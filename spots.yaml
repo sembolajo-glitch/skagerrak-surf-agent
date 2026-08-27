@@ -1,0 +1,355 @@
+# =====================================================================
+#  Skagerrak surf agent - spotdefinisjoner
+# =====================================================================
+#  ALT i denne fila er tunbart. Ingen av tallene er malt - de er utledet
+#  fra fetch-geometri og et grovt energibudsjett. Kalibrer mot egen logg.
+#
+#  facing:        retningen brytningen SER MOT = retningen palandsvind
+#                 kommer fra. Slagen facing=120 -> vika apner mot OSO.
+#  swell_window:  [lo, hi] meteorologiske grader, sektoren som gir bolger
+#  klasse:
+#     A = apen Skagerrak-kyst. Les Hs/Tp/dir rett fra WW3/WAM.
+#     B = fjordmunning. Som A, men sjekk ogsa lokal fetch.
+#     C = indre fjord. Modellene duger IKKE. Regn lokal fetch + propager
+#         S-komponenten fra munningen.
+#
+#  fetch_km:      16 verdier fra N og med klokka (N, NNO, NO, ONO, O, OSO,
+#                 SO, SSO, S, SSV, SV, VSV, V, VNV, NV, NNV).
+#                 For klasse C er dette avstand til NAERMESTE land ELLER
+#                 til fjordmunningen - ikke helt ut i Skagerrak. Swellen
+#                 utenfra handteres separat av gate-blokka.
+#
+#  gate:          kun klasse C. Punktet i fjordmunningen der vi leser
+#                 WW3-output og propagerer innover.
+#    sector_half_width: hvor bred vinkelsektor fjorden slipper opp.
+#                       LAV verdi = strengere = mindre bolge. Viktigste knapp.
+#    spread_s:          cos^(2s) retningsspredning i kildesjoen.
+#                       LAV s = bredere spredning = mer slipper inn.
+#    transmission:      samleknapp for alt vi ikke modellerer (skjaergard,
+#                       refraksjonstap). Start pa 1.0, juster ned hvis
+#                       agenten overvurderer.
+# =====================================================================
+
+defaults:
+  min_tp: 5.0
+  water_optimal_cm: 0
+  water_sensitivity_cm: 0        # 0 = vannstand ignoreres
+  wind_weight: 1.0               # <1 = spotten taaler chop, >1 = vindfolsom
+  alert_min_p_surf: 50           # varsle nar sannsynlighet >= denne (%)
+  alert_min_stars: 5.5           # OG forventet kvalitet >= denne (1-10)
+  min_window_hours: 2
+  uncertainty:                   # standardavvik ved varslingslengde 0
+    wind_rel: 0.10               #   vindstyrke, relativt
+    wind_dir_deg: 8              #   vindretning
+    hs_rel: 0.15                 #   Hs ved munningen, relativt
+    wave_dir_deg: 10             #   bolgeretning
+    transmission_rel: 0.20       #   strukturell - dobles for ukalibrerte spots
+    sector_deg: 3.5              #   strukturell - dobles for ukalibrerte spots
+
+spots:
+
+  # ------------------------------------------------ KLASSE A - apen kyst
+
+  - id: saltstein
+    name: Saltstein
+    klasse: A
+    lat: 58.955
+    lon: 9.855
+    offshore_point: [58.930, 9.830]
+    wind_weight: 0.55          # kraftig dyptvannsrev - surfes rutinemessig i onshore chop
+    facing: 225
+    swell_window: [170, 260]
+    min_hs: 1.2
+    ideal_hs: 2.5
+    max_hs: 4.5
+    min_tp: 6.0
+    water_optimal_cm: -10
+    water_sensitivity_cm: 60
+    drive_min: 110
+    kalibrert: true               # kjent spot - bruk som referanse
+    notes: >
+      Referansespotten. SV-vendt steinrev, jekker fra dypt vann.
+      Fralandsvind er NO, som sjelden folger en S-kuling.
+
+  - id: svenner
+    name: Svenner
+    klasse: A
+    lat: 58.970
+    lon: 10.145
+    offshore_point: [58.945, 10.140]
+    wind_weight: 0.6          # samme type rev, enda mer eksponert
+    facing: 180
+    swell_window: [130, 250]
+    min_hs: 1.1
+    ideal_hs: 2.2
+    max_hs: 4.0
+    min_tp: 6.0
+    drive_min: 105
+    boat: true
+    notes: Ytterskjaer pa rennekanten. Uprovd. Baten er risikoen, ikke bolgen.
+
+  - id: jomfruland_ost
+    name: Jomfruland ostside
+    klasse: A
+    lat: 58.865
+    lon: 9.620
+    offshore_point: [58.845, 9.650]
+    wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
+    facing: 135
+    swell_window: [100, 230]
+    min_hs: 1.3
+    ideal_hs: 2.5
+    max_hs: 4.5
+    min_tp: 6.0
+    drive_min: 140
+    boat: true
+    notes: >
+      SO-vendt Ra-strand. NV fralandsvind = beste vindvinkel i regionen.
+      Hoyeste tak av alle prospektene.
+
+  - id: rakke
+    name: Rakke / Kjolen, Stavern
+    klasse: A
+    lat: 58.975
+    lon: 10.000
+    offshore_point: [58.955, 9.995]
+    wind_weight: 0.7          # berg og viker gir le-lommer
+    facing: 170
+    swell_window: [155, 225]
+    min_hs: 1.7
+    ideal_hs: 2.6
+    max_hs: 4.5
+    min_tp: 6.0
+    drive_min: 105
+    notes: Komplementaer til Saltstein - N/NNV fralands. 25 min unna.
+
+  - id: molen
+    name: Molen
+    klasse: A
+    lat: 58.968
+    lon: 9.805
+    offshore_point: [58.945, 9.800]
+    wind_weight: 0.85
+    facing: 200
+    swell_window: [170, 240]
+    min_hs: 1.7
+    ideal_hs: 2.6
+    max_hs: 4.0
+    min_tp: 6.5
+    drive_min: 120
+    notes: Rullestein pa Raet. Kan gi tung dumper - trenger periode.
+
+  - id: portor
+    name: Portor
+    klasse: A
+    lat: 58.806
+    lon: 9.433
+    offshore_point: [58.785, 9.430]
+    wind_weight: 0.7
+    facing: 190
+    swell_window: [160, 240]
+    min_hs: 1.5
+    ideal_hs: 2.5
+    max_hs: 4.2
+    min_tp: 6.0
+    drive_min: 140
+
+  # ------------------------------------------- KLASSE B - fjordmunningen
+
+  - id: verdens_ende
+    name: Verdens Ende / Tristein
+    klasse: B
+    lat: 59.028
+    lon: 10.475
+    offshore_point: [59.000, 10.470]
+    wind_weight: 0.7
+    facing: 200
+    swell_window: [165, 240]
+    min_hs: 2.0
+    ideal_hs: 3.0
+    max_hs: 5.0
+    min_tp: 5.5
+    drive_min: 100
+    notes: Naermeste ekte Skagerrak-berg til Oslo. Bor ga oftere enn Hvasser.
+
+  - id: hvasser_sando
+    name: Hvasser / Sando ostside
+    klasse: B
+    lat: 59.100
+    lon: 10.470
+    offshore_point: [59.095, 10.510]
+    wind_weight: 1.0
+    facing: 100
+    swell_window: [110, 200]
+    min_hs: 1.3
+    ideal_hs: 2.0
+    max_hs: 3.5
+    min_tp: 5.0
+    drive_min: 95
+    kalibrert: true
+    local_fetch_km: [1, 2, 6, 12, 22, 35, 80, 120, 90, 40, 20, 3, 0.5, 0.3, 0.3, 0.5]
+    notes: >
+      Har egen SO-fetch mot Koster/Skagen pa 100+ km. Ved ren SO-kuling
+      bor Hvasser ga nar Slagen ikke gjor det.
+
+  - id: orekroken
+    name: Orekroken, Kirkoy (Hvaler)
+    klasse: B
+    lat: 59.005
+    lon: 10.980
+    offshore_point: [58.980, 10.975]
+    wind_weight: 1.1          # slak sand - blir soppel raskt
+    facing: 195
+    swell_window: [155, 220]
+    min_hs: 2.2
+    ideal_hs: 3.0
+    max_hs: 5.0
+    min_tp: 5.5
+    drive_min: 100
+
+  # -------------------------------------------- KLASSE C - indre fjord
+
+  - id: slagen
+    name: Slagen
+    klasse: C
+    lat: 59.320
+    lon: 10.500
+    wind_weight: 1.15          # kort fjordsjo taaler lite vind
+    facing: 120
+    swell_window: [160, 200]
+    min_hs: 1.6
+    ideal_hs: 2.4
+    max_hs: 3.4
+    min_tp: 4.5
+    water_optimal_cm: 20
+    water_sensitivity_cm: 80
+    drive_min: 80
+    kalibrert: true
+    #          N   NNO  NO  ONO   O  OSO   SO  SSO    S  SSV   SV  VSV   V  VNV  NV  NNV
+    fetch_km: [0.5, 1.0, 3, 10,  14,  16,  22,  48,  33,  20,   8, 0.2, 0.1, 0.1, 0.1, 0.2]
+    gate:
+      name: Faerder
+      lat: 59.030
+      lon: 10.520
+      distance_km: 33
+      bearing_deg: 181
+      sector_half_width: 20
+      spread_s: 5
+      transmission: 1.0
+    notes: >
+      Kalibreringsspotten for hele klasse C. Kjent trigger - S >= 15 m/s
+      i 8-12 t, vindu 2-5 t etter dreining til V/NV.
+
+  - id: skallevold
+    name: Skallevold
+    klasse: C
+    lat: 59.290
+    lon: 10.470
+    wind_weight: 1.25          # sandvik, mest vindfolsom av de kjente
+    facing: 115
+    swell_window: [172, 198]
+    min_hs: 1.9
+    ideal_hs: 2.7
+    max_hs: 3.6
+    min_tp: 4.5
+    water_optimal_cm: 20
+    water_sensitivity_cm: 70
+    drive_min: 80
+    kalibrert: true
+    fetch_km: [0.3, 0.5, 2, 8, 15, 18, 25, 42, 28, 15, 6, 0.2, 0.1, 0.1, 0.1, 0.2]
+    gate:
+      name: Faerder
+      lat: 59.030
+      lon: 10.520
+      distance_km: 28
+      bearing_deg: 185
+      sector_half_width: 16      # trangere vindu enn Slagen
+      spread_s: 5
+      transmission: 0.85         # Karlsvikodden + Ringshaugholmen
+    notes: Trenger mest av de kjente. Litt bedre pa ren S enn Slagen.
+
+  - id: sletteroyene
+    name: Sletteroyene
+    klasse: C
+    lat: 59.350
+    lon: 10.620
+    wind_weight: 1.0          # revbunn taaler mer enn Slagen
+    facing: 200
+    swell_window: [172, 208]
+    min_hs: 1.5
+    ideal_hs: 2.3
+    max_hs: 3.5
+    min_tp: 4.5
+    water_optimal_cm: 0
+    water_sensitivity_cm: 60
+    drive_min: 60
+    boat: true
+    fetch_km: [6, 4, 3, 5, 8, 12, 20, 40, 36, 36, 20, 14, 13, 12, 10, 8]
+    gate:
+      name: Faerder
+      lat: 59.030
+      lon: 10.520
+      distance_km: 36
+      bearing_deg: 189
+      sector_half_width: 20
+      spread_s: 5
+      transmission: 1.05         # dypt vann + revbunn, bedre enn Slagen
+    notes: >
+      Beste uprovde indre-fjord-kandidat. Samme fetch som Slagen, bedre bunn.
+      Rekogniser fra Larkollen med kikkert for du tar baten.
+
+  - id: bastoy_odden
+    name: Bastoy odden
+    klasse: C
+    lat: 59.365
+    lon: 10.530
+    wind_weight: 1.15
+    facing: 180
+    swell_window: [168, 196]
+    min_hs: 2.1
+    ideal_hs: 2.8
+    max_hs: 3.6
+    min_tp: 4.5
+    water_optimal_cm: 30
+    water_sensitivity_cm: 50     # grunn hylle - folsom for vannstand
+    drive_min: 60
+    boat: true
+    access_warning: >
+      Fengselsoy med landskapsvernomrade. Ilandstigning pa sorspissen er
+      IKKE tillatt. Ren batokt. Avklar med Kriminalomsorgen/Statsforvalteren.
+    fetch_km: [3, 3, 8, 10, 11, 14, 22, 30, 38, 30, 14, 5, 4, 5, 6, 5]
+    gate:
+      name: Faerder
+      lat: 59.030
+      lon: 10.520
+      distance_km: 38
+      bearing_deg: 178
+      sector_half_width: 16
+      spread_s: 5
+      transmission: 0.75         # grunn hylle sor for odden spiser energi
+    notes: Lavest prioritet. Kun i kombinasjon med en Slagen-okt.
+
+  - id: larkollen
+    name: Larkollen
+    klasse: C
+    lat: 59.335
+    lon: 10.685
+    wind_weight: 1.15
+    facing: 215
+    swell_window: [170, 240]
+    min_hs: 1.8
+    ideal_hs: 2.5
+    max_hs: 3.5
+    min_tp: 4.5
+    drive_min: 55
+    fetch_km: [2, 2, 2, 4, 6, 10, 16, 30, 34, 34, 22, 12, 8, 5, 3, 2]
+    gate:
+      name: Faerder
+      lat: 59.030
+      lon: 10.520
+      distance_km: 35
+      bearing_deg: 193
+      sector_half_width: 18
+      spread_s: 5
+      transmission: 0.9
+    notes: Kort kjoring, bilvei. Vindvinkelen er svakheten (N/NO fralands).
