@@ -1,1 +1,93 @@
+name: forecast
 
+# Kjorer i takt med modellkjoringene. MEPS og ECMWF er ferdig distribuert
+# ca. 3-4 timer etter analysetidspunkt, saa vi ligger litt etter 00/06/12/18Z.
+on:
+  schedule:
+    - cron: "20 3,9,15,21 * * *"
+  workflow_dispatch:
+    inputs:
+      shadow:
+        description: "Skyggemodus - regn og logg, ikke varsle"
+        type: boolean
+        default: false
+
+concurrency:
+  group: forecast
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Historikk: alert_state.json og shadow.csv ligger paa data-grenen slik
+      # at de overlever mellom kjoringer. Uten dette faar du varsel om samme
+      # vindu hver sjette time.
+      - name: Hent tilstand fra data-grenen
+        run: |
+          git fetch origin data:data 2>/dev/null || echo "data-gren finnes ikke enna"
+          mkdir -p out
+          git show data:out/alert_state.json > out/alert_state.json 2>/dev/null || true
+          git show data:out/shadow.csv       > out/shadow.csv       2>/dev/null || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Selvtest
+        run: |
+          pip install pytest
+          python -m pytest test_physics.py -q
+          python agent.py --mock storm > /dev/null
+
+      - name: Kjor prognose
+        env:
+          SURF_AGENT_UA: ${{ secrets.SURF_AGENT_UA }}
+          DMI_API_KEY: ${{ secrets.DMI_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python agent.py ${{ inputs.shadow && '--shadow' || '' }} | tee out/run.log
+
+      # Roterer shadow.csv naar den blir stor - ett ars data er rikelig
+      - name: Trim logg
+        run: |
+          if [ -f out/shadow.csv ] && [ "$(wc -l < out/shadow.csv)" -gt 800000 ]; then
+            head -1 out/shadow.csv > out/shadow.tmp
+            tail -n 700000 out/shadow.csv >> out/shadow.tmp
+            mv out/shadow.tmp out/shadow.csv
+          fi
+
+      - name: Publiser til data-grenen
+        run: |
+          git config user.name  "surf-agent"
+          git config user.email "surf-agent@users.noreply.github.com"
+          git checkout --orphan tmp-data
+          git rm -rf --cached . > /dev/null
+          git add -f out/forecast.json out/shadow.csv out/alert_state.json out/run.log
+          git commit -m "prognose $(date -u +%FT%TZ)" || exit 0
+          git branch -M tmp-data data
+          git push -f origin data
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: run
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
