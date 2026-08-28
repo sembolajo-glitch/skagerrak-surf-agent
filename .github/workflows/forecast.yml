@@ -73,7 +73,7 @@ jobs:
           git config user.email "surf-agent@users.noreply.github.com"
           git checkout --orphan tmp-data
           git rm -rf --cached . > /dev/null
-          git add -f out/forecast.json out/shadow.csv out/alert_state.json out/run.log
+          git add -f out/forecast.json out/spots out/shadow.csv out/alert_state.json out/run.log
           git commit -m "prognose $(date -u +%FT%TZ)" || exit 0
           git branch -M tmp-data data
           git push -f origin data

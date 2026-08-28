@@ -9,7 +9,8 @@ Skagerrak surf agent.
   python agent.py --explain slagen    full parameterutskrift for ett spot
 
 Output:
-  out/forecast.json   full struktur til frontend (Lovable henter denne)
+  out/forecast.json   oversikt til frontend - alt utenom hours (Lovable henter denne)
+  out/spots/<id>.json  fullt hours-array per spot - hentes bare naar detaljer slaas ut
   out/shadow.csv      en rad per spot per time per kjoring - benchmarkgrunnlag
 """
 
@@ -22,6 +23,7 @@ import math
 import os
 import pathlib
 import sys
+import zoneinfo
 
 import yaml
 
@@ -32,6 +34,10 @@ import physics as P
 ROOT = pathlib.Path(__file__).parent
 OUT = ROOT / "out"
 OUT.mkdir(exist_ok=True)
+SPOTS_OUT = OUT / "spots"
+SPOTS_OUT.mkdir(exist_ok=True)
+
+OSLO = zoneinfo.ZoneInfo("Europe/Oslo")
 
 
 # --------------------------------------------------------------- konfig
@@ -254,6 +260,24 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
             "prop_hs": round(prop_hs, 2),
         }))
     return rows
+
+
+def daily_summary(hours, days=7):
+    """
+    Slaa sammen timene til en post per dogn, lokal tid (Europe/Oslo).
+    Det er alt 7-dagersgrafen i frontenden trenger, saa den slipper aa
+    laste hele hours-arrayet bare for aa tegne en oversiktsgraf.
+    """
+    buckets = {}
+    for h in hours:
+        local_date = dt.datetime.fromisoformat(h["time"]).astimezone(OSLO).date()
+        b = buckets.setdefault(local_date, {"max_p_surf": 0.0, "max_stars": 0.0})
+        b["max_p_surf"] = max(b["max_p_surf"], h.get("p_surf") or 0.0)
+        b["max_stars"] = max(b["max_stars"], h.get("stars") or 0.0)
+    return [
+        {"date": d.isoformat(), **buckets[d]}
+        for d in sorted(buckets)[:days]
+    ]
 
 
 # --------------------------------------------------------------- vinduer
@@ -557,6 +581,8 @@ def run(args):
             "id": spot["id"],
             "name": spot["name"],
             "klasse": spot["klasse"],
+            "lat": spot["lat"],
+            "lon": spot["lon"],
             "kalibrert": spot.get("kalibrert", False),
             "boat": spot.get("boat", False),
             "drive_min": spot.get("drive_min"),
@@ -565,6 +591,7 @@ def run(args):
             "best_stars": max((h["stars"] or 0 for h in hours), default=0) or None,
             "best_p_surf": max((h["p_surf"] for h in hours), default=0),
             "windows": windows,
+            "daily": daily_summary(hours),
             "hours": hours,
             "sources": errors,
             "params": {k: spot.get(k) for k in
@@ -595,10 +622,22 @@ def run(args):
             (r.get("best_stars") or 0) * (r.get("best_p_surf") or 0))),
     }
     payload = tidy(payload)
-    (OUT / "forecast.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+
     if not args.mock:
         STATE_FILE.write_text(json.dumps(state, indent=2))
         append_shadow_log(payload)
+
+    # fullt hours-array per spot til egen fil - hovedfila (og dermed
+    # nedlastingen i frontenden) trenger den ikke, bare detaljvisningen gjor
+    for spot in payload["spots"]:
+        hours = spot.pop("hours", None)
+        if hours is None:
+            continue
+        (SPOTS_OUT / f"{spot['id']}.json").write_text(json.dumps(
+            {"id": spot["id"], "generated_at": payload["generated_at"], "hours": hours},
+            indent=2, ensure_ascii=False))
+
+    (OUT / "forecast.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))
 
     print(f"\n{'SPOT':<28}{'STJ':>5}{'P%':>5}  VINDUER")
     for r in payload["spots"]:
