@@ -14,6 +14,7 @@ Output:
 """
 
 import argparse
+import concurrent.futures
 import csv
 import datetime as dt
 import json
@@ -445,9 +446,23 @@ def gather(spot, mock=None):
     waves = {}
     for ts in set(met_w) | set(om_w):
         m, o = met_w.get(ts, {}), om_w.get(ts, {})
+        hs = m.get("hs") if m.get("hs") is not None else o.get("hs")
+        tp = m.get("tp") if m.get("tp") is not None else o.get("tp")
+        if m.get("tp") is not None:
+            tp_source = "met"
+        elif o.get("tp") is not None:
+            tp_source = "openmeteo"
+        else:
+            tp_source = None
+        # MET Oceanforecast 2.0 leverer ikke alltid periode, og Open-Meteo
+        # kan mangle den samme timen. Estimer fra Hs fremfor aa la tp falle
+        # til 0 (som ville nullstilt period_quality og dermed hele scoren).
+        if tp is None and hs is not None:
+            tp = 4.6 * hs ** 0.4
+            tp_source = "estimated"
         waves[ts] = {
-            "hs": m.get("hs") if m.get("hs") is not None else o.get("hs"),
-            "tp": m.get("tp") if m.get("tp") is not None else o.get("tp"),
+            "hs": hs,
+            "tp": tp,
             "wave_from_direction": (
                 m.get("wave_from_direction")
                 if m.get("wave_from_direction") is not None
@@ -455,7 +470,7 @@ def gather(spot, mock=None):
             ),
             "hs_met": m.get("hs"),
             "hs_openmeteo": o.get("hs"),
-            "tp_source": "met" if m.get("tp") is not None else "openmeteo",
+            "tp_source": tp_source,
         }
 
     if os.environ.get("DMI_API_KEY"):
@@ -486,8 +501,15 @@ def run(args):
     now = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
     results = []
 
-    for spot in spots:
-        wind, waves, water, errors = gather(spot, mock)
+    # gather() er nettverksbundet og uavhengig per spot - hent parallelt.
+    # ThreadPoolExecutor.map beholder rekkefolgen paa resultatene uansett
+    # hvilken traad som blir ferdig forst. Feilhaandtering skjer fortsatt
+    # inne i gather() via S.safe(), saa dette endrer bare hvor raskt
+    # kallene skytes av.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        gathered = list(pool.map(lambda spot: gather(spot, mock), spots))
+
+    for spot, (wind, waves, water, errors) in zip(spots, gathered):
         if not wind:
             results.append({"id": spot["id"], "name": spot["name"],
                             "error": "ingen vinddata", "sources": errors})
