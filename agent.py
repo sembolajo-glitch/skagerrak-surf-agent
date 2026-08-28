@@ -25,6 +25,7 @@ import sys
 
 import yaml
 
+import describe as D
 import ensemble as E
 import physics as P
 
@@ -142,6 +143,10 @@ def evaluate_class_ab(spot, times, wind_series, wave_series):
             "hs_eff": model_hs,
             "tp_eff": model_tp,
             "dir_eff": model_dir,
+            "tp_source": w.get("tp_source"),
+            "hs_met": w.get("hs_met"),
+            "hs_openmeteo": w.get("hs_openmeteo"),
+            "hs_dmi": w.get("hs_dmi"),
             "local_hs": None,
             "local_tp": None,
             "local_wind_mean": 0.0,
@@ -186,6 +191,7 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
 
     for i, ts in enumerate(times):
         loc = P.build_local_sea(wind_list, spot["fetch_km"], i)
+        w = gate_wave_series.get(ts, {})
 
         # finn den timen ved munningen hvis energi ankommer NA
         gate_hs = gate_tp = 0.0
@@ -226,6 +232,10 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
             "hs_eff": hs_eff,
             "tp_eff": tp_eff,
             "dir_eff": dir_eff,
+            "tp_source": w.get("tp_source"),
+            "hs_met": w.get("hs_met"),
+            "hs_openmeteo": w.get("hs_openmeteo"),
+            "hs_dmi": w.get("hs_dmi"),
             # lokal vindsjo
             "local_hs": round(loc["hs"], 2),
             "local_tp": round(loc["tp"], 1),
@@ -295,6 +305,14 @@ def find_windows(hours, spot):
             "peak_wind": f"{best['wind_speed']:.0f} m/s {best['wind_from']:.0f}deg ({best['wind_label']})"
             if best["wind_from"] is not None else "?",
             "why": explain(best),
+            "bullets": D.describe({
+                "name": spot["name"], "klasse": spot["klasse"],
+                "kalibrert": spot.get("kalibrert", False),
+                "access_warning": spot.get("access_warning"),
+                "params": {"facing": spot["facing"],
+                           "swell_window": spot["swell_window"],
+                           "gate": spot.get("gate")},
+            }, None, w),
         })
     return out
 
@@ -457,8 +475,10 @@ def gather(spot, mock=None):
         # MET Oceanforecast 2.0 leverer ikke alltid periode, og Open-Meteo
         # kan mangle den samme timen. Estimer fra Hs fremfor aa la tp falle
         # til 0 (som ville nullstilt period_quality og dermed hele scoren).
+        # Gulv paa 4.5 s: lav Hs med lang periode er swell, ikke vindsjo -
+        # den rene Hs-baserte formelen undervurderer systematisk der.
         if tp is None and hs is not None:
-            tp = 4.6 * hs ** 0.4
+            tp = max(4.5, 4.6 * hs ** 0.4)
             tp_source = "estimated"
         waves[ts] = {
             "hs": hs,
