@@ -556,7 +556,7 @@ def run(args):
     (OUT / "forecast.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))
     if not args.mock:
         STATE_FILE.write_text(json.dumps(state, indent=2))
-    append_shadow_log(payload)
+        append_shadow_log(payload)
 
     print(f"\n{'SPOT':<28}{'STJ':>5}{'P%':>5}  VINDUER")
     for r in payload["spots"]:
