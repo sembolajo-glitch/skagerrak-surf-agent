@@ -23,7 +23,7 @@ USER_AGENT = os.environ.get(
     "SURF_AGENT_UA",
     "skagerrak-surf-agent/0.1 (bytt-meg@example.com)",
 )
-TIMEOUT = 25
+TIMEOUT = 10
 
 
 def _iso(t):
@@ -215,9 +215,12 @@ def kartverket_water_level(lat, lon, hours=72):
     Vannstandsvarsel (inkludert stormflo) fra Kartverket, i cm relativt
     middelvann. Returnerer {} hvis tjenesten ikke svarer - agenten kjorer
     videre uten vannstandsjustering.
+
+    Merk: api.sehavniva.no ble avviklet av Kartverket - tjenesten flyttet
+    til vannstand.kartverket.no (samme sti/parametre/XML-format).
     """
     now = dt.datetime.now(dt.timezone.utc)
-    url = "https://api.sehavniva.no/tideapi.php"
+    url = "https://vannstand.kartverket.no/tideapi.php"
     params = {
         "lat": round(lat, 4),
         "lon": round(lon, 4),

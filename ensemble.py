@@ -158,9 +158,6 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
             hs *= P.window_factor(wdir, spot)
 
         q_size = P.size_quality(hs, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
-        if q_size <= 0:
-            continue
-
         q_period = P.period_quality(tp, spot["min_tp"])
         q_wind_raw, _ = (
             P.wind_quality(ws * m["wind_scale"], (wfrom or 0) + m["wind_dir"], spot["facing"])
@@ -171,8 +168,14 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
             water_cm if water_cm is not None else spot["water_optimal_cm"],
             spot["water_optimal_cm"], spot["water_sensitivity_cm"],
         )
+        score = 100.0 * q_size * q_period * q_wind * q_water
+        # et medlem telles som "surf" naar HELE scoren er positiv, ikke
+        # bare naar bolgehoyden passerer min_hs - ellers kan p_surf vise
+        # hoy sannsynlighet mens stars er null (f.eks. naar q_period er 0).
+        if score <= 0:
+            continue
         surf += 1
-        scores.append(100.0 * q_size * q_period * q_wind * q_water)
+        scores.append(score)
 
     total = len(members)
     p_surf = 100.0 * surf / total
