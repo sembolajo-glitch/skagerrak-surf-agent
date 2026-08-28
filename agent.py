@@ -25,6 +25,7 @@ import sys
 
 import yaml
 
+import describe as D
 import ensemble as E
 import physics as P
 
@@ -304,6 +305,14 @@ def find_windows(hours, spot):
             "peak_wind": f"{best['wind_speed']:.0f} m/s {best['wind_from']:.0f}deg ({best['wind_label']})"
             if best["wind_from"] is not None else "?",
             "why": explain(best),
+            "bullets": D.describe({
+                "name": spot["name"], "klasse": spot["klasse"],
+                "kalibrert": spot.get("kalibrert", False),
+                "access_warning": spot.get("access_warning"),
+                "params": {"facing": spot["facing"],
+                           "swell_window": spot["swell_window"],
+                           "gate": spot.get("gate")},
+            }, None, w),
         })
     return out
 
