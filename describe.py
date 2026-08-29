@@ -55,8 +55,8 @@ def describe(spot, window, hours):
         snitt = peak.get("local_wind_mean")
         if varighet and snitt:
             out.append({"ikon": "wind", "tekst":
-                f"Vind {_grader(wd)} {ws:.0f} m/s i vinduet. Sjoen er bygget av "
-                f"{snitt:.0f} m/s i {varighet} timer for dette."})
+                f"Vind {_grader(wd)} {ws:.0f} m/s i vinduet. Sjøen er bygget av "
+                f"{snitt:.0f} m/s i {varighet} timer før dette."})
         else:
             out.append({"ikon": "wind", "tekst":
                 f"Vind {_grader(wd)} {ws:.0f} m/s i vinduet."})
@@ -103,14 +103,14 @@ def describe(spot, window, hours):
         gate = spot["params"].get("gate") or {}
         spot_tekst += (f" Fjorden slipper bare gjennom \u00b1"
                        f"{gate.get('sector_half_width', 20)}\u00b0 rundt aksen, "
-                       f"og det er derfor spotten trenger mye mer enn apen kyst.")
+                       f"og det er derfor spotten trenger mye mer enn åpen kyst.")
     elif spot.get("klasse") == "A":
-        spot_tekst += (" Norskerenna gir dypt vann helt inn, saa bolgen jekker "
-                       "brått uten aa tape energi paa veien.")
+        spot_tekst += (" Norskerenna gir dypt vann helt inn, så bølgen jekker "
+                       "brått uten å tape energi på veien.")
     out.append({"ikon": "spot", "tekst": spot_tekst})
 
     # ------------------------------------------------------------ resultat
-    ledd = {"storrelse": peak.get("q_size", 0), "periode": peak.get("q_period", 0),
+    ledd = {"størrelse": peak.get("q_size", 0), "periode": peak.get("q_period", 0),
             "vind": peak.get("q_wind", 0), "vannstand": peak.get("q_water", 0)}
     svakest = min(ledd.items(), key=lambda x: x[1])
     out.append({"ikon": "result", "tekst":
@@ -122,14 +122,14 @@ def describe(spot, window, hours):
     # ----------------------------------------------------------- forbehold
     forbehold = []
     if not spot.get("kalibrert"):
-        forbehold.append("Spotten er ikke kalibrert mot faktiske okter - "
-                         "terskelen er et estimat, ikke en malt verdi")
+        forbehold.append("Spotten er ikke kalibrert mot faktiske økter - "
+                         "terskelen er et estimat, ikke en målt verdi")
     if (peak.get("model_spread") or 0) > 0.20:
         forbehold.append(f"modellene spriker {100 * peak['model_spread']:.0f} % "
-                         f"paa bolgehoyde - sjekk igjen naermere tida")
+                         f"på bølgehøyde - sjekk igjen nærmere tida")
     if peak.get("lead_h", 0) > 72:
-        forbehold.append(f"varselet gar {peak['lead_h'] / 24:.0f} dogn fram, "
-                         f"saa vinduet kan flytte seg flere timer")
+        forbehold.append(f"varselet går {peak['lead_h'] / 24:.0f} døgn fram, "
+                         f"så vinduet kan flytte seg flere timer")
     if peak.get("confidence") == "lav":
         forbehold.append("samlet konfidens er lav")
     if forbehold:
