@@ -69,7 +69,7 @@ spots:
     kalibrert: true               # kjent spot - bruk som referanse
     notes: >
       Referansespotten. SV-vendt steinrev, jekker fra dypt vann.
-      Fralandsvind er NO, som sjelden folger en S-kuling.
+      Fralandsvind er NØ, som sjelden følger en S-kuling.
 
   - id: svenner
     name: Svenner
@@ -86,10 +86,10 @@ spots:
     min_tp: 6.0
     drive_min: 105
     boat: true
-    notes: Ytterskjaer pa rennekanten. Uprovd. Baten er risikoen, ikke bolgen.
+    notes: Ytterskjær på rennekanten. Uprøvd. Båten er risikoen, ikke bølgen.
 
   - id: jomfruland_ost
-    name: Jomfruland ostside
+    name: Jomfruland østside
     klasse: A
     lat: 58.865
     lon: 9.620
@@ -104,11 +104,11 @@ spots:
     drive_min: 140
     boat: true
     notes: >
-      SO-vendt Ra-strand. NV fralandsvind = beste vindvinkel i regionen.
-      Hoyeste tak av alle prospektene.
+      SØ-vendt Ra-strand. NV fralandsvind = beste vindvinkel i regionen.
+      Høyeste tak av alle prospektene.
 
   - id: rakke
-    name: Rakke / Kjolen, Stavern
+    name: Rakke / Kjølen, Stavern
     klasse: A
     lat: 58.975
     lon: 10.000
@@ -121,10 +121,10 @@ spots:
     max_hs: 4.5
     min_tp: 6.0
     drive_min: 105
-    notes: Komplementaer til Saltstein - N/NNV fralands. 25 min unna.
+    notes: Komplementær til Saltstein - N/NNV fralands. 25 min unna.
 
   - id: molen
-    name: Molen
+    name: Mølen
     klasse: A
     lat: 58.968
     lon: 9.805
@@ -137,10 +137,10 @@ spots:
     max_hs: 4.0
     min_tp: 6.5
     drive_min: 120
-    notes: Rullestein pa Raet. Kan gi tung dumper - trenger periode.
+    notes: Rullestein på Raet. Kan gi tung dumper - trenger periode.
 
   - id: portor
-    name: Portor
+    name: Portør
     klasse: A
     lat: 58.806
     lon: 9.433
@@ -170,10 +170,10 @@ spots:
     max_hs: 5.0
     min_tp: 5.5
     drive_min: 100
-    notes: Naermeste ekte Skagerrak-berg til Oslo. Bor ga oftere enn Hvasser.
+    notes: Nærmeste ekte Skagerrak-berg til Oslo. Bør gå oftere enn Hvasser.
 
   - id: hvasser_sando
-    name: Hvasser / Sando ostside
+    name: Hvasser / Sandø østside
     klasse: B
     lat: 59.100
     lon: 10.470
@@ -189,11 +189,11 @@ spots:
     kalibrert: true
     local_fetch_km: [1, 2, 6, 12, 22, 35, 80, 120, 90, 40, 20, 3, 0.5, 0.3, 0.3, 0.5]
     notes: >
-      Har egen SO-fetch mot Koster/Skagen pa 100+ km. Ved ren SO-kuling
-      bor Hvasser ga nar Slagen ikke gjor det.
+      Har egen SØ-fetch mot Koster/Skagen på 100+ km. Ved ren SØ-kuling
+      bør Hvasser gå når Slagen ikke gjør det.
 
   - id: orekroken
-    name: Orekroken, Kirkoy (Hvaler)
+    name: Ørekroken, Kirkøy (Hvaler)
     klasse: B
     lat: 59.005
     lon: 10.980
@@ -228,7 +228,7 @@ spots:
     #          N   NNO  NO  ONO   O  OSO   SO  SSO    S  SSV   SV  VSV   V  VNV  NV  NNV
     fetch_km: [0.5, 1.0, 3, 10,  14,  16,  22,  48,  33,  20,   8, 0.2, 0.1, 0.1, 0.1, 0.2]
     gate:
-      name: Faerder
+      name: Færder
       lat: 59.030
       lon: 10.520
       distance_km: 33
@@ -258,7 +258,7 @@ spots:
     kalibrert: true
     fetch_km: [0.3, 0.5, 2, 8, 15, 18, 25, 42, 28, 15, 6, 0.2, 0.1, 0.1, 0.1, 0.2]
     gate:
-      name: Faerder
+      name: Færder
       lat: 59.030
       lon: 10.520
       distance_km: 28
@@ -266,10 +266,10 @@ spots:
       sector_half_width: 16      # trangere vindu enn Slagen
       spread_s: 5
       transmission: 0.85         # Karlsvikodden + Ringshaugholmen
-    notes: Trenger mest av de kjente. Litt bedre pa ren S enn Slagen.
+    notes: Trenger mest av de kjente. Litt bedre på ren S enn Slagen.
 
   - id: sletteroyene
-    name: Sletteroyene
+    name: Sletterøyene
     klasse: C
     lat: 59.350
     lon: 10.620
@@ -286,7 +286,7 @@ spots:
     boat: true
     fetch_km: [6, 4, 3, 5, 8, 12, 20, 40, 36, 36, 20, 14, 13, 12, 10, 8]
     gate:
-      name: Faerder
+      name: Færder
       lat: 59.030
       lon: 10.520
       distance_km: 36
@@ -295,11 +295,11 @@ spots:
       spread_s: 5
       transmission: 1.05         # dypt vann + revbunn, bedre enn Slagen
     notes: >
-      Beste uprovde indre-fjord-kandidat. Samme fetch som Slagen, bedre bunn.
-      Rekogniser fra Larkollen med kikkert for du tar baten.
+      Beste uprøvde indre-fjord-kandidat. Samme fetch som Slagen, bedre bunn.
+      Rekognoser fra Larkollen med kikkert før du tar båten.
 
   - id: bastoy_odden
-    name: Bastoy odden
+    name: Bastøy odden
     klasse: C
     lat: 59.365
     lon: 10.530
@@ -315,11 +315,11 @@ spots:
     drive_min: 60
     boat: true
     access_warning: >
-      Fengselsoy med landskapsvernomrade. Ilandstigning pa sorspissen er
-      IKKE tillatt. Ren batokt. Avklar med Kriminalomsorgen/Statsforvalteren.
+      Fengselsøy med landskapsvernområde. Ilandstigning på sørspissen er
+      IKKE tillatt. Ren båtøkt. Avklar med Kriminalomsorgen/Statsforvalteren.
     fetch_km: [3, 3, 8, 10, 11, 14, 22, 30, 38, 30, 14, 5, 4, 5, 6, 5]
     gate:
-      name: Faerder
+      name: Færder
       lat: 59.030
       lon: 10.520
       distance_km: 38
@@ -327,7 +327,7 @@ spots:
       sector_half_width: 16
       spread_s: 5
       transmission: 0.75         # grunn hylle sor for odden spiser energi
-    notes: Lavest prioritet. Kun i kombinasjon med en Slagen-okt.
+    notes: Lavest prioritet. Kun i kombinasjon med en Slagen-økt.
 
   - id: larkollen
     name: Larkollen
@@ -344,7 +344,7 @@ spots:
     drive_min: 55
     fetch_km: [2, 2, 2, 4, 6, 10, 16, 30, 34, 34, 22, 12, 8, 5, 3, 2]
     gate:
-      name: Faerder
+      name: Færder
       lat: 59.030
       lon: 10.520
       distance_km: 35
@@ -352,4 +352,4 @@ spots:
       sector_half_width: 18
       spread_s: 5
       transmission: 0.9
-    notes: Kort kjoring, bilvei. Vindvinkelen er svakheten (N/NO fralands).
+    notes: Kort kjøring, bilvei. Vindvinkelen er svakheten (N/NØ fralands).
