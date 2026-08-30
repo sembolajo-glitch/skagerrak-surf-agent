@@ -149,16 +149,25 @@ git commit -m "oppdater geodata fra Kartverket"
 python build_fetch.py
 ```
 
-`fetch_geodata.py` kjenner ikke det eksakte WFS-endepunktet eller
-lagnavnene på forhånd – det prøver en liste kandidat-URL-er, kjører
-`GetCapabilities`, og matcher `FeatureType`-navn mot "kyst"/"dybde" i
-stedet for å anta faste navn. Kjør `python fetch_geodata.py --list-layers`
-først for å bare se hvilke lag tjenesten faktisk tilbyr, uten å prøve
-`GetFeature` i det hele tatt. Skriptet forventer at tjenesten kan kreve
-paginering, sette et tak på antall features per kall, og levere GML i
-stedet for GeoJSON – alt dette håndteres, men er **ikke verifisert mot den
-levende tjenesten** (utviklingsmiljøet dette ble skrevet i har ikke
-nettverkstilgang til geonorge.no).
+`fetch_geodata.py` gjetter ikke på WFS-URL-en – det opplagte gjettet
+(`wms.geonorge.no/skwms1/wfs.dybdedata2`, samme mønster som WMS-en) er
+**bekreftet feil (404)**. I stedet slår skriptet opp riktig endepunkt i
+[Geonorge sin kartkatalog-API](https://kartkatalog.geonorge.no/api/getdata/9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe)
+for datasettet "Sjøkart – Dybdedata" (UUID
+`9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe`), og leter rekursivt gjennom svaret
+etter et WFS-felt uten å anta et eksakt skjema. `--wfs-url` overstyrer
+oppslaget helt; de gamle gjettede kandidat-URL-ene er beholdt som siste
+utvei hvis kartkatalog-oppslaget selv skulle feile.
+
+Lagnavnene er heller ikke hardkodet – skriptet kjører `GetCapabilities` på
+den funnede URL-en og matcher `FeatureType`-navn mot "kyst"/"dybde" i
+stedet. Kjør `python fetch_geodata.py --list-layers` for å bare se hvilke
+lag tjenesten faktisk tilbyr, uten å prøve `GetFeature` i det hele tatt.
+Skriptet forventer at tjenesten kan kreve paginering, sette et tak på
+antall features per kall, og levere GML i stedet for GeoJSON – alt dette
+håndteres, men er **ikke verifisert mot den levende tjenesten**
+(utviklingsmiljøet dette ble skrevet i har ikke nettverkstilgang til
+geonorge.no).
 
 Skriptet skal **aldri fullføre stille**: hvert eneste HTTP-kall – også de
 som feiler – logges til stderr (full URL, statuskode/unntak, første 500

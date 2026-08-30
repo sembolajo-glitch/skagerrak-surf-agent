@@ -8,6 +8,7 @@ foerste gang fetch_geodata.py faktisk kjores mot Kartverket, og juster om
 noe her ikke stemmer med virkeligheten.
 """
 
+import argparse
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -124,6 +125,82 @@ def test_match_layer_delvis_naar_ikke_eksakt():
 
 def test_match_layer_ingen_treff():
     assert F.match_layer(["app:Noe_annet"], ["dybdekurve"]) is None
+
+
+# ---------------------------------------------------- kartkatalog-oppslag
+
+
+def test_walk_json_besoker_nestede_dict_og_liste():
+    data = {"a": 1, "b": {"c": 2, "d": [{"e": 3}, {"e": 4}]}}
+    found = [(path, key, value) for path, key, value in F._walk_json(data)
+             if not isinstance(value, dict)]
+    assert ("a", "a", 1) in found
+    assert ("b.c", "c", 2) in found
+    assert ("b.d[0].e", "e", 3) in found
+    assert ("b.d[1].e", "e", 4) in found
+
+
+def test_extract_wfs_url_finner_getcapabilitiesurl_felt():
+    data = {"Title": "Sjøkart - Dybdedata", "GetCapabilitiesUrl": "https://x.example/wfs?service=WFS"}
+    assert F._extract_wfs_url(data) == "https://x.example/wfs"
+
+
+def test_extract_wfs_url_finner_distribution_objekt_med_protocol():
+    data = {
+        "Distributions": [
+            {"protocol": "OGC WMS", "url": "https://x.example/wms"},
+            {"protocol": "OGC WFS 2.0", "url": "https://x.example/skwms1/wfs.dybdedata2"},
+        ]
+    }
+    assert F._extract_wfs_url(data) == "https://x.example/skwms1/wfs.dybdedata2"
+
+
+def test_extract_wfs_url_svak_match_paa_url_som_siste_utvei():
+    data = {"SomeField": "https://x.example/path/wfs.dybdedata2"}
+    assert F._extract_wfs_url(data) == "https://x.example/path/wfs.dybdedata2"
+
+
+def test_extract_wfs_url_ingen_treff_lister_alle_urler_i_feilmelding():
+    data = {"a": "https://x.example/a", "b": {"c": "https://x.example/b"}}
+    with pytest.raises(RuntimeError) as exc_info:
+        F._extract_wfs_url(data)
+    msg = str(exc_info.value)
+    assert "https://x.example/a" in msg
+    assert "https://x.example/b" in msg
+
+
+def test_extract_wfs_url_prioriterer_getcapabilities_over_svak_match():
+    data = {
+        "junk": "https://x.example/wfs-noe-random",
+        "GetCapabilitiesUrl": "https://x.example/riktig/wfs",
+    }
+    assert F._extract_wfs_url(data) == "https://x.example/riktig/wfs"
+
+
+def test_build_candidates_wfs_url_overstyrer_uten_oppslag(monkeypatch):
+    called = []
+    monkeypatch.setattr(F, "lookup_wfs_url", lambda **kw: called.append(1) or "should-not-be-used")
+    args = argparse.Namespace(wfs_url="https://override.example/wfs")
+    candidates = F.build_candidates(args, dump_dir=None)
+    assert candidates[0] == "https://override.example/wfs"
+    assert called == []  # kartkatalog-oppslag skal IKKE kjores naar --wfs-url er satt
+
+
+def test_build_candidates_faller_tilbake_til_gjettede_urler_ved_feil(monkeypatch):
+    def boom(**kw):
+        raise RuntimeError("kartkatalog utilgjengelig")
+    monkeypatch.setattr(F, "lookup_wfs_url", boom)
+    args = argparse.Namespace(wfs_url=None)
+    candidates = F.build_candidates(args, dump_dir=None)
+    assert candidates == F.WFS_URL_CANDIDATES
+
+
+def test_build_candidates_bruker_oppslaatt_url_forst(monkeypatch):
+    monkeypatch.setattr(F, "lookup_wfs_url", lambda **kw: "https://funnet.example/wfs")
+    args = argparse.Namespace(wfs_url=None)
+    candidates = F.build_candidates(args, dump_dir=None)
+    assert candidates[0] == "https://funnet.example/wfs"
+    assert candidates[1:] == F.WFS_URL_CANDIDATES
 
 
 # ------------------------------------------------- raadata-dumping (aldri stille)

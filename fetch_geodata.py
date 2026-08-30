@@ -11,10 +11,19 @@ workflowen (forecast.yml kjoerer aldri dette).
 
 WMS-referansen oppgitt for datasettet er
     https://wms.geonorge.no/skwms1/wms.dybdedata2
-Vi kjenner ikke det eksakte WFS-endepunktet eller lagnavnene paa forhaand,
-saa skriptet:
-  1. proever en liste kandidat-URL-er + WFS-versjoner og kjoerer
-     GetCapabilities paa hver, til en svarer.
+Det AAPENBARE WFS-gjettet (samme vert/sti-monster) - wms.geonorge.no/skwms1/
+wfs.dybdedata2 - gir 404. Riktig URL slaas derfor opp paa forhaand, ikke
+gjettes: skriptet spoerr Geonorge sin kartkatalog-API om metadata for
+datasettet "Sjøkart - Dybdedata" (UUID 9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe,
+se DYBDEDATA_WFS_UUID) og leter gjennom svaret (rekursivt, uten aa anta
+eksakt feltnavn) etter et WFS GetCapabilities-felt. Den URL-en brukes
+direkte. --wfs-url overstyrer oppslaget helt; de gamle gjettede
+kandidat-URL-ene (WFS_URL_CANDIDATES) er beholdt som siste utvei hvis
+kartkatalog-oppslaget selv feiler.
+
+Naar en base-URL er bestemt (uansett kilde):
+  1. proever WFS-versjoner (2.0.0, 1.1.0, 1.0.0) med GetCapabilities til en
+     svarer.
   2. leser de faktiske FeatureType-navnene fra svaret og matcher dem mot
      "kyst"/"dybde"-noekkelord i stedet for aa anta faste navn.
   3. proever outputFormat=application/json foerst; faller tilbake til GML
@@ -62,6 +71,15 @@ TIMEOUT = 60
 
 USER_AGENT = "skagerrak-surf-agent/fetch_geodata (kartverket-geodata-integration)"
 
+# "Sjøkart - Dybdedata" i Geonorge sin kartkatalog. UUID-en er stabil selv
+# om den faktiske tjeneste-URL-en skulle endre seg igjen.
+DYBDEDATA_WFS_UUID = "9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe"
+KARTKATALOG_API = "https://kartkatalog.geonorge.no/api/getdata/{uuid}"
+
+# Siste utvei hvis oppslaget mot kartkatalogen selv feiler (nettverksfeil,
+# uventet svarskjema). Det opplagte gjettet i lista - wms.geonorge.no/skwms1/
+# wfs.dybdedata2 - er BEKREFTET FEIL (404), men staar igjen som dokumentasjon
+# paa hva som er proevd.
 WFS_URL_CANDIDATES = [
     "https://wfs.geonorge.no/skwms1/wfs.dybdedata2",
     "https://openwfs.geonorge.no/skwms1/wfs.dybdedata2",
@@ -161,15 +179,148 @@ def _localname(tag):
     return tag.split("}", 1)[-1] if "}" in tag else tag
 
 
+# --------------------------------------------------------------- kartkatalog
+
+
+def _walk_json(obj, path=""):
+    """
+    Rekursiv generator over en JSON-struktur: yielder (path, key, value) for
+    hvert dict-felt (path er en '.'/'[i]'-notasjon for feilsoeking). Brukes
+    til aa lete etter en WFS-URL i kartkatalog-metadata UTEN aa anta et
+    eksakt skjema paa forhaand - vi vet ikke sikkert om feltet heter
+    GetCapabilitiesUrl, DistributionUrl, eller ligger i en Distributions-liste.
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            new_path = f"{path}.{k}" if path else k
+            yield (new_path, k, v)
+            yield from _walk_json(v, new_path)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            yield from _walk_json(v, f"{path}[{i}]")
+
+
+def _iter_dicts(obj):
+    """
+    Rekursiv generator over ALLE dict-objekter i en JSON-struktur - ogsaa de
+    som ligger som elementer i en liste (f.eks. hvert element i en
+    Distributions-liste). _walk_json alene fanger ikke disse som en
+    'value', siden listeelementer ikke har en dict-noekkel aa henge (path,
+    key, value) paa.
+    """
+    if isinstance(obj, dict):
+        yield obj
+        for v in obj.values():
+            yield from _iter_dicts(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _iter_dicts(v)
+
+
+def _extract_wfs_url(data):
+    """
+    Ren funksjon (ingen nettverk): let gjennom kartkatalog-metadata etter en
+    WFS GetCapabilities-URL. Returnerer base-URL-en (uten spoerrestreng -
+    discover_service bygger sine egne service/request/version-parametre).
+    Kaster RuntimeError med en liste over ALLE URL-er funnet i svaret hvis
+    ingenting matcher, saa feilen er lett aa undersoeke manuelt.
+
+    Prioritet:
+      1. et felt hvis navn inneholder "getcapabilit" og hvis verdi nevner wfs
+      2. et felt "protocol"/"type" = noe med "wfs" ved siden av en "url"
+         eller tilsvarende i samme objekt (vanlig i Distributions-lister)
+      3. enhver URL-streng som selv inneholder baade "wfs" og "getcapabilit"
+      4. enhver URL-streng som inneholder "wfs" (svakest signal, sist)
+    """
+    candidates = []  # (prioritet, url, beskrivelse)
+
+    for path, key, value in _walk_json(data):
+        if isinstance(value, str) and value.startswith("http"):
+            kl, vl = key.lower(), value.lower()
+            if "getcapabilit" in kl:
+                candidates.append((0, value, f"felt '{path}'"))
+            elif "wfs" in vl and "getcapabilit" in vl:
+                candidates.append((1, value, f"felt '{path}' (URL inneholder GetCapabilities)"))
+            elif "wfs" in vl:
+                candidates.append((3, value, f"felt '{path}' (URL inneholder 'wfs')"))
+
+    # "protocol"/"type" = noe med "wfs" ved siden av en "url" i SAMME objekt -
+    # vanlig i Distributions-lister. Maa skanne alle dict-er (ogsaa
+    # listeelementer), ikke bare _walk_json sine (path, key, value)-treff.
+    for d in _iter_dicts(data):
+        proto = url = None
+        for k2, v2 in d.items():
+            if k2.lower() in ("protocol", "type", "protocolname") and isinstance(v2, str) and "wfs" in v2.lower():
+                proto = v2
+            if k2.lower() in ("url", "getcapabilitiesurl", "distributionurl") and isinstance(v2, str) and v2.startswith("http"):
+                url = v2
+        if proto and url:
+            candidates.append((0, url, f"objekt (protocol={proto!r})"))
+
+    if not candidates:
+        all_urls = sorted({v for _, k, v in _walk_json(data) if isinstance(v, str) and v.startswith("http")})
+        raise RuntimeError(
+            "Fant ingen WFS-URL i kartkatalog-metadata. "
+            f"Alle URL-er i svaret: {all_urls or '(ingen URL-er funnet i det hele tatt)'}"
+        )
+
+    candidates.sort(key=lambda c: c[0])
+    best_score, best_url, desc = candidates[0]
+    others = [c for c in candidates[1:] if c[1] != best_url]
+    log(f"  fant WFS-URL via {desc}: {best_url}")
+    if others:
+        log(f"  ({len(others)} andre kandidat(er) vurdert og forkastet: "
+            f"{[c[1] for c in others[:5]]})")
+
+    return best_url.split("?")[0]
+
+
+def lookup_wfs_url(uuid=DYBDEDATA_WFS_UUID, dump_dir=None):
+    """
+    Slaa opp WFS-endepunktet for datasettet i Geonorge sin kartkatalog-API
+    i stedet for aa gjette paa URL-monster (det opplagte gjettet,
+    wms.geonorge.no/skwms1/wfs.dybdedata2, er bekreftet aa gi 404).
+    """
+    url = KARTKATALOG_API.format(uuid=uuid)
+    log(f"Slaar opp WFS-URL for datasett {uuid} i Geonorge kartkatalog ...")
+    r = _get(url, {}, dump_dir=dump_dir, tag=f"kartkatalog_{uuid}")
+    data = r.json()
+    return _extract_wfs_url(data)
+
+
+def build_candidates(args, dump_dir):
+    """
+    Bygg den ordnede lista av WFS-base-URL-er aa proeve:
+      1. --wfs-url, hvis satt - overstyrer alt annet, INGEN kartkatalog-oppslag.
+      2. ellers: URL-en slaatt opp i kartkatalogen for DYBDEDATA_WFS_UUID.
+      3. de gamle gjettede kandidatene, som siste utvei hvis 1-2 feiler/mangler.
+    """
+    if args.wfs_url:
+        log(f"--wfs-url overstyrer: {args.wfs_url} (hopper over kartkatalog-oppslag)")
+        return [args.wfs_url] + list(WFS_URL_CANDIDATES)
+
+    candidates = []
+    try:
+        looked_up = lookup_wfs_url(dump_dir=dump_dir)
+        candidates.append(looked_up)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ADVARSEL: kartkatalog-oppslag feilet ({type(exc).__name__}: {exc})")
+        log("  faller tilbake til gjettede kandidat-URL-er (se WFS_URL_CANDIDATES)")
+
+    for c in WFS_URL_CANDIDATES:
+        if c not in candidates:
+            candidates.append(c)
+    return candidates
+
+
 # ------------------------------------------------------------ GetCapabilities
 
 
-def discover_service(url_candidates, extra_url=None, dump_dir=None):
+def discover_service(candidates, dump_dir=None):
     """
-    Proev kandidat-URL-er x versjoner til GetCapabilities svarer.
-    Returnerer (base_url, version, {layer_name: xml_element}).
+    Proev kandidat-URL-er (se build_candidates) x WFS-versjoner til
+    GetCapabilities svarer. Returnerer (base_url, version, {layer_name: xml_element}).
     """
-    candidates = ([extra_url] if extra_url else []) + list(url_candidates)
     last_err = None
     for base_url in candidates:
         for version in WFS_VERSIONS:
@@ -651,21 +802,18 @@ def _count_coords(geom):
 
 
 def list_layers(args, dump_dir):
-    log(f"Soeker WFS-endepunkt for --list-layers (kandidater: "
-        f"{([args.wfs_url] if args.wfs_url else []) + WFS_URL_CANDIDATES}) ...")
-    base_url, version, feature_types = discover_service(
-        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
-    )
+    candidates = build_candidates(args, dump_dir)
+    log(f"Soeker WFS-endepunkt for --list-layers (kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
     log(f"\n{base_url} (WFS {version}) - {len(feature_types)} lag:")
     for name in sorted(feature_types):
         print(name)
 
 
 def run_pipeline(args, out_dir, dump_dir):
-    log(f"Soeker WFS-endepunkt (bbox={args.bbox}) ...")
-    base_url, version, feature_types = discover_service(
-        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
-    )
+    candidates = build_candidates(args, dump_dir)
+    log(f"Soeker WFS-endepunkt (bbox={args.bbox}, kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
     log(f"Bruker {base_url} (WFS {version})")
     log(f"Tilgjengelige lag: {sorted(feature_types.keys())}")
 
@@ -701,7 +849,9 @@ def main():
     ap.add_argument("--bbox", nargs=4, type=float, metavar=("LAT_MIN", "LON_MIN", "LAT_MAX", "LON_MAX"),
                      default=DEFAULT_BBOX)
     ap.add_argument("--tolerance-m", type=float, default=DEFAULT_TOLERANCE_M)
-    ap.add_argument("--wfs-url", default=None, help="Override/legg til kandidat-URL foerst i lista")
+    ap.add_argument("--wfs-url", default=None,
+                     help="Overstyr WFS-base-URL helt (hopper over kartkatalog-oppslaget). "
+                          "Bruk denne hvis oppslaget mot kartkatalog.geonorge.no selv gir feil URL.")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--list-layers", action="store_true",
                      help="Bare kjor GetCapabilities og skriv ut alle tilgjengelige lagnavn, ikke hent features")
