@@ -46,7 +46,7 @@ def test_validate_reference_points_alle_bestaar():
     tree, line_geoms = _tree_from_lines(lines)
     ok, rows = V.validate_reference_points(tree, line_geoms)
     assert ok is True
-    assert len(rows) == 4
+    assert len(rows) == len(V.REFERENCE_POINTS)
     assert all(r[5] for r in rows)
 
 

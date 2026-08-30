@@ -39,6 +39,46 @@ def test_compass_16_matcher_spots_yaml_konvensjon():
     assert len(B.COMPASS_16) == 16
 
 
+def test_compute_fetch_72_effektiv_flat_tabell_uendret():
+    tbl = [10.0] * 72
+    eff = B.compute_fetch_72_effektiv(tbl)
+    assert eff == tbl
+
+
+def test_compute_fetch_72_effektiv_drukner_enkelt_smett():
+    """Kjernen i brukerens funn: en enkelt straale som smetter gjennom et
+    trangt skjaer gir 300 km midt i en retning der naboene er blokkert paa
+    under 1 km - medianen skal droppe utliggeren, ikke ta den med."""
+    tbl = [0.5] * 72
+    tbl[10] = 300.0  # naboene (idx 8,9,11,12) er fortsatt 0.5
+    eff = B.compute_fetch_72_effektiv(tbl)
+    assert eff[10] == 0.5
+    # punktene rundt paavirkes ikke av en enkelt nabo-utligger heller
+    assert eff[8] == 0.5 and eff[12] == 0.5
+
+
+def test_compute_fetch_72_effektiv_bruker_riktig_vindu():
+    """window=2 med 5-graders steg -> +-10 grader (idx-2..idx+2, 5 verdier)."""
+    tbl = [1.0] * 72
+    tbl[10] = 100.0  # innenfor +-2 av idx 10,11,12 (avstand <=2)
+    eff = B.compute_fetch_72_effektiv(tbl)
+    # idx 10 selv: median([1,1,100,1,1]) = 1.0 (kun 1 utligger av 5)
+    assert eff[10] == 1.0
+    # idx 12 (2 unna): median([1,1,1,1,100]) fortsatt 1.0
+    assert eff[12] == 1.0
+    # idx 13 (3 unna, utenfor vinduet): helt upaavirket
+    assert eff[13] == 1.0
+
+
+def test_compute_fetch_72_effektiv_wrap_rundt_0():
+    tbl = [5.0] * 72
+    tbl[0] = 300.0
+    eff = B.compute_fetch_72_effektiv(tbl)
+    # idx 70, 71 er innenfor +-2 av idx 0 naar man teller med wrap
+    assert eff[71] == 5.0
+    assert eff[1] == 5.0
+
+
 def test_group_by_depth_filtrerer_pa_toleranse():
     close = LineString([(0, 0), (100, 0)])
     far = LineString([(0, 100), (100, 100)])

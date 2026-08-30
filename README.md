@@ -222,33 +222,58 @@ responser.
 
 `build_fetch.py` endrer **aldri** `physics.py`, `ensemble.py` eller de
 eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –
-det legger bare til `fetch_km_72`, `fetch_km_manuell` og
-`dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan de
-nye tallene skal erstatte de håndlagde, er et eget steg.
+det legger bare til `fetch_km_72`, `fetch_km_72_effektiv`, `fetch_km_manuell`
+og `dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan
+de nye tallene skal erstatte de håndlagde, er et eget steg.
+
+**`fetch_km_72` vs. `fetch_km_72_effektiv`.** Rå enkelt-stråleskyting kan
+smette gjennom en trang passasje mellom skjær og gi f.eks. 300 km i en
+retning der naboretningene er blokkert på under en kilometer – det er en
+metodeforskjell mot håndmålt "fetch i bølgeforstand" (som ser bort fra slike
+smett), ikke en feil i strålene selv. `fetch_km_72_effektiv` tar medianen av
+strålen og de fire naboene i en ±10°-sektor (samme 5°-oppløsning som
+`fetch_km_72` selv – vinduet dekker akkurat ±10°), og er tabellen
+avviksrapporten faktisk sammenligner mot `fetch_km_manuell`.
+
+**Kjørt mot ekte data, effekten er blandet:** noen spot forbedres kraftig
+(Bastøy odden: største avvik 144→33 km), andre er uendret (Larkollen:
+298→298 km) eller til og med litt verre (Hvasser/Sandø: 88→180 km) – en
+enkelt utligger blir borte i medianen, men et par av spottene har flere enn
+fem sammenhengende 5°-punkter som smetter gjennom (eller det er reell fetch
+gjennom en trang, men faktisk åpen renne som de håndlagde tabellene aldri
+fanget). `fetch_km_72_effektiv` er ikke en fasit – bruk avviksrapporten til
+å se hvilke spot som fortsatt trenger et lengre medianvindu eller manuell
+gjennomgang.
 
 **`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
 
-1. *Referansepunkter.* Avstand fra `data/kystkontur.geojson` til fire punkter
-   med kjent, grovt anslått avstand til land. Det viktigste er punktet midt
-   i Vestfjorden (skal være langt fra land) – havner *det* nær land, er
-   konturen sannsynligvis speilvendt eller akse-byttet, uansett hvor riktig
-   de andre punktene ser ut isolert. Feiler (exit 1) hvis noe punkt bryter
-   sin terskel – blokkerer committ-steget i `geodata.yml`.
+1. *Referansepunkter.* Avstand fra `data/kystkontur.geojson` til fem punkter
+   med kjent, grovt anslått avstand til land. De to viktigste er ute i åpent
+   vann og skal være *langt* fra land (midt i Vestfjorden mellom
+   Bolærne/Rauer, og åpent Skagerrak sørvest for Færder) – havner et av dem
+   nær land, er konturen sannsynligvis speilvendt, akse-byttet eller
+   forskjøvet/rotert, uansett hvor riktig de kystnære punktene ser ut isolert.
+   Feiler (exit 1) hvis noe punkt bryter sin terskel – blokkerer
+   committ-steget i `geodata.yml`.
 2. *SVG-forhåndsvisning* – hele kystkonturen tegnet med de 14 spottene fra
    `spots.yaml` markert, skrevet til `out/kystkontur_preview.svg` og lastet
    opp som Actions-artifact (`kystkontur-preview`) uansett utfall, siden
    bildet er mest nyttig akkurat når noe har gått galt.
 
 **Kjørt mot ekte nedlastet data 2026-08-30** (61 594 kystkontur-features,
-bounds 9,30–11,21 Ø / 58,72–59,50 N): tre av fire referansepunkter besto med
+bounds 9,30–11,21 Ø / 58,72–59,50 N): tre av fem referansepunkter besto med
 tette, plausible marginer (Færder fyr 22 m, Slagen 229 m, Bastøy sørspiss
-238 m). Vestfjorden-punktet var 939 m fra land, ikke > 3000 m som forventet
-– men nærmeste konturpunkt lå bare ~940 m unna på nesten identisk
-breddegrad, altså sammenhengende lokal geometri (trolig en reell
-skjærgård/øygruppe nærmere det antatte fjordmidtpunktet enn terskelen la
-til grunn), ikke et vilkårlig hopp et speilvendt datasett ville gitt. Om
-terskelen eller referansepunktet bør justeres er en vurdering, ikke noe
-skriptet gjør automatisk.
+238 m). De to fjerneste punktene besto ikke, men er ikke i nærheten av å
+være på land: "Midt i Vestfjorden" var 2399 m fra land (krav 3000 m,
+nærmeste konturpunkt på nesten identisk breddegrad), "Åpent Skagerrak" var
+7723 m (krav 10 000 m, nærmeste kontur rett nord). Begge er sammenhengende,
+lokal geometri – ikke de vilkårlige hoppene et speilvendt eller forskjøvet
+datasett ville gitt. Mest sannsynlig er terskelen satt en anelse strammere
+enn den faktiske fjordbredden/kystavstanden der. Det opprinnelige
+Vestfjorden-punktet (59.200/10.600) lå enda nærmere – rett ved
+Bolærne/Rauer, ikke i åpen fjord – og ble flyttet til 59.250/10.560 av
+samme grunn. Om terskelen eller punktene bør justeres videre er en
+vurdering, ikke noe skriptet gjør automatisk.
 
 ---
 

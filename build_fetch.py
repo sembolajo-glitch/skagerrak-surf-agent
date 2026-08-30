@@ -9,11 +9,21 @@ data/kystkontur.geojson og data/dybdekurve.geojson finnes.
 For hvert spot i spots.yaml:
   - Steg 2: skyter straaler i 72 retninger (0, 5, 10, ..., 355 grader,
     kompass/med klokka) fra spotens (lat, lon) til foerste skjaering med
-    kystkontur, tak 300 km. Skrevet som `fetch_km_72`.
+    kystkontur, tak 300 km. Skrevet som `fetch_km_72` (raa enkeltstraale).
+
+    Raa enkeltstraale kan smette gjennom trange passasjer mellom skjaer og
+    gi f.eks. 300 km i en retning der naboretningene er blokkert paa under
+    en kilometer - det er en metodeforskjell mot haandmaalt "fetch i
+    boelgeforstand" (som ser bort fra slike smett), ikke en feil i
+    straaleskytingen. `fetch_km_72_effektiv` er medianen av de fem
+    straalene i en +-10 grader sektor rundt hver retning (se
+    compute_fetch_72_effektiv()) - drukner enkeltsmett, og er den som
+    faktisk sammenlignes mot de haandlagde tabellene i avviksrapporten.
   - Steg 3: for spotens `facing`-retning, finner avstanden til 20-, 30- og
     50-meterskoten i dybdekurve-laget. Skrevet som `dybde_20m_km`,
     `dybde_30m_km`, `dybde_50m_km` (null hvis koten ikke finnes/treffes
-    innenfor taket).
+    innenfor taket). Disse trenger ingen etterbehandling tilsvarende
+    fetch_km_72_effektiv - skrives rett inn som de maales.
 
 Eksisterende 16-punkts fetch-tabeller (`fetch_km` / `local_fetch_km`)
 BEHOLDES uendret - agent.py/physics.py bruker dem fortsatt. En kopi
@@ -25,6 +35,7 @@ Dette skriptet endrer ALDRI physics.py, ensemble.py eller agent.py.
 """
 
 import argparse
+import statistics
 import sys
 from pathlib import Path
 
@@ -74,22 +85,40 @@ def compute_fetch_72(lon, lat, kyst_tree, kyst_lines):
     ]
 
 
-def report_deviation(spot_id, manual, measured_72):
-    log(f"\n  {spot_id}: manuell vs maalt (72 pkt interpolert til 16 pkt)")
-    log(f"  {'ret':<5}{'manuell':>9}{'maalt':>9}{'avvik':>9}")
+def compute_fetch_72_effektiv(fetch_km_72, window=2):
+    """
+    "Effektiv" fetch: medianen av straalen selv og `window` naboer paa hver
+    side (window=2 -> +-2*5 grader = +-10 grader, siden fetch_km_72 er
+    samplet hver 5. grad - de fem straalene DEKKER akkurat +-10 grader).
+    Median (ikke gjennomsnitt) gjor at en enkelt smett-gjennom-straale
+    (avviker sterkt fra naboene) ikke drar verdien med seg.
+    """
+    n = len(fetch_km_72)
+    return [
+        round(statistics.median(fetch_km_72[(i + k) % n] for k in range(-window, window + 1)), 1)
+        for i in range(n)
+    ]
+
+
+def report_deviation(spot_id, manual, measured_72_eff):
+    """`measured_72_eff` skal vaere fetch_km_72_effektiv (median-i-sektor),
+    ikke raa fetch_km_72 - raa enkeltstraale gir kunstig store avvik pga.
+    smett gjennom trange passasjer, se compute_fetch_72_effektiv()."""
+    log(f"\n  {spot_id}: manuell vs maalt-effektiv (72 pkt interpolert til 16 pkt)")
+    log(f"  {'ret':<5}{'manuell':>9}{'maalt-eff':>10}{'avvik':>9}")
     deltas = []
     for j, label in enumerate(COMPASS_16):
         bearing = j * 22.5
         m = manual[j]
-        measured = interp_table(measured_72, FETCH_STEP_DEG, bearing)
+        measured = interp_table(measured_72_eff, FETCH_STEP_DEG, bearing)
         d = measured - m
         deltas.append(d)
-        log(f"  {label:<5}{m:>9.1f}{measured:>9.1f}{d:>+9.1f}")
+        log(f"  {label:<5}{m:>9.1f}{measured:>10.1f}{d:>+9.1f}")
     mean_abs = sum(abs(d) for d in deltas) / len(deltas)
     worst_i = max(range(len(deltas)), key=lambda k: abs(deltas[k]))
     log(f"  gj.snitt |avvik|: {mean_abs:.1f} km   "
         f"storst avvik: {COMPASS_16[worst_i]} ({deltas[worst_i]:+.1f} km, "
-        f"manuell {manual[worst_i]:.1f} -> maalt {interp_table(measured_72, FETCH_STEP_DEG, worst_i*22.5):.1f})")
+        f"manuell {manual[worst_i]:.1f} -> maalt-eff. {interp_table(measured_72_eff, FETCH_STEP_DEG, worst_i*22.5):.1f})")
     return mean_abs, deltas[worst_i], COMPASS_16[worst_i]
 
 
@@ -182,18 +211,20 @@ def main():
     for spot in doc["spots"]:
         lon, lat = spot["lon"], spot["lat"]
         measured_72 = compute_fetch_72(lon, lat, kyst_tree, kyst_lines)
+        measured_72_eff = compute_fetch_72_effektiv(measured_72)
         spot["fetch_km_72"] = make_flow_seq(measured_72)
+        spot["fetch_km_72_effektiv"] = make_flow_seq(measured_72_eff)
 
         manual = spot.get("fetch_km") or spot.get("local_fetch_km")
         if manual:
             spot["fetch_km_manuell"] = make_flow_seq(list(manual))
-            mean_abs, worst_delta, worst_label = report_deviation(spot["id"], manual, measured_72)
+            mean_abs, worst_delta, worst_label = report_deviation(spot["id"], manual, measured_72_eff)
             all_mean_abs.append((spot["id"], mean_abs, worst_delta, worst_label))
         else:
             log(f"\n  {spot['id']}: ingen haandlaget tabell - ingen sammenligning")
 
     log("\n" + "-" * 70)
-    log("Oppsummering avvik (manuell - haandlaget vs maalt fra kystkontur):")
+    log("Oppsummering avvik (manuell - haandlaget vs maalt-effektiv fra kystkontur):")
     for spot_id, mean_abs, worst_delta, worst_label in sorted(all_mean_abs, key=lambda x: -x[1]):
         log(f"  {spot_id:<16} gj.snitt |avvik| {mean_abs:6.1f} km   "
             f"storst {worst_delta:+7.1f} km ({worst_label})")

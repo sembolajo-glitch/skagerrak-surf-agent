@@ -35,11 +35,21 @@ SPOTS_YAML = ROOT / "spots.yaml"
 DEFAULT_OUT_SVG = ROOT / "out" / "kystkontur_preview.svg"
 
 # id, navn, lat, lon, "lt"/"gt", terskel_m
+#
+# vestfjorden_midt (opprinnelig 59.200/10.600) feilet forste kjoring - IKKE
+# fordi kystkonturen var feil, men fordi punktet laa naer Bolærne/Rauer, ikke
+# midt i aapen fjord (bekreftet: naermeste konturpunkt var sammenhengende
+# lokal geometri paa nesten identisk breddegrad, ikke et vilkaarlig hopp).
+# Flyttet 2026-08-30 til den aapne delen av Vestfjorden mellom
+# Bolærne/Rauer, samme 3 km-krav.
 REFERENCE_POINTS = [
     ("slagen", "Slagen", 59.320, 10.500, "lt", 500),
     ("faerder_fyr", "Faerder fyr", 59.027, 10.524, "lt", 200),
     ("bastoy_sorspiss", "Bastoy sorspiss", 59.365, 10.530, "lt", 300),
-    ("vestfjorden_midt", "Midt i Vestfjorden", 59.200, 10.600, "gt", 3000),
+    ("vestfjorden_midt", "Midt i Vestfjorden", 59.250, 10.560, "gt", 3000),
+    # Aapent Skagerrak SV for Faerder - fanger opp en forskjoevet/rotert
+    # kystkontur (grov feil) som de fire fjordpunktene kan gaa glipp av.
+    ("skagerrak_apent", "Aapent Skagerrak (SV for Faerder)", 58.900, 10.200, "gt", 10000),
 ]
 
 
