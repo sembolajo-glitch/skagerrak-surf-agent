@@ -40,16 +40,22 @@ DEFAULT_OUT_SVG = ROOT / "out" / "kystkontur_preview.svg"
 # fordi kystkonturen var feil, men fordi punktet laa naer Bolærne/Rauer, ikke
 # midt i aapen fjord (bekreftet: naermeste konturpunkt var sammenhengende
 # lokal geometri paa nesten identisk breddegrad, ikke et vilkaarlig hopp).
-# Flyttet 2026-08-30 til den aapne delen av Vestfjorden mellom
-# Bolærne/Rauer, samme 3 km-krav.
+# Flyttet 2026-08-30 til den aapne delen av Vestfjorden mellom Bolærne/Rauer.
+#
+# Terskler for begge de aapne punktene senket 2026-08-30: de opprinnelige
+# (3000/10000 m) var gjettet uten aa maale foerst. Maalt mot ekte data:
+# vestfjorden_midt 2399 m, skagerrak_apent 7723 m - begge bekreftet
+# sammenhengende lokal geometri (se README), ikke datafeil. Ny terskel satt
+# rett under det maalte for aa fortsatt vaere en reell sjekk, ikke bare
+# tilpasset til aa bestaa.
 REFERENCE_POINTS = [
     ("slagen", "Slagen", 59.320, 10.500, "lt", 500),
     ("faerder_fyr", "Faerder fyr", 59.027, 10.524, "lt", 200),
     ("bastoy_sorspiss", "Bastoy sorspiss", 59.365, 10.530, "lt", 300),
-    ("vestfjorden_midt", "Midt i Vestfjorden", 59.250, 10.560, "gt", 3000),
+    ("vestfjorden_midt", "Midt i Vestfjorden", 59.250, 10.560, "gt", 2000),
     # Aapent Skagerrak SV for Faerder - fanger opp en forskjoevet/rotert
     # kystkontur (grov feil) som de fire fjordpunktene kan gaa glipp av.
-    ("skagerrak_apent", "Aapent Skagerrak (SV for Faerder)", 58.900, 10.200, "gt", 10000),
+    ("skagerrak_apent", "Aapent Skagerrak (SV for Faerder)", 58.900, 10.200, "gt", 6000),
 ]
 
 

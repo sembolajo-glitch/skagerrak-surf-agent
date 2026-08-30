@@ -235,15 +235,19 @@ strålen og de fire naboene i en ±10°-sektor (samme 5°-oppløsning som
 `fetch_km_72` selv – vinduet dekker akkurat ±10°), og er tabellen
 avviksrapporten faktisk sammenligner mot `fetch_km_manuell`.
 
-**Kjørt mot ekte data, effekten er blandet:** noen spot forbedres kraftig
-(Bastøy odden: største avvik 144→33 km), andre er uendret (Larkollen:
-298→298 km) eller til og med litt verre (Hvasser/Sandø: 88→180 km) – en
-enkelt utligger blir borte i medianen, men et par av spottene har flere enn
-fem sammenhengende 5°-punkter som smetter gjennom (eller det er reell fetch
-gjennom en trang, men faktisk åpen renne som de håndlagde tabellene aldri
-fanget). `fetch_km_72_effektiv` er ikke en fasit – bruk avviksrapporten til
-å se hvilke spot som fortsatt trenger et lengre medianvindu eller manuell
-gjennomgang.
+**Kjørt mot ekte data, effekten var blandet** – og en oppfølgende diagnose
+(`debug_fetch_rays.py`, se under) fant den egentlige årsaken: `FETCH_MAX_KM`
+(300 km) er langt større enn diagonalen på det nedlastede bbox-utsnittet
+(9,3–11,2 Ø / 58,7–59,5 N, diagonal ca. 150 km). Alle klasse C-spottene
+ligger nær kanten av utsnittet. En stråle som ikke treffer kystkontur *før*
+den forlater utsnittet finner rett og slett ikke mer data, og faller
+tilbake på 300 km-taket – det er verken en reell fjordåpning eller et smett
+mellom skjær, bare fravær av data lenger unna. `fetch_km_72_effektiv` kan
+aldri fikse dette, uansett vindusbredde – medianen av fem "kant"-verdier
+er fortsatt en kant-verdi. Se `debug_fetch_rays.py` for detaljene og
+hvilke stråler som faktisk er reelle kysttreff. Ikke prøv flere
+korreksjoner av *hvordan* strålen regnes ut – problemet er *hvor langt*
+dataene rekker, ikke algoritmen.
 
 **`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
 
@@ -261,19 +265,32 @@ gjennomgang.
    bildet er mest nyttig akkurat når noe har gått galt.
 
 **Kjørt mot ekte nedlastet data 2026-08-30** (61 594 kystkontur-features,
-bounds 9,30–11,21 Ø / 58,72–59,50 N): tre av fem referansepunkter besto med
-tette, plausible marginer (Færder fyr 22 m, Slagen 229 m, Bastøy sørspiss
-238 m). De to fjerneste punktene besto ikke, men er ikke i nærheten av å
-være på land: "Midt i Vestfjorden" var 2399 m fra land (krav 3000 m,
-nærmeste konturpunkt på nesten identisk breddegrad), "Åpent Skagerrak" var
-7723 m (krav 10 000 m, nærmeste kontur rett nord). Begge er sammenhengende,
-lokal geometri – ikke de vilkårlige hoppene et speilvendt eller forskjøvet
-datasett ville gitt. Mest sannsynlig er terskelen satt en anelse strammere
-enn den faktiske fjordbredden/kystavstanden der. Det opprinnelige
+bounds 9,30–11,21 Ø / 58,72–59,50 N): alle fem referansepunkter består.
+De tre kystnære består med tette, plausible marginer (Færder fyr 22 m,
+Slagen 229 m, Bastøy sørspiss 238 m). De to åpne punktene ("Midt i
+Vestfjorden" og "Åpent Skagerrak") feilet først – ikke fordi konturen var
+feil, men fordi de opprinnelige tersklene (3000/10 000 m) var *gjettet*
+uten å måle først. Målt: 2399 m og 7723 m, begge sammenhengende, lokal
+geometri (bekreftet ved å slå opp nærmeste konturpunkt – ikke de vilkårlige
+hoppene et speilvendt eller forskjøvet datasett ville gitt). Tersklene er
+senket til 2000/6000 m – rett under de målte verdiene, så sjekken fortsatt
+er reell og ikke bare tilpasset for å bestå. Det opprinnelige
 Vestfjorden-punktet (59.200/10.600) lå enda nærmere – rett ved
 Bolærne/Rauer, ikke i åpen fjord – og ble flyttet til 59.250/10.560 av
-samme grunn. Om terskelen eller punktene bør justeres videre er en
-vurdering, ikke noe skriptet gjør automatisk.
+samme grunn.
+
+**`debug_fetch_rays.py`** (engangsdiagnose, ikke i `geodata.yml`) – for de
+fem klasse C-spottene: skriver ut alle 72 råe `fetch_km_72`-verdiene i en
+tabell sammen med retning, og klassifiserer hver stråle som ekte
+kysttreff ("kyst") eller som en stråle som forlot bbox-utsnittet før den
+fant noe å treffe ("kant" – se over). Tegner én SVG per spot med alle 72
+strålene oppå kystkonturen, farget etter kategori, pluss en stiplet ramme
+som viser bbox-kanten. **Kjørt mot ekte data:** 52 av 360 stråler (alle
+fem spot) er "kant". De ekte kysttreffene er gjennomgående under 20–30 km
+– konsistent med indre fjord/skjærgård, ikke åpent Skagerrak. Dette
+bekreftet at "uendret etter median"-mønsteret fra `fetch_km_72_effektiv`
+ikke betyr en reell fjordåpning eller et smett som ikke bør telle – det
+betyr at dataene rett og slett ikke rekker langt nok i den retningen.
 
 ---
 
