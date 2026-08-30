@@ -126,11 +126,56 @@ Sannsynligheten trenger en egen sjekk: grupper alle varsler i 10 %-bøtter og se
 
 ---
 
+## Geodata fra Kartverket
+
+`fetch_km` og `dybdekurve` var opprinnelig håndlagde tall fra kartlesing. To
+engangsskript erstatter dem med målte verdier fra Kartverkets sjøkart-WFS
+("Sjøkart – Dybdedata", Geonorge, CC BY 4.0). Ingen av dem kjører i
+`forecast.yml` – kjør dem manuelt når geodataene trenger oppdatering:
+
+```
+pip install -r requirements-geodata.txt
+
+# 1. Last ned Kystkontur + Dybdekurve for 58.7-59.5 N, 9.3-11.2 Ø,
+#    forenkle (~20 m toleranse) og lagre som GeoJSON i data/.
+python fetch_geodata.py
+git add data/*.geojson
+git commit -m "oppdater geodata fra Kartverket"
+
+# 2+3. Skyt 72 stråler per spot mot kystkontur (fetch_km_72) og finn
+#      avstand til 20/30/50-meterskoten langs facing (dybde_Xm_km).
+#      Skriver rett inn i spots.yaml, rapporterer avvik mot de
+#      håndlagde 16-punkts-tabellene (fetch_km_manuell) på stderr.
+python build_fetch.py
+```
+
+`fetch_geodata.py` kjenner ikke det eksakte WFS-endepunktet eller
+lagnavnene på forhånd – det prøver en liste kandidat-URL-er, kjører
+`GetCapabilities`, og matcher `FeatureType`-navn mot "kyst"/"dybde" i
+stedet for å anta faste navn. Det forventer at tjenesten kan kreve
+paginering, sette et tak på antall features per kall, og levere GML i
+stedet for GeoJSON – alt dette håndteres, men er **ikke verifisert mot den
+levende tjenesten** (utviklingsmiljøet dette ble skrevet i har ikke
+nettverkstilgang til geonorge.no). Kjør med `--dump-raw` første gang og se
+rapporten skriptet skriver ut til stderr; den sier eksplisitt hvilken
+URL/versjon/format som faktisk ble brukt. Meld fra om noe i parsingen ikke
+stemmer, så rettes det opp – de rene parse-funksjonene har enhetstester i
+`test_fetch_geodata.py`, men de er skrevet mot håndlagde XML-eksempler
+etter OGC-spekken, ikke mot ekte responser.
+
+`build_fetch.py` endrer **aldri** `physics.py`, `ensemble.py` eller de
+eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –
+det legger bare til `fetch_km_72`, `fetch_km_manuell` og
+`dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan de
+nye tallene skal erstatte de håndlagde, er et eget steg.
+
+---
+
 ## Hva den ikke gjør
 
 - **Ingen refraksjon eller shoaling ved brytningen.** Hs er dypvannsverdi utenfor spotten, ikke bølgehøyden i ansiktet.
 - **Ingen strøm.** Utgående brakkvann mot sørlig vind gjør fjordsjøen brattere enn fetchen tilsier.
-- **Fetch-tabellene er håndlaget** fra kartlesing, ikke generert fra kystlinjedata.
+- **Fetch-tabellene som faktisk brukes (`fetch_km`/`local_fetch_km`) er fortsatt håndlaget** fra kartlesing. Målte verdier finnes nå ved siden av som `fetch_km_72`/`dybde_Xm_km` (se «Geodata fra Kartverket» over), men er ikke koblet inn i beregningen ennå.
 - **`min_hs` for de ti uprøvde spottene er gjetning.** Ensemblet gir dem automatisk lavere `confidence`, men det fikser ikke en systematisk feil terskel. Behandle varslene deres som hypoteser.
 
 Første sesong er datainnsamling. Andre sesong er den nyttig.

@@ -1,0 +1,93 @@
+name: geodata
+
+# Engangsjobb: hent Kystkontur/Dybdekurve fra Kartverket (Geonorge WFS,
+# CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km. KUN manuell trigger - aldri
+# paa tidsplan. Ruerer ikke forecast.yml eller main: resultatet havner paa
+# en egen gren (geodata-resultat) for gjennomsyn foer eventuell merge.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  geodata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements-geodata.txt -r requirements-dev.txt
+
+      # continue-on-error slik at artifact-opplastingen av data/_raw/ lenger
+      # ned kjorer selv om nedlastingen/parsingen mot Kartverket ryker - det
+      # er eneste maaten aa faa ut raadata for feilsoeking naar dette kjores
+      # fra Actions og ingen har terminaltilgang til runneren.
+      - name: Hent geodata fra Kartverket
+        id: fetch
+        continue-on-error: true
+        run: python fetch_geodata.py --dump-raw
+
+      - name: Sjekk filstorrelse
+        run: |
+          set -e
+          fail=0
+          for f in data/kystkontur.geojson data/dybdekurve.geojson; do
+            if [ ! -f "$f" ]; then
+              echo "::warning::$f finnes ikke - fetch_geodata.py leverte ikke dette laget"
+              continue
+            fi
+            bytes=$(stat -c%s "$f")
+            mb=$(( bytes / 1024 / 1024 ))
+            echo "$f: ${mb} MB (${bytes} bytes)"
+            if [ "$bytes" -gt $((90 * 1024 * 1024)) ]; then
+              echo "::error::$f er ${mb} MB - over 90 MB-taket. Ok forenklingstoleranse i fetch_geodata.py (--tolerance-m) eller trangere --bbox og kjor paa nytt."
+              fail=1
+            fi
+          done
+          if [ "$fail" -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Beregn fetch og dybdeprofil (build_fetch.py)
+        run: python build_fetch.py
+
+      - name: Kjor tester
+        run: python -m pytest -q
+
+      - name: Committ resultatet til geodata-resultat
+        run: |
+          git config user.name  "surf-agent"
+          git config user.email "surf-agent@users.noreply.github.com"
+          git checkout -B geodata-resultat
+
+          shopt -s nullglob
+          geo_files=(data/*.geojson)
+          if [ ${#geo_files[@]} -gt 0 ]; then
+            git add "${geo_files[@]}"
+          fi
+          git add spots.yaml
+
+          git commit -m "geodata: kystkontur/dybdekurve + fetch_km_72/dybde_Xm_km ($(date -u +%FT%TZ))" \
+            || echo "ingen endringer aa committe"
+          git push -f origin geodata-resultat
+
+      - name: Last opp raadata som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geodata-raw
+          path: data/_raw/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Feil jobben tydelig hvis nedlastingen feilet
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::fetch_geodata.py feilet (se steget 'Hent geodata fra Kartverket' over, og last ned artifacten 'geodata-raw' for raadata). Resultatet paa geodata-resultat kan vaere ufullstendig eller mangle et lag."
+          exit 1

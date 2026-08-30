@@ -19,6 +19,20 @@
 #                 til fjordmunningen - ikke helt ut i Skagerrak. Swellen
 #                 utenfra handteres separat av gate-blokka.
 #
+#  fetch_km_72,
+#  fetch_km_manuell,
+#  dybde_Xm_km:   MAALTE felt fra build_fetch.py (Kartverket Kystkontur/
+#                 Dybdekurve, CC BY 4.0 - se fetch_geodata.py). IKKE brukt av
+#                 physics.py/ensemble.py ennaa - kun lagt inn for
+#                 sammenligning mot de haandlagde tabellene over.
+#                   fetch_km_manuell = kopi av fetch_km/local_fetch_km slik de
+#                     saa ut foer maaling, saa de to kan diffes.
+#                   fetch_km_72 = 72 verdier (hver 5. grad fra N, med klokka)
+#                     fra straaleskyting mot kystkontur, tak 300 km.
+#                   dybde_20m_km/_30m_km/_50m_km = avstand fra spottens
+#                     koordinat til hhv. 20-, 30- og 50-meterskoten langs
+#                     `facing`-retningen. null hvis koten ikke ble truffet.
+#
 #  gate:          kun klasse C. Punktet i fjordmunningen der vi leser
 #                 WW3-output og propagerer innover.
 #    sector_half_width: hvor bred vinkelsektor fjorden slipper opp.

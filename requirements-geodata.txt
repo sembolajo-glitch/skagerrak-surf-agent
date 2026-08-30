@@ -1,0 +1,5 @@
+# Kun for fetch_geodata.py og build_fetch.py - engangs-/offline-skript,
+# IKKE brukt av forecast.yml. Hovedrequirements.txt holdes derfor lean.
+shapely>=2.0
+pyproj>=3.6
+ruamel.yaml>=0.18

@@ -1,0 +1,173 @@
+"""
+Delte geometrihjelpere for fetch_geodata.py og build_fetch.py.
+
+Alt her jobber i to CRS:
+  - EPSG:4326 (WGS84 lon/lat) - lagringsformatet i GeoJSON-filene
+  - EPSG:25832 (UTM sone 32N) - metrisk CRS for straaleskyting og
+    forenkling. Hele bbox (9.3-11.2 O) ligger godt innenfor sone 32
+    (6-12 O), saa en enkelt sone gir lav forvrengning over hele omraadet.
+
+Bearing-konvensjon overalt: meteorologisk/kompass, 0 = nord, med klokka.
+"""
+
+import functools
+import json
+import math
+
+import pyproj
+from shapely.geometry import shape, mapping, LineString
+from shapely.ops import transform as shp_transform
+from shapely.strtree import STRtree
+
+WGS84 = "EPSG:4326"
+UTM32 = "EPSG:25832"
+
+
+@functools.lru_cache(maxsize=8)
+def _transformer(from_crs, to_crs):
+    return pyproj.Transformer.from_crs(from_crs, to_crs, always_xy=True)
+
+
+def reproject_geom(geom, from_crs, to_crs):
+    if from_crs == to_crs or geom is None:
+        return geom
+    t = _transformer(from_crs, to_crs)
+    return shp_transform(t.transform, geom)
+
+
+def to_utm(lon, lat):
+    x, y = _transformer(WGS84, UTM32).transform(lon, lat)
+    return x, y
+
+
+def to_wgs84_xy(x, y):
+    lon, lat = _transformer(UTM32, WGS84).transform(x, y)
+    return lon, lat
+
+
+def bearing_vector(bearing_deg):
+    """Enhetsvektor (dx, dy) i et easting/northing-plan for en kompassretning."""
+    rad = math.radians(bearing_deg)
+    return math.sin(rad), math.cos(rad)
+
+
+# ------------------------------------------------------------- GeoJSON I/O
+
+
+def load_geojson(path):
+    """Les en FeatureCollection. Returnerer liste av (shapely_geom, properties)."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    out = []
+    for feat in data.get("features", []):
+        geom = feat.get("geometry")
+        if geom is None:
+            continue
+        out.append((shape(geom), feat.get("properties", {}) or {}))
+    return out
+
+
+def write_geojson(path, features_geom_props, crs_name="urn:ogc:def:crs:OGC:1.3:CRS84"):
+    """Skriv en FeatureCollection. features_geom_props: liste av (shapely_geom, dict)."""
+    out = {
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": crs_name}},
+        "features": [
+            {"type": "Feature", "geometry": mapping(geom), "properties": props}
+            for geom, props in features_geom_props
+        ],
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+
+
+# --------------------------------------------------------- kystlinje/boundary
+
+
+def to_boundary_lines(geoms):
+    """
+    Reduser en liste shapely-geometrier til linjestykker vi kan skyte straaler
+    mot. Polygoner -> boundary (yttergrense + hull), linjer beholdes som de er.
+    """
+    lines = []
+    for g in geoms:
+        if g is None or g.is_empty:
+            continue
+        gt = g.geom_type
+        if gt in ("Polygon", "MultiPolygon"):
+            b = g.boundary
+            lines.extend(_flatten_lines(b))
+        elif gt in ("LineString", "MultiLineString", "LinearRing"):
+            lines.extend(_flatten_lines(g))
+        else:
+            continue
+    return lines
+
+
+def _flatten_lines(geom):
+    if geom.geom_type == "LineString" or geom.geom_type == "LinearRing":
+        return [LineString(geom.coords)]
+    if geom.geom_type in ("MultiLineString", "GeometryCollection"):
+        out = []
+        for part in geom.geoms:
+            out.extend(_flatten_lines(part))
+        return out
+    return []
+
+
+def build_strtree(line_geoms):
+    if not line_geoms:
+        return None
+    return STRtree(line_geoms)
+
+
+def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
+    """
+    Skyt en straale fra (origin_lon, origin_lat) i retning bearing_deg (kompass,
+    0=N, med klokka), returner avstand i km til naermeste skjaering med
+    linjene i `tree`/`line_geoms`, eller max_km hvis ingen skjaering.
+
+    `tree` maa vaere bygget over `line_geoms` i UTM32 (meter). Origin gis i
+    WGS84 og projiseres internt.
+    """
+    if tree is None:
+        return float(max_km)
+
+    ox, oy = to_utm(origin_lon, origin_lat)
+    dx, dy = bearing_vector(bearing_deg)
+    max_m = max_km * 1000.0
+    ray = LineString([(ox, oy), (ox + dx * max_m, oy + dy * max_m)])
+
+    idx = tree.query(ray)
+    best_m = None
+    for i in idx:
+        cand = line_geoms[i]
+        if not ray.intersects(cand):
+            continue
+        inter = ray.intersection(cand)
+        for pt in _iter_points(inter):
+            d = math.hypot(pt[0] - ox, pt[1] - oy)
+            if best_m is None or d < best_m:
+                best_m = d
+
+    if best_m is None:
+        return float(max_km)
+    return best_m / 1000.0
+
+
+def _iter_points(geom):
+    if geom.is_empty:
+        return
+    gt = geom.geom_type
+    if gt == "Point":
+        yield (geom.x, geom.y)
+    elif gt in ("MultiPoint", "GeometryCollection"):
+        for part in geom.geoms:
+            yield from _iter_points(part)
+    elif gt in ("LineString", "LinearRing"):
+        for c in geom.coords:
+            yield c
+    elif gt == "MultiLineString":
+        for part in geom.geoms:
+            yield from _iter_points(part)
+    # punkter-langs-linje daekker alle praktiske skjaeringstilfeller her
