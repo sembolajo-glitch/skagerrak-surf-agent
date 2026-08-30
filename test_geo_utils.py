@@ -67,6 +67,29 @@ def test_cast_ray_tomt_tre_gir_tak():
     assert d == 123.0
 
 
+def test_nearest_distance_km():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    coast = LineString([(ox - 50000, oy + 10000), (ox + 50000, oy + 10000)])
+    tree = G.build_strtree([coast])
+    d = G.nearest_distance_km(lon0, lat0, tree, [coast])
+    assert math.isclose(d, 10.0, abs_tol=0.05)
+
+
+def test_nearest_distance_km_finner_naermeste_av_flere():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    far = LineString([(ox - 50000, oy + 50000), (ox + 50000, oy + 50000)])
+    near = LineString([(ox - 50000, oy + 2000), (ox + 50000, oy + 2000)])
+    tree = G.build_strtree([far, near])
+    d = G.nearest_distance_km(lon0, lat0, tree, [far, near])
+    assert math.isclose(d, 2.0, abs_tol=0.05)
+
+
+def test_nearest_distance_km_tomt_tre_gir_none():
+    assert G.nearest_distance_km(10.0, 59.0, None, []) is None
+
+
 def test_to_boundary_lines_polygon_gir_yttergrense():
     poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
     lines = G.to_boundary_lines([poly])

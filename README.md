@@ -147,6 +147,11 @@ git commit -m "oppdater geodata fra Kartverket"
 #      Skriver rett inn i spots.yaml, rapporterer avvik mot de
 #      håndlagde 16-punkts-tabellene (fetch_km_manuell) på stderr.
 python build_fetch.py
+
+# 4. Valider FØR du stoler på tallene: avstand fra fire referansepunkter
+#    til kystkontur (fanger en speilvendt/akse-byttet kontur - se under),
+#    pluss en SVG av hele konturen + de 14 spottene til visuell kontroll.
+python validate_geodata.py
 ```
 
 `fetch_geodata.py` gjetter ikke på WFS-URL-en – det opplagte gjettet
@@ -220,6 +225,30 @@ eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –
 det legger bare til `fetch_km_72`, `fetch_km_manuell` og
 `dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan de
 nye tallene skal erstatte de håndlagde, er et eget steg.
+
+**`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
+
+1. *Referansepunkter.* Avstand fra `data/kystkontur.geojson` til fire punkter
+   med kjent, grovt anslått avstand til land. Det viktigste er punktet midt
+   i Vestfjorden (skal være langt fra land) – havner *det* nær land, er
+   konturen sannsynligvis speilvendt eller akse-byttet, uansett hvor riktig
+   de andre punktene ser ut isolert. Feiler (exit 1) hvis noe punkt bryter
+   sin terskel – blokkerer committ-steget i `geodata.yml`.
+2. *SVG-forhåndsvisning* – hele kystkonturen tegnet med de 14 spottene fra
+   `spots.yaml` markert, skrevet til `out/kystkontur_preview.svg` og lastet
+   opp som Actions-artifact (`kystkontur-preview`) uansett utfall, siden
+   bildet er mest nyttig akkurat når noe har gått galt.
+
+**Kjørt mot ekte nedlastet data 2026-08-30** (61 594 kystkontur-features,
+bounds 9,30–11,21 Ø / 58,72–59,50 N): tre av fire referansepunkter besto med
+tette, plausible marginer (Færder fyr 22 m, Slagen 229 m, Bastøy sørspiss
+238 m). Vestfjorden-punktet var 939 m fra land, ikke > 3000 m som forventet
+– men nærmeste konturpunkt lå bare ~940 m unna på nesten identisk
+breddegrad, altså sammenhengende lokal geometri (trolig en reell
+skjærgård/øygruppe nærmere det antatte fjordmidtpunktet enn terskelen la
+til grunn), ikke et vilkårlig hopp et speilvendt datasett ville gitt. Om
+terskelen eller referansepunktet bør justeres er en vurdering, ikke noe
+skriptet gjør automatisk.
 
 ---
 

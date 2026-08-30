@@ -15,7 +15,7 @@ import json
 import math
 
 import pyproj
-from shapely.geometry import shape, mapping, LineString
+from shapely.geometry import shape, mapping, LineString, Point
 from shapely.ops import transform as shp_transform
 from shapely.strtree import STRtree
 
@@ -160,6 +160,24 @@ def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     if best_m is None:
         return float(max_km)
     return best_m / 1000.0
+
+
+def nearest_distance_km(lon, lat, tree, line_geoms):
+    """
+    Korteste avstand fra et punkt til naermeste linje i `tree`/`line_geoms`,
+    i km. I motsetning til cast_ray_km (retningsavhengig, straaleskyting)
+    er dette en ren "avstand til naermeste kystlinje uansett retning" -
+    brukt til aa validere mot referansepunkter med kjent avstand til land.
+
+    `tree` maa vaere bygget over `line_geoms` i UTM32 (meter). Punktet gis
+    i WGS84 og projiseres internt. Returnerer None hvis treet er tomt.
+    """
+    if tree is None or not line_geoms:
+        return None
+    x, y = to_utm(lon, lat)
+    pt = Point(x, y)
+    idx = tree.nearest(pt)
+    return pt.distance(line_geoms[idx]) / 1000.0
 
 
 def _iter_points(geom):
