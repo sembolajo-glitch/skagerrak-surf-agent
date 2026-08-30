@@ -248,6 +248,103 @@ def test_guess_crs_hint_ingen_bounds():
     assert F._guess_crs_hint(None) == ""
 
 
+# --------------------------------------- akserekkefolge (--probe-funn 2026-08-30)
+
+
+def test_explicit_srs_name_paa_geometrielement():
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml" srsName="urn:ogc:def:crs:EPSG::4326"><gml:posList>1 2</gml:posList></gml:LineString>'
+    el = ET.fromstring(xml)
+    assert F._explicit_srs_name(el) == "urn:ogc:def:crs:EPSG::4326"
+
+
+def test_explicit_srs_name_paa_barn():
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml"><gml:posList srsName="EPSG:25833">1 2</gml:posList></gml:LineString>'
+    el = ET.fromstring(xml)
+    assert F._explicit_srs_name(el) == "EPSG:25833"
+
+
+def test_explicit_srs_name_ingen():
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml"><gml:posList>1 2</gml:posList></gml:LineString>'
+    assert F._explicit_srs_name(ET.fromstring(xml)) is None
+
+
+def test_resolve_axis_swap_eksplisitt_paa_svaret_vinner():
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml" srsName="EPSG:4326"><gml:posList>1 2</gml:posList></gml:LineString>'
+    el = ET.fromstring(xml)
+    # svaret sier plain EPSG:4326 (lon/lat) - skal IKKE byttes, selv om vi ba om urn-formen
+    assert F.resolve_axis_swap(el, requested_srs_name="urn:ogc:def:crs:EPSG::4326") is False
+
+
+def test_resolve_axis_swap_faller_tilbake_paa_forespurt():
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml"><gml:posList>1 2</gml:posList></gml:LineString>'
+    el = ET.fromstring(xml)
+    assert F.resolve_axis_swap(el, requested_srs_name="urn:ogc:def:crs:EPSG::4326") is True
+    assert F.resolve_axis_swap(el, requested_srs_name="EPSG:4326") is False
+
+
+def test_resolve_axis_swap_default_true_naar_ingen_srs_kjent():
+    """Bekreftet empirisk mot Kartverkets WFS 2026-08-30: --probe variant A
+    (ingen bbox, ingen srsName sendt) kom likevel i lat/lon-rekkefolge."""
+    xml = '<gml:LineString xmlns:gml="http://www.opengis.net/gml"><gml:posList>1 2</gml:posList></gml:LineString>'
+    el = ET.fromstring(xml)
+    assert F.resolve_axis_swap(el, requested_srs_name=None) is True
+
+
+def test_parse_gml_member_bytter_om_koordinater_med_ekte_probe_data():
+    """
+    Regresjonstest med de faktiske koordinatene fra --probe-kjoringen
+    2026-08-30 (variant C, Kystkontur): responsen ga
+    (59.15965, 11.107758) - som ER (lat, lon). Etter fiksen skal shapely
+    lagre dem som (lon, lat) = (11.107758, 59.15965), slik GeoJSON krever.
+    """
+    xml = """<wfs:member xmlns:wfs="http://www.opengis.net/wfs/2.0"
+                         xmlns:gml="http://www.opengis.net/gml/3.2"
+                         xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Dybdedata/20201001">
+      <app:Kystkontur>
+        <app:geometri><gml:LineString><gml:posList>59.15965 11.107758 59.159497 11.107733</gml:posList></gml:LineString></app:geometri>
+      </app:Kystkontur>
+    </wfs:member>"""
+    member = ET.fromstring(xml)
+    geom, _props = F._parse_gml_member(member, requested_srs_name=F.BBOX_SRS_NAME)
+    coords = list(geom.coords)
+    assert coords[0] == (11.107758, 59.15965)
+    assert coords[1] == (11.107733, 59.159497)
+
+
+def test_union_bounds():
+    from shapely.geometry import LineString
+    geoms = [LineString([(1, 1), (2, 2)]), LineString([(0, 5), (3, -1)])]
+    assert F._union_bounds(geoms) == (0, -1, 3, 5)
+
+
+def test_union_bounds_tom_liste():
+    assert F._union_bounds([]) is None
+
+
+def test_validate_bounds_godtar_innenfor_omraadet():
+    from shapely.geometry import LineString
+    feats = [(LineString([(9.3, 58.7), (11.2, 59.5)]), {})]
+    F.validate_bounds(feats, "kystkontur")  # skal ikke kaste
+
+
+def test_validate_bounds_feiler_paa_skagen_koordinater():
+    """De faktiske --probe-koordinatene for variant A (57.76 N, 6.04 O -
+    Skagen/Danmark) skal IKKE godtas som Ytre Oslofjord-data."""
+    from shapely.geometry import LineString
+    feats = [(LineString([(6.042142, 57.761225), (6.040308, 57.761489)]), {})]
+    with pytest.raises(RuntimeError, match="fornuftsomraadet"):
+        F.validate_bounds(feats, "dybdekurve")
+
+
+def test_validate_bounds_feiler_paa_byttet_om_koordinater():
+    """Hvis akse-fiksen glipper og lat/lon forblir byttet om, havner
+    bounds utenfor SANITY_BOUNDS og skal fanges her - andrelinjeforsvar."""
+    from shapely.geometry import LineString
+    feats = [(LineString([(59.15965, 11.107758), (59.159497, 11.107733)]), {})]  # (lat,lon) i (x,y)
+    with pytest.raises(RuntimeError, match="fornuftsomraadet"):
+        F.validate_bounds(feats, "kystkontur")
+
+
 # ------------------------------------------------- raadata-dumping (aldri stille)
 
 

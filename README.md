@@ -157,17 +157,20 @@ for datasettet "Sjøkart – Dybdedata" (UUID
 `9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe`), og leter rekursivt gjennom svaret
 etter et WFS-felt uten å anta et eksakt skjema. `--wfs-url` overstyrer
 oppslaget helt; de gamle gjettede kandidat-URL-ene er beholdt som siste
-utvei hvis kartkatalog-oppslaget selv skulle feile.
+utvei hvis kartkatalog-oppslaget selv skulle feile. **Bekreftet riktig mot
+den ekte tjenesten**: `https://wfs.geonorge.no/skwms1/wfs.dybdedata` (uten
+en "2" på slutten, i motsetning til WMS-en).
 
 Lagnavnene er heller ikke hardkodet – skriptet kjører `GetCapabilities` på
 den funnede URL-en og matcher `FeatureType`-navn mot "kyst"/"dybde" i
-stedet. Kjør `python fetch_geodata.py --list-layers` for å bare se hvilke
-lag tjenesten faktisk tilbyr, uten å prøve `GetFeature` i det hele tatt.
-Skriptet forventer at tjenesten kan kreve paginering, sette et tak på
-antall features per kall, og levere GML i stedet for GeoJSON – alt dette
-håndteres, men er **ikke verifisert mot den levende tjenesten**
-(utviklingsmiljøet dette ble skrevet i har ikke nettverkstilgang til
-geonorge.no).
+stedet (bekreftet: `app:Kystkontur`/`app:Dybdekurve` blant 36 lag). Kjør
+`python fetch_geodata.py --list-layers` for å bare se hvilke lag tjenesten
+faktisk tilbyr, uten å prøve `GetFeature` i det hele tatt. Skriptet
+paginerer med `count`/`startIndex`, og henter GML (se under for hvorfor
+JSON ikke prøves) – begge deler bekreftet mot den levende tjenesten. Selve
+geometritypene i GML-parseren (`gml_to_shapely`) er derimot kun testet mot
+`LineString`, som er det Kystkontur/Dybdekurve faktisk leverer – `Polygon`/
+`Multi*`-grenene er fortsatt bare testet mot håndlagde XML-eksempler.
 
 Får et ellers riktig lag 0 features, er det som oftest bbox-en (feil
 akserekkefølge eller feil CRS), ikke tjenesten. `python fetch_geodata.py
@@ -178,6 +181,26 @@ noe: den prøver (a) `GetFeature` helt uten bbox, (b) bbox `lon,lat` med
 EPSG-koder), og (d) bbox i UTM33 (`EPSG:25833`, ofte native CRS for norske
 datasett) – og viser rå geometri + bounds for første treff i hver variant,
 så det er synlig med egne øyne hvilken kombinasjon som faktisk gir treff.
+
+**Kjørt mot den ekte tjenesten 2026-08-30 – tre funn, alle låst inn i koden:**
+1. **Variant (c) er riktig** – bbox som `lat,lon` med
+   `srsName=urn:ogc:def:crs:EPSG::4326`. Kortformen `EPSG:4326` (lon,lat)
+   og UTM33 ga begge 0 features. `fetch_features_gml()` sender nå kun
+   denne varianten – ingen flere gjetterunder.
+2. **JSON støttes ikke i det hele tatt** – `outputFormat=application/json`
+   gir HTTP 400 *"This WFS is not configured to handle the output/input
+   format"*. Skriptet prøver ikke lenger JSON i hovedpipelinen (kun
+   `--probe` tester det fortsatt, som diagnostikk).
+3. **Svargeometrien kommer i (breddegrad, lengdegrad)-rekkefølge** – også
+   uten noen `srsName` i forespørselen. `resolve_axis_swap()` retter dette
+   opp basert på (i prioritert rekkefølge) en eksplisitt `srsName` i selve
+   svaret, ellers `srsName`-en vi ba om, ellers en bekreftet
+   default-på-True. Som andrelinjeforsvar sjekker `validate_bounds()` at
+   *ingen* feature havner utenfor 57–60 N / 8–12 Ø (Ytre Oslofjord-området)
+   – gjør den det, feiler skriptet tydelig i stedet for å skrive filen.
+
+`run_layer()` logger antall features og samlet bounding box for hvert lag
+rett før filen skrives, slik at man kan se at området faktisk stemmer.
 
 Skriptet skal **aldri fullføre stille**: hvert eneste HTTP-kall – også de
 som feiler – logges til stderr (full URL, statuskode/unntak, første 500
