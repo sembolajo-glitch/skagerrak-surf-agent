@@ -271,13 +271,31 @@ def daily_summary(hours, days=7):
     buckets = {}
     for h in hours:
         local_date = dt.datetime.fromisoformat(h["time"]).astimezone(OSLO).date()
-        b = buckets.setdefault(local_date, {"max_p_surf": 0.0, "max_stars": 0.0})
+        b = buckets.setdefault(local_date, {"max_p_surf": 0.0, "max_stars": 0.0, "max_hs": 0.0})
         b["max_p_surf"] = max(b["max_p_surf"], h.get("p_surf") or 0.0)
         b["max_stars"] = max(b["max_stars"], h.get("stars") or 0.0)
+        b["max_hs"] = max(b["max_hs"], h.get("hs_eff") or 0.0)
     return [
-        {"date": d.isoformat(), **buckets[d]}
+        {
+            "date": d.isoformat(),
+            "max_p_surf": buckets[d]["max_p_surf"],
+            "max_stars": buckets[d]["max_stars"],
+            "max_hs": round(buckets[d]["max_hs"], 1),
+        }
         for d in sorted(buckets)[:days]
     ]
+
+
+def best_day(daily):
+    """
+    Dognet i uka med hoyest stars x p_surf - det frontenden trenger for
+    aa sortere spots pa "beste dag", ikke bare "beste time noensinne".
+    """
+    if not daily:
+        return None
+    d = max(daily, key=lambda x: x["max_stars"] * x["max_p_surf"])
+    return {"date": d["date"], "p_surf": d["max_p_surf"],
+            "stars": d["max_stars"], "hs": d["max_hs"]}
 
 
 # --------------------------------------------------------------- vinduer
@@ -576,6 +594,7 @@ def run(args):
                 spot, ts, wind.get(ts, {}), waves.get(ts, {}),
                 (water.get(ts) or {}).get("level_cm"), c, lead_h=lead))
         windows = find_windows(hours, spot)
+        daily = daily_summary(hours)
 
         results.append({
             "id": spot["id"],
@@ -591,7 +610,8 @@ def run(args):
             "best_stars": max((h["stars"] or 0 for h in hours), default=0) or None,
             "best_p_surf": max((h["p_surf"] for h in hours), default=0),
             "windows": windows,
-            "daily": daily_summary(hours),
+            "daily": daily,
+            "best_day": best_day(daily),
             "hours": hours,
             "sources": errors,
             "params": {k: spot.get(k) for k in
