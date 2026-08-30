@@ -152,16 +152,26 @@ python build_fetch.py
 `fetch_geodata.py` kjenner ikke det eksakte WFS-endepunktet eller
 lagnavnene på forhånd – det prøver en liste kandidat-URL-er, kjører
 `GetCapabilities`, og matcher `FeatureType`-navn mot "kyst"/"dybde" i
-stedet for å anta faste navn. Det forventer at tjenesten kan kreve
+stedet for å anta faste navn. Kjør `python fetch_geodata.py --list-layers`
+først for å bare se hvilke lag tjenesten faktisk tilbyr, uten å prøve
+`GetFeature` i det hele tatt. Skriptet forventer at tjenesten kan kreve
 paginering, sette et tak på antall features per kall, og levere GML i
 stedet for GeoJSON – alt dette håndteres, men er **ikke verifisert mot den
 levende tjenesten** (utviklingsmiljøet dette ble skrevet i har ikke
-nettverkstilgang til geonorge.no). Kjør med `--dump-raw` første gang og se
-rapporten skriptet skriver ut til stderr; den sier eksplisitt hvilken
-URL/versjon/format som faktisk ble brukt. Meld fra om noe i parsingen ikke
-stemmer, så rettes det opp – de rene parse-funksjonene har enhetstester i
-`test_fetch_geodata.py`, men de er skrevet mot håndlagde XML-eksempler
-etter OGC-spekken, ikke mot ekte responser.
+nettverkstilgang til geonorge.no).
+
+Skriptet skal **aldri fullføre stille**: hvert eneste HTTP-kall – også de
+som feiler – logges til stderr (full URL, statuskode/unntak, første 500
+tegn) og dumpes til `data/_raw/` (`NNN_<hva>.meta.txt` +
+`NNN_<hva>.json|xml|bin`), uansett om kallet lykkes eller ikke. Enhver feil
+gir en tydelig sluttmelding med henvisning til `data/_raw/` og exit-kode 1
+– `--dump-raw` er beholdt som flagg for bakoverkompatibilitet, men gjør
+ikke lenger noe (dumping er alltid på). Se rapporten skriptet skriver ut
+til stderr; den sier eksplisitt hvilken URL/versjon/format som faktisk ble
+brukt. Meld fra om noe i parsingen ikke stemmer, så rettes det opp – de
+rene parse-funksjonene har enhetstester i `test_fetch_geodata.py`, men de
+er skrevet mot håndlagde XML-eksempler etter OGC-spekken, ikke mot ekte
+responser.
 
 `build_fetch.py` endrer **aldri** `physics.py`, `ensemble.py` eller de
 eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –

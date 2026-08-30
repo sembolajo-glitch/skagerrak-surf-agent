@@ -24,9 +24,19 @@ saa skriptet:
 
 Alt dette er IKKE testet mot den levende tjenesten (naettverket i
 utviklingsmiljoeet hvor dette ble skrevet er sperret mot geonorge.no).
-Kjoer med --dump-raw for aa lagre raadata fra foerste side hvis noe feiler,
-og se rapporten skriptet skriver ut til slutt - den sier eksplisitt hvilket
-format/versjon/lagnavn som faktisk ble brukt.
+
+FEILSOEKING: hvert eneste HTTP-kall - ogsaa de som feiler - logges til
+stderr (full URL, statuskode/unntak, forste 500 tegn) og dumpes til
+data/_raw/ (ett par filer per kall: NNN_<tag>.meta.txt + NNN_<tag>.<ext>).
+Dette skjer alltid, uavhengig av --dump-raw (flagget er beholdt kun for
+bakoverkompatibilitet med eksisterende kall). Skriptet skal ALDRI fullfore
+stille - enhver feil gir en tydelig sluttmelding og exit-kode 1.
+
+Kjor med --list-layers for aa bare gjore GetCapabilities og skrive ut alle
+tilgjengelige lagnavn, uten aa proeve GetFeature i det hele tatt:
+
+    python fetch_geodata.py --list-layers
+    python fetch_geodata.py --list-layers --wfs-url https://annen.url/wfs
 """
 
 import argparse
@@ -76,10 +86,73 @@ def log(*a):
     print(*a, file=sys.stderr)
 
 
-def _get(url, params, **kw):
-    kw.setdefault("timeout", TIMEOUT)
-    headers = {"User-Agent": USER_AGENT}
-    r = requests.get(url, params=params, headers=headers, **kw)
+_call_seq = 0
+
+
+def _slug(text, maxlen=50):
+    s = re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_")
+    return (s[:maxlen] or "call")
+
+
+def _ext_for(content_type):
+    ct = (content_type or "").lower()
+    if "json" in ct:
+        return ".json"
+    if "xml" in ct or "gml" in ct:
+        return ".xml"
+    if "html" in ct:
+        return ".html"
+    return ".bin"
+
+
+def _dump_call(dump_dir, seq, tag, url, status, error, content, content_type=None):
+    """Skriv metadata + (evt. avkortet) body for ETT HTTP-kall. Kalles for
+    hvert eneste forsok - ogsaa naar det feiler - saa data/_raw/ alltid gir
+    noe aa feilsoeke paa."""
+    if not dump_dir:
+        return
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    base = dump_dir / f"{seq:03d}_{_slug(tag)}"
+    meta_lines = [f"url: {url}", f"status: {status if status is not None else '(ingen HTTP-respons)'}"]
+    if error:
+        meta_lines.append(f"error: {error}")
+    if content is not None:
+        meta_lines.append(f"bytes: {len(content)}")
+        meta_lines.append(f"content-type: {content_type or '?'}")
+    base.with_suffix(".meta.txt").write_text("\n".join(meta_lines) + "\n", encoding="utf-8")
+    if content:
+        MAX_DUMP = 200_000  # feilsoekingsdump, ikke ment til parsing - hold artifacten liten
+        body = content[:MAX_DUMP]
+        base.with_suffix(_ext_for(content_type)).write_bytes(body)
+
+
+def _get(url, params, dump_dir=None, tag="call"):
+    """
+    GET med User-Agent, som ALLTID logger til stderr og dumper til
+    dump_dir - baade ved suksess og ved unntak/feilstatus. Kastes
+    videre (requests.RequestException) etter logging, saa kallerne kan
+    fortsatt proeve neste kandidat, men ingenting forsvinner stille.
+    """
+    global _call_seq
+    _call_seq += 1
+    seq = _call_seq
+
+    prepared_url = requests.Request("GET", url, params=params).prepare().url
+    log(f"  [{seq:03d}] GET {prepared_url}")
+
+    try:
+        r = requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+    except requests.RequestException as exc:
+        log(f"  [{seq:03d}] FEIL (ingen respons): {type(exc).__name__}: {exc}")
+        _dump_call(dump_dir, seq, tag, prepared_url, None, f"{type(exc).__name__}: {exc}", None)
+        raise
+
+    ctype = r.headers.get("Content-Type", "")
+    preview = (r.text[:500].replace("\n", " ") if r.text else "")
+    log(f"  [{seq:03d}] status {r.status_code}, {len(r.content)} bytes, content-type={ctype!r}")
+    log(f"  [{seq:03d}] forste 500 tegn: {preview!r}")
+    _dump_call(dump_dir, seq, tag, prepared_url, r.status_code, None, r.content, ctype)
+
     r.raise_for_status()
     return r
 
@@ -91,7 +164,7 @@ def _localname(tag):
 # ------------------------------------------------------------ GetCapabilities
 
 
-def discover_service(url_candidates, extra_url=None, dump_raw=None):
+def discover_service(url_candidates, extra_url=None, dump_dir=None):
     """
     Proev kandidat-URL-er x versjoner til GetCapabilities svarer.
     Returnerer (base_url, version, {layer_name: xml_element}).
@@ -100,17 +173,15 @@ def discover_service(url_candidates, extra_url=None, dump_raw=None):
     last_err = None
     for base_url in candidates:
         for version in WFS_VERSIONS:
+            tag = f"capabilities_{base_url}_{version}"
             try:
                 r = _get(base_url, {
                     "service": "WFS", "request": "GetCapabilities", "version": version,
-                })
+                }, dump_dir=dump_dir, tag=tag)
             except requests.RequestException as exc:
                 last_err = exc
                 log(f"  [feil] {base_url} v{version}: {exc}")
                 continue
-
-            if dump_raw:
-                Path(dump_raw).write_bytes(r.content)
 
             try:
                 root = ET.fromstring(r.content)
@@ -159,7 +230,7 @@ def match_layer(feature_type_names, keywords):
 # -------------------------------------------------------------- GetFeature
 
 
-def supports_json(base_url, version, type_name):
+def supports_json(base_url, version, type_name, dump_dir=None):
     params = {
         "service": "WFS", "request": "GetFeature", "version": version,
         "typeNames" if version == "2.0.0" else "typeName": type_name,
@@ -167,7 +238,7 @@ def supports_json(base_url, version, type_name):
         ("count" if version == "2.0.0" else "maxFeatures"): 1,
     }
     try:
-        r = _get(base_url, params)
+        r = _get(base_url, params, dump_dir=dump_dir, tag=f"supports_json_{type_name}")
     except requests.RequestException:
         return False
     ctype = r.headers.get("Content-Type", "")
@@ -183,7 +254,7 @@ def supports_json(base_url, version, type_name):
     return isinstance(data, dict) and data.get("type") == "FeatureCollection"
 
 
-def fetch_features_json(base_url, version, type_name, bbox, dump_raw=None):
+def fetch_features_json(base_url, version, type_name, bbox, dump_dir=None):
     """bbox = (lat_min, lon_min, lat_max, lon_max). Yield (shapely_geom, props)."""
     lat_min, lon_min, lat_max, lon_max = bbox
     bbox_variants = [
@@ -193,7 +264,6 @@ def fetch_features_json(base_url, version, type_name, bbox, dump_raw=None):
 
     for bbox_param in bbox_variants:
         start = 0
-        first_page = True
         got_any = False
         page_no = 0
         while True:
@@ -213,12 +283,11 @@ def fetch_features_json(base_url, version, type_name, bbox, dump_raw=None):
                     # ikke standard for 1.0/1.1, men noen GeoServer-installasjoner stoetter den
                     params["startIndex"] = start
 
-            r = _get(base_url, params)
-            if dump_raw and first_page:
-                Path(dump_raw).write_bytes(r.content)
+            page_no += 1
+            r = _get(base_url, params, dump_dir=dump_dir,
+                     tag=f"getfeature_json_{type_name}_p{page_no}")
             data = r.json()
             feats = data.get("features", [])
-            page_no += 1
             log(f"    side {page_no}: {len(feats)} features (startIndex={start}, bbox={bbox_param})")
 
             if feats:
@@ -232,7 +301,6 @@ def fetch_features_json(base_url, version, type_name, bbox, dump_raw=None):
             if len(feats) < PAGE_SIZE:
                 break
             start += len(feats)
-            first_page = False
 
         if got_any:
             return
@@ -245,7 +313,7 @@ def fetch_features_json(base_url, version, type_name, bbox, dump_raw=None):
 # ------------------------------------------------------------------- GML
 
 
-def fetch_features_gml(base_url, version, type_name, bbox, dump_raw=None):
+def fetch_features_gml(base_url, version, type_name, bbox, dump_dir=None):
     """Fallback naar tjenesten ikke gir GeoJSON. Parser raa GML."""
     lat_min, lon_min, lat_max, lon_max = bbox
     bbox_param = f"{lon_min},{lat_min},{lon_max},{lat_max}"
@@ -265,11 +333,10 @@ def fetch_features_gml(base_url, version, type_name, bbox, dump_raw=None):
         else:
             params["maxFeatures"] = PAGE_SIZE
 
-        r = _get(base_url, params)
-        if dump_raw and page_no == 0:
-            Path(dump_raw).write_bytes(r.content)
-        root = ET.fromstring(r.content)
         page_no += 1
+        r = _get(base_url, params, dump_dir=dump_dir,
+                 tag=f"getfeature_gml_{type_name}_p{page_no}")
+        root = ET.fromstring(r.content)
 
         n = 0
         for member in _iter_members(root):
@@ -524,7 +591,7 @@ def simplify_all(features, tolerance_m):
 
 
 def run_layer(layer_key, keywords, base_url, version, feature_types, bbox,
-              tolerance_m, out_path, dump_raw_dir):
+              tolerance_m, out_path, dump_dir):
     log(f"\n=== {layer_key} ===")
     type_name = match_layer(feature_types.keys(), keywords)
     if type_name is None:
@@ -534,15 +601,13 @@ def run_layer(layer_key, keywords, base_url, version, feature_types, bbox,
         )
     log(f"  lag: {type_name}")
 
-    dump_raw = str(dump_raw_dir / f"{layer_key}_raw.bin") if dump_raw_dir else None
-
-    use_json = supports_json(base_url, version, type_name)
+    use_json = supports_json(base_url, version, type_name, dump_dir=dump_dir)
     log(f"  format: {'GeoJSON' if use_json else 'GML (fallback)'}")
 
     if use_json:
-        feats = list(fetch_features_json(base_url, version, type_name, bbox, dump_raw))
+        feats = list(fetch_features_json(base_url, version, type_name, bbox, dump_dir))
     else:
-        raw = list(fetch_features_gml(base_url, version, type_name, bbox, dump_raw))
+        raw = list(fetch_features_gml(base_url, version, type_name, bbox, dump_dir))
         # GML-koordinatrekkefoelgen avhenger av srsName paa selve elementet;
         # vi ba om srsName=EPSG:4326 (plain), som er lon/lat - ingen bytte
         # trengs normalt. Hvis punktene havner i havet ved Afrika, er dette
@@ -559,7 +624,7 @@ def run_layer(layer_key, keywords, base_url, version, feature_types, bbox,
     feats = simplify_all(feats, tolerance_m)
     n_coords_after = sum(_count_coords(g) for g, _ in feats)
 
-    OUT_DIR.mkdir(exist_ok=True)
+    out_path.parent.mkdir(exist_ok=True)
     G.write_geojson(out_path, feats)
     size_kb = out_path.stat().st_size / 1024
 
@@ -585,28 +650,21 @@ def _count_coords(geom):
     return 0
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--bbox", nargs=4, type=float, metavar=("LAT_MIN", "LON_MIN", "LAT_MAX", "LON_MAX"),
-                     default=DEFAULT_BBOX)
-    ap.add_argument("--tolerance-m", type=float, default=DEFAULT_TOLERANCE_M)
-    ap.add_argument("--wfs-url", default=None, help="Override/legg til kandidat-URL foerst i lista")
-    ap.add_argument("--out-dir", default=str(OUT_DIR))
-    ap.add_argument("--dump-raw", action="store_true",
-                     help="Lagre raadata fra foerste side per lag i data/_raw/ for feilsoeking")
-    args = ap.parse_args()
+def list_layers(args, dump_dir):
+    log(f"Soeker WFS-endepunkt for --list-layers (kandidater: "
+        f"{([args.wfs_url] if args.wfs_url else []) + WFS_URL_CANDIDATES}) ...")
+    base_url, version, feature_types = discover_service(
+        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
+    )
+    log(f"\n{base_url} (WFS {version}) - {len(feature_types)} lag:")
+    for name in sorted(feature_types):
+        print(name)
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(exist_ok=True)
-    dump_dir = None
-    if args.dump_raw:
-        dump_dir = out_dir / "_raw"
-        dump_dir.mkdir(exist_ok=True)
 
+def run_pipeline(args, out_dir, dump_dir):
     log(f"Soeker WFS-endepunkt (bbox={args.bbox}) ...")
     base_url, version, feature_types = discover_service(
-        WFS_URL_CANDIDATES, extra_url=args.wfs_url,
-        dump_raw=str(dump_dir / "capabilities.xml") if dump_dir else None,
+        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
     )
     log(f"Bruker {base_url} (WFS {version})")
     log(f"Tilgjengelige lag: {sorted(feature_types.keys())}")
@@ -633,6 +691,47 @@ def main():
             log(f"  {k}: {v}")
 
     if any("error" in r for r in report.values()):
+        raise RuntimeError(
+            "Ett eller flere lag feilet - se RAPPORT over og data/_raw/ for hvert HTTP-kall som ble gjort."
+        )
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--bbox", nargs=4, type=float, metavar=("LAT_MIN", "LON_MIN", "LAT_MAX", "LON_MAX"),
+                     default=DEFAULT_BBOX)
+    ap.add_argument("--tolerance-m", type=float, default=DEFAULT_TOLERANCE_M)
+    ap.add_argument("--wfs-url", default=None, help="Override/legg til kandidat-URL foerst i lista")
+    ap.add_argument("--out-dir", default=str(OUT_DIR))
+    ap.add_argument("--list-layers", action="store_true",
+                     help="Bare kjor GetCapabilities og skriv ut alle tilgjengelige lagnavn, ikke hent features")
+    ap.add_argument("--dump-raw", action="store_true",
+                     help="Ingen effekt lenger - raadata dumpes na alltid til <out-dir>/_raw/. "
+                          "Beholdt for bakoverkompatibilitet med eksisterende kall.")
+    args = ap.parse_args()
+
+    if args.dump_raw:
+        log("Merk: --dump-raw er na alltid paa (hvert HTTP-kall dumpes uansett) - "
+            "flagget selv gjor ikke lenger noe.")
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(exist_ok=True)
+    dump_dir = out_dir / "_raw"
+    dump_dir.mkdir(exist_ok=True)
+
+    try:
+        if args.list_layers:
+            list_layers(args, dump_dir)
+        else:
+            run_pipeline(args, out_dir, dump_dir)
+    except Exception as exc:  # noqa: BLE001
+        log("\n" + "=" * 70)
+        log("FEIL - skriptet stoppet uten aa fullfore")
+        log("=" * 70)
+        log(f"{type(exc).__name__}: {exc}")
+        log(f"Hvert HTTP-kall som ble forsokt ligger i {dump_dir}/ "
+            f"(NNN_<hva>.meta.txt + NNN_<hva>.<json|xml|bin>) - se der for full URL, "
+            f"statuskode/unntak og respons per forsok.")
         sys.exit(1)
 
 

@@ -1,10 +1,11 @@
 """
 Enhetstester for de rene parse-funksjonene i fetch_geodata.py: GML->shapely,
-akserekkefolge og dybdeattributt-gjenkjenning. Ingen nettverk involvert -
-XML-utdragene er haandskrevet etter OGC GML/WFS-spesifikasjonen, IKKE hentet
-fra den ekte tjenesten (som var utilgjengelig fra utviklingsmiljoet). Kjor
-disse pa nytt mot ekte raadata (--dump-raw) foerste gang fetch_geodata.py
-kjores mot Kartverket, og juster om noe her ikke stemmer med virkeligheten.
+akserekkefolge, dybdeattributt-gjenkjenning og raadata-dumping
+(data/_raw/). Ingen nettverk involvert - XML-utdragene er haandskrevet
+etter OGC GML/WFS-spesifikasjonen, IKKE hentet fra den ekte tjenesten (som
+var utilgjengelig fra utviklingsmiljoet). Kjor disse pa nytt mot data/_raw/
+foerste gang fetch_geodata.py faktisk kjores mot Kartverket, og juster om
+noe her ikke stemmer med virkeligheten.
 """
 
 import xml.etree.ElementTree as ET
@@ -123,3 +124,50 @@ def test_match_layer_delvis_naar_ikke_eksakt():
 
 def test_match_layer_ingen_treff():
     assert F.match_layer(["app:Noe_annet"], ["dybdekurve"]) is None
+
+
+# ------------------------------------------------- raadata-dumping (aldri stille)
+
+
+def test_ext_for_gjetter_ut_fra_content_type():
+    assert F._ext_for("application/json; charset=utf-8") == ".json"
+    assert F._ext_for("text/xml") == ".xml"
+    assert F._ext_for("application/gml+xml") == ".xml"
+    assert F._ext_for("text/html") == ".html"
+    assert F._ext_for(None) == ".bin"
+    assert F._ext_for("application/octet-stream") == ".bin"
+
+
+def test_slug_er_filsystem_trygg():
+    s = F._slug("https://wfs.geonorge.no/skwms1/wfs.dybdedata2 v2.0.0")
+    assert s.replace("_", "").isalnum()
+    assert " " not in s and "/" not in s and ":" not in s
+
+
+def test_dump_call_skriver_meta_ved_feil_uten_respons(tmp_path):
+    F._dump_call(tmp_path, 1, "capabilities_test", "https://example/wfs?x=1",
+                 status=None, error="ConnectionError: boom", content=None)
+    files = list(tmp_path.iterdir())
+    assert len(files) == 1
+    meta = files[0].read_text()
+    assert "https://example/wfs?x=1" in meta
+    assert "ingen HTTP-respons" in meta
+    assert "boom" in meta
+
+
+def test_dump_call_skriver_meta_og_body_ved_suksess(tmp_path):
+    F._dump_call(tmp_path, 2, "getfeature_json_p1", "https://example/wfs?x=2",
+                 status=200, error=None, content=b'{"type":"FeatureCollection"}',
+                 content_type="application/json")
+    files = sorted(p.name for p in tmp_path.iterdir())
+    assert files == ["002_getfeature_json_p1.json", "002_getfeature_json_p1.meta.txt"]
+    body = (tmp_path / "002_getfeature_json_p1.json").read_bytes()
+    assert body == b'{"type":"FeatureCollection"}'
+    meta = (tmp_path / "002_getfeature_json_p1.meta.txt").read_text()
+    assert "status: 200" in meta
+
+
+def test_dump_call_uten_dump_dir_er_no_op():
+    # skal ikke krasje naar dump_dir=None (f.eks. hvis noen kaller
+    # funksjonene direkte uten aa ha satt opp data/_raw/)
+    F._dump_call(None, 1, "tag", "url", 200, None, b"data", "text/plain")
