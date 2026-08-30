@@ -169,6 +169,16 @@ håndteres, men er **ikke verifisert mot den levende tjenesten**
 (utviklingsmiljøet dette ble skrevet i har ikke nettverkstilgang til
 geonorge.no).
 
+Får et ellers riktig lag 0 features, er det som oftest bbox-en (feil
+akserekkefølge eller feil CRS), ikke tjenesten. `python fetch_geodata.py
+--probe` isolerer akkurat det spørsmålet uten å laste ned eller skrive
+noe: den prøver (a) `GetFeature` helt uten bbox, (b) bbox `lon,lat` med
+`srsName=EPSG:4326`, (c) bbox `lat,lon` med
+`srsName=urn:ogc:def:crs:EPSG::4326` (WFS 2.0-regelen for geografiske
+EPSG-koder), og (d) bbox i UTM33 (`EPSG:25833`, ofte native CRS for norske
+datasett) – og viser rå geometri + bounds for første treff i hver variant,
+så det er synlig med egne øyne hvilken kombinasjon som faktisk gir treff.
+
 Skriptet skal **aldri fullføre stille**: hvert eneste HTTP-kall – også de
 som feiler – logges til stderr (full URL, statuskode/unntak, første 500
 tegn) og dumpes til `data/_raw/` (`NNN_<hva>.meta.txt` +

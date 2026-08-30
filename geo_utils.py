@@ -45,6 +45,13 @@ def to_wgs84_xy(x, y):
     return lon, lat
 
 
+def transform_point(lon, lat, to_crs, from_crs=WGS84):
+    """Generisk punkt-transform til en vilkaarlig EPSG-kode (f.eks. for
+    engangsdiagnostikk mot en annen projeksjon enn UTM32)."""
+    x, y = _transformer(from_crs, to_crs).transform(lon, lat)
+    return x, y
+
+
 def bearing_vector(bearing_deg):
     """Enhetsvektor (dx, dy) i et easting/northing-plan for en kompassretning."""
     rad = math.radians(bearing_deg)

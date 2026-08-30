@@ -203,6 +203,51 @@ def test_build_candidates_bruker_oppslaatt_url_forst(monkeypatch):
     assert candidates[1:] == F.WFS_URL_CANDIDATES
 
 
+# --------------------------------------------------------------------- --probe
+
+
+def test_geom_sample_coords_linestring():
+    from shapely.geometry import LineString
+    g = LineString([(9.9, 59.0), (10.0, 59.1), (10.1, 59.2)])
+    assert F._geom_sample_coords(g, n=2) == [(9.9, 59.0), (10.0, 59.1)]
+
+
+def test_geom_sample_coords_polygon_bruker_exterior():
+    from shapely.geometry import Polygon
+    g = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+    sample = F._geom_sample_coords(g, n=2)
+    assert sample == [(0.0, 0.0), (1.0, 0.0)]
+
+
+def test_geom_sample_coords_multigeometri_bruker_forste_del():
+    from shapely.geometry import MultiLineString
+    g = MultiLineString([[(9.9, 59.0), (10.0, 59.1)], [(1, 1), (2, 2)]])
+    assert F._geom_sample_coords(g, n=1) == [(9.9, 59.0)]
+
+
+def test_geom_sample_coords_none():
+    assert F._geom_sample_coords(None) is None
+
+
+def test_guess_crs_hint_norge_lonlat():
+    hint = F._guess_crs_hint((9.3, 58.7, 11.2, 59.5))
+    assert "Norge" in hint
+
+
+def test_guess_crs_hint_byttet_om():
+    hint = F._guess_crs_hint((58.7, 9.3, 59.5, 11.2))
+    assert "byttet om" in hint
+
+
+def test_guess_crs_hint_utm_aktig():
+    hint = F._guess_crs_hint((169929.0, 6512888.8, 284931.2, 6609567.1))
+    assert "UTM" in hint
+
+
+def test_guess_crs_hint_ingen_bounds():
+    assert F._guess_crs_hint(None) == ""
+
+
 # ------------------------------------------------- raadata-dumping (aldri stille)
 
 

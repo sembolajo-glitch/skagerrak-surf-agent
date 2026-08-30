@@ -46,6 +46,16 @@ tilgjengelige lagnavn, uten aa proeve GetFeature i det hele tatt:
 
     python fetch_geodata.py --list-layers
     python fetch_geodata.py --list-layers --wfs-url https://annen.url/wfs
+
+Faar du 0 features for et lag som ellers matcher fint, er det som oftest
+bbox-en (akserekkefolge eller feil CRS), ikke tjenesten eller lagnavnet.
+Kjor --probe for aa diagnostisere det isolert, uten aa proeve aa laste ned
+noe: den proever (a) uten bbox i det hele tatt, (b) bbox lon,lat i EPSG:4326,
+(c) bbox lat,lon (WFS2.0-regelen for geografiske EPSG-koder skrevet som
+urn:...), og (d) bbox i UTM33 (EPSG:25833, ofte tjenestens native CRS) - og
+viser raa geometri + bounds for foerste treff i hver variant:
+
+    python fetch_geodata.py --probe
 """
 
 import argparse
@@ -810,6 +820,174 @@ def list_layers(args, dump_dir):
         print(name)
 
 
+# --------------------------------------------------------------- --probe
+
+
+def _geom_sample_coords(geom, n=3):
+    """
+    Ren funksjon: de forste n koordinatparene i en shapely-geometri, uansett
+    type - brukt til aa vise raadata for CRS/akserekkefolge-diagnose.
+
+    OBS: hasattr(geom, "coords") er SANN for alle shapely-geometrier (feltet
+    finnes paa baseklassen) - men aa faktisk LESE .coords kaster
+    NotImplementedError for Polygon/Multi*/GeometryCollection, siden de ikke
+    er "koordinatsekvenser". Maa derfor proeve/fange, ikke bare hasattr().
+    """
+    if geom is None:
+        return None
+    try:
+        coords = list(geom.coords)
+        if coords:
+            return coords[:n]
+    except NotImplementedError:
+        pass
+    if hasattr(geom, "exterior") and geom.exterior is not None:
+        return list(geom.exterior.coords)[:n]
+    if hasattr(geom, "geoms") and len(geom.geoms):
+        return _geom_sample_coords(geom.geoms[0], n)
+    return None
+
+
+def _guess_crs_hint(bounds):
+    """Ren funksjon: svakt, uautoritativt hint om hva slags CRS et sett
+    bounds sannsynligvis er i, ut fra rene stoerrelsesordener. Kun til hjelp
+    i loggen - ikke brukt til noen beslutning i koden."""
+    if not bounds:
+        return ""
+    minx, miny, maxx, maxy = bounds
+    if 4 <= minx <= 32 and 4 <= maxx <= 32 and 55 <= miny <= 72 and 55 <= maxy <= 72:
+        return "  <- ser ut som WGS84 lon,lat over Norge (riktig!)"
+    if 55 <= minx <= 72 and 55 <= maxx <= 72 and 4 <= miny <= 32 and 4 <= maxy <= 32:
+        return "  <- ser ut som WGS84 MEN med lat/lon byttet om (x=breddegrad her)"
+    if abs(minx) > 1000 or abs(miny) > 1000:
+        return "  <- ser ut som prosjiserte meterkoordinater (UTM e.l.)"
+    return "  <- usikker, ikke i noen av de forventede omraadene"
+
+
+def _probe_call(base_url, version, type_name, use_json, dump_dir, label, params_extra, count=10):
+    """
+    Ett enkelt, ikke-paginert GetFeature-kall for --probe: bygg params,
+    hent, tell features, og vis geometrien til den forste - saa en kan se
+    med egne oyne hvilket koordinatsystem/akserekkefolge svaret faktisk
+    kommer i, i stedet for aa gjette videre.
+    """
+    params = {
+        "service": "WFS", "request": "GetFeature", "version": version,
+        ("typeNames" if version == "2.0.0" else "typeName"): type_name,
+        ("count" if version == "2.0.0" else "maxFeatures"): count,
+    }
+    if use_json:
+        params["outputFormat"] = "application/json"
+    params.update(params_extra)
+
+    tag = f"probe_{type_name}_{_slug(label)}"
+    try:
+        r = _get(base_url, params, dump_dir=dump_dir, tag=tag)
+    except requests.RequestException as exc:
+        log(f"  [{label}] FEIL: {exc}")
+        return 0
+
+    geoms = []
+    if use_json:
+        try:
+            data = r.json()
+        except ValueError:
+            log(f"  [{label}] status {r.status_code}, ugyldig JSON")
+            return 0
+        for f in data.get("features", []):
+            g = f.get("geometry")
+            if g is not None:
+                geoms.append(shape(g))
+    else:
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError as exc:
+            log(f"  [{label}] status {r.status_code}, ugyldig XML: {exc}")
+            return 0
+        for member in _iter_members(root):
+            g, _props = _parse_gml_member(member)
+            if g is not None:
+                geoms.append(g)
+
+    n = len(geoms)
+    if n == 0:
+        log(f"  [{label}] 0 features")
+        return 0
+
+    sample = _geom_sample_coords(geoms[0])
+    hint = _guess_crs_hint(geoms[0].bounds)
+    log(f"  [{label}] {n} features. Forste geometri: type={geoms[0].geom_type}, "
+        f"koordinater={sample}, bounds={geoms[0].bounds}{hint}")
+    return n
+
+
+def probe(args, dump_dir):
+    """
+    --probe: diagnostiser bbox/akserekkefolge/projeksjon UTEN aa laste ned
+    og skrive noe. Rekkefolge (etter brukerens instruks - gjor "uten bbox"
+    forst, det halverer soekerommet raskest):
+      A. count=10, INGEN bbox i det hele tatt - er tjenesten frisk?
+      B. bbox lon,lat med srsName=EPSG:4326 (kortform, vanlig lon/lat-akse)
+      C. bbox lat,lon med srsName=urn:ogc:def:crs:EPSG::4326 (WFS2.0-regelen
+         for geografiske EPSG-koder: lat/lon-akse)
+      D. bbox i UTM33 (EPSG:25833), siden norske geodata ofte er native der
+    """
+    candidates = build_candidates(args, dump_dir)
+    log(f"--probe: soeker WFS-endepunkt (kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
+    log(f"Bruker {base_url} (WFS {version})\n")
+
+    lat_min, lon_min, lat_max, lon_max = args.bbox
+    bbox_lonlat = f"{lon_min},{lat_min},{lon_max},{lat_max}"
+    bbox_latlon = f"{lat_min},{lon_min},{lat_max},{lon_max}"
+
+    e1, n1 = G.transform_point(lon_min, lat_min, "EPSG:25833")
+    e2, n2 = G.transform_point(lon_min, lat_max, "EPSG:25833")
+    e3, n3 = G.transform_point(lon_max, lat_min, "EPSG:25833")
+    e4, n4 = G.transform_point(lon_max, lat_max, "EPSG:25833")
+    e_min, e_max = min(e1, e2, e3, e4), max(e1, e2, e3, e4)
+    n_min, n_max = min(n1, n2, n3, n4), max(n1, n2, n3, n4)
+    bbox_utm33 = f"{e_min:.1f},{n_min:.1f},{e_max:.1f},{n_max:.1f}"
+    log(f"bbox (lat/lon) {args.bbox} -> UTM33 {bbox_utm33}\n")
+
+    any_hit = False
+    for key, keywords in LAYERS.items():
+        type_name = match_layer(feature_types.keys(), keywords)
+        if type_name is None:
+            log(f"=== {key}: FEIL - fant ikke noe lag som matcher {keywords} blant "
+                f"{sorted(feature_types.keys())} ===\n")
+            continue
+
+        log(f"=== {key} ({type_name}) ===")
+        use_json = supports_json(base_url, version, type_name, dump_dir=dump_dir)
+        log(f"  format: {'GeoJSON' if use_json else 'GML'}")
+
+        n_a = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "A: uten bbox", {})
+        n_b = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "B: bbox lon,lat EPSG:4326",
+                           {"bbox": bbox_lonlat, "srsName": "EPSG:4326"})
+        n_c = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "C: bbox lat,lon urn:...:EPSG::4326",
+                           {"bbox": bbox_latlon, "srsName": "urn:ogc:def:crs:EPSG::4326"})
+        n_d = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "D: bbox UTM33 EPSG:25833",
+                           {"bbox": bbox_utm33, "srsName": "EPSG:25833"})
+        log("")
+        any_hit = any_hit or any([n_a, n_b, n_c, n_d])
+
+    log("=" * 70)
+    if not any_hit:
+        log("KONKLUSJON: 0 features i ALLE varianter, ogsaa uten bbox (A). "
+            "Problemet er ikke bbox-en - det er lagnavnet, tjenesten, eller "
+            "noe annet. Sjekk --list-layers og data/_raw/ for de raa svarene.")
+    else:
+        log("KONKLUSJON: se hvilken(e) variant(er) over som faktisk ga treff, "
+            "og hvilket omraade 'bounds' pekte paa - det forteller hvilken "
+            "bbox-rekkefolge/CRS tjenesten faktisk vil ha.")
+    log("=" * 70)
+
+
 def run_pipeline(args, out_dir, dump_dir):
     candidates = build_candidates(args, dump_dir)
     log(f"Soeker WFS-endepunkt (bbox={args.bbox}, kandidater: {candidates}) ...")
@@ -855,6 +1033,9 @@ def main():
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--list-layers", action="store_true",
                      help="Bare kjor GetCapabilities og skriv ut alle tilgjengelige lagnavn, ikke hent features")
+    ap.add_argument("--probe", action="store_true",
+                     help="Diagnostiser bbox-rekkefolge/akse/projeksjon mot layerne (uten bbox, "
+                          "lon/lat, lat/lon, UTM33) - ikke last ned eller skriv noe")
     ap.add_argument("--dump-raw", action="store_true",
                      help="Ingen effekt lenger - raadata dumpes na alltid til <out-dir>/_raw/. "
                           "Beholdt for bakoverkompatibilitet med eksisterende kall.")
@@ -872,6 +1053,8 @@ def main():
     try:
         if args.list_layers:
             list_layers(args, dump_dir)
+        elif args.probe:
+            probe(args, dump_dir)
         else:
             run_pipeline(args, out_dir, dump_dir)
     except Exception as exc:  # noqa: BLE001
