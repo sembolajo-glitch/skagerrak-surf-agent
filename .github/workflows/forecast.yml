@@ -30,12 +30,21 @@ jobs:
       # Historikk: alert_state.json og shadow.csv ligger paa data-grenen slik
       # at de overlever mellom kjoringer. Uten dette faar du varsel om samme
       # vindu hver sjette time.
+      #
+      # spotgrid.json rundes paa samme maate - MEN denne kjoringen regner
+      # den aldri ut selv (den er statisk, se geodata.yml sin
+      # build_spotgrid.py). Den eneste jobben til denne kjoringen er aa
+      # hente den her og legge den rett tilbake paa data-grenen igjen
+      # under (se "Publiser til data-grenen"), slik at den overlever den
+      # naeste --orphan-force-pushen og dermed havner i upload-pages-
+      # artifact under, klar for spot-testeren i frontenden.
       - name: Hent tilstand fra data-grenen
         run: |
           git fetch origin data:data 2>/dev/null || echo "data-gren finnes ikke enna"
           mkdir -p out
           git show data:out/alert_state.json > out/alert_state.json 2>/dev/null || true
           git show data:out/shadow.csv       > out/shadow.csv       2>/dev/null || true
+          git show data:out/spotgrid.json    > out/spotgrid.json    2>/dev/null || true
 
       - uses: actions/setup-python@v5
         with:
@@ -73,11 +82,16 @@ jobs:
           git config user.email "surf-agent@users.noreply.github.com"
           git checkout --orphan tmp-data
           git rm -rf --cached . > /dev/null
-          git add -f out/forecast.json out/spots out/shadow.csv out/alert_state.json out/run.log
+          add_args=(out/forecast.json out/spots out/shadow.csv out/alert_state.json out/run.log)
+          [ -f out/spotgrid.json ] && add_args+=(out/spotgrid.json)
+          git add -f "${add_args[@]}"
           git commit -m "prognose $(date -u +%FT%TZ)" || exit 0
           git branch -M tmp-data data
           git push -f origin data
 
+      # path: out laster opp HELE mappa, saa spotgrid.json (rundet inn fra
+      # data-grenen over - se "Hent tilstand fra data-grenen") blir med
+      # automatisk naar den finnes, uten noe eget filoppslag her.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

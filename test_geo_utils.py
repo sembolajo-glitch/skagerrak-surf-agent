@@ -90,6 +90,35 @@ def test_nearest_distance_km_tomt_tre_gir_none():
     assert G.nearest_distance_km(10.0, 59.0, None, []) is None
 
 
+def test_ray_crossing_count_tomt_tre_gir_null():
+    assert G.ray_crossing_count(10.0, 59.0, 180, 50, None, []) == 0
+
+
+def test_ray_crossing_count_ett_kryss():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    coast = LineString([(ox - 50000, oy - 10000), (ox + 50000, oy - 10000)])
+    tree = G.build_strtree([coast])
+    assert G.ray_crossing_count(lon0, lat0, 180, 50, tree, [coast]) == 1
+
+
+def test_ray_crossing_count_ingen_kryss_utenfor_rekkevidde():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    coast = LineString([(ox - 50000, oy - 10000), (ox + 50000, oy - 10000)])
+    tree = G.build_strtree([coast])
+    assert G.ray_crossing_count(lon0, lat0, 180, 5, tree, [coast]) == 0
+
+
+def test_ray_crossing_count_to_kryss():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    near = LineString([(ox - 50000, oy - 5000), (ox + 50000, oy - 5000)])
+    far = LineString([(ox - 50000, oy - 15000), (ox + 50000, oy - 15000)])
+    tree = G.build_strtree([near, far])
+    assert G.ray_crossing_count(lon0, lat0, 180, 50, tree, [near, far]) == 2
+
+
 def test_bbox_edge_tree_finner_kant_i_alle_retninger():
     bbox = (58.0, 9.0, 59.0, 10.0)  # lat_min, lon_min, lat_max, lon_max
     tree, lines = G.bbox_edge_tree(bbox)

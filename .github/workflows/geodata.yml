@@ -1,12 +1,17 @@
 name: geodata
 
 # Engangsjobb: hent Kystkontur/Dybdekurve fra Kartverket (Geonorge WFS,
-# CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km. KUN manuell trigger - aldri
-# paa tidsplan. Ruerer ikke forecast.yml eller main: resultatet havner paa
-# en egen gren (geodata-resultat) for gjennomsyn foer eventuell merge.
+# CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km (build_fetch.py) og
+# out/spotgrid.json (build_spotgrid.py). KUN manuell trigger - aldri paa
+# tidsplan. Ruerer ikke forecast.yml eller main: kystkontur/dybdekurve +
+# spots.yaml havner paa en egen gren (geodata-resultat) for gjennomsyn foer
+# eventuell merge, mens spotgrid.json - som er statisk og kun endres her -
+# ogsaa dyttes til data-grenen saa forecast.yml sin "Hent tilstand fra
+# data-grenen" runder den tilbake inn i out/ (og dermed upload-pages-
+# artifact) uten aa regne den ut paa nytt hver dag, se forecast.yml.
 # Input "probe" bytter til fetch_geodata.py --probe (diagnostiser bbox/
-# akse/CRS mot layerne) og hopper over build_fetch.py og commit-steget -
-# artifact-opplastingen av data/_raw/ kjorer uansett.
+# akse/CRS mot layerne) og hopper over build_fetch.py, build_spotgrid.py
+# og commit-stegene - artifact-opplastingen av data/_raw/ kjorer uansett.
 on:
   workflow_dispatch:
     inputs:
@@ -71,6 +76,15 @@ jobs:
         if: inputs.probe != true
         run: python build_fetch.py
 
+      # Statisk rutenett over kandidat-surfpunkter (d20/d30/d50, apen
+      # sektor/retning) - se build_spotgrid.py sin docstring. Trenger bare
+      # kystkontur/dybdekurve, ikke spots.yaml, saa den kan kjore uavhengig
+      # av build_fetch.py over - men staar etter den her fordi begge er
+      # "beregn fra geodata"-steg.
+      - name: Bygg spotgrid (build_spotgrid.py)
+        if: inputs.probe != true
+        run: python build_spotgrid.py
+
       # Feiler (exit 1) hvis et referansepunkt bryter sin avstandsterskel -
       # se validate_geodata.py. Tegner uansett ut/kystkontur_preview.svg,
       # ogsaa ved feil, siden det er akkurat da bildet er mest nyttig
@@ -96,10 +110,39 @@ jobs:
             git add "${geo_files[@]}"
           fi
           git add spots.yaml
+          [ -f out/spotgrid.json ] && git add -f out/spotgrid.json
 
-          git commit -m "geodata: kystkontur/dybdekurve + fetch_km_72/dybde_Xm_km ($(date -u +%FT%TZ))" \
+          git commit -m "geodata: kystkontur/dybdekurve + fetch_km_72/dybde_Xm_km + spotgrid.json ($(date -u +%FT%TZ))" \
             || echo "ingen endringer aa committe"
           git push -f origin geodata-resultat
+
+      # spotgrid.json alene (ikke kystkontur/dybdekurve/spots.yaml, som
+      # skal gjennom manuell gjennomsyn paa geodata-resultat foerst) dyttes
+      # ogsaa rett til data-grenen: den er den eneste av filene her
+      # forecast.yml faktisk leser (via "Hent tilstand fra data-grenen") og
+      # inkluderer i upload-pages-artifact. data-grenen force-pushes hver
+      # gang forecast.yml kjorer, saa dette folger samme "gjenopprettbar
+      # tilstand, ikke historikk aa ta vare paa"-konvensjon som resten av
+      # den grenen (se forecast.yml).
+      - name: Publiser spotgrid.json til data-grenen
+        if: inputs.probe != true
+        run: |
+          if [ ! -f out/spotgrid.json ]; then
+            echo "::warning::out/spotgrid.json finnes ikke - hopper over publisering til data-grenen"
+            exit 0
+          fi
+          git config user.name  "surf-agent"
+          git config user.email "surf-agent@users.noreply.github.com"
+          cp out/spotgrid.json /tmp/spotgrid.json
+
+          git fetch origin data:data 2>/dev/null || echo "data-gren finnes ikke enna"
+          git checkout data 2>/dev/null || git checkout --orphan data
+
+          mkdir -p out
+          cp /tmp/spotgrid.json out/spotgrid.json
+          git add -f out/spotgrid.json
+          git commit -m "geodata: spotgrid.json ($(date -u +%FT%TZ))" || echo "ingen endringer aa committe"
+          git push -f origin data
 
       - name: Last opp raadata som artifact
         if: always()
