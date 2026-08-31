@@ -21,11 +21,20 @@ For hvert spot i spots.yaml:
     forlater utsnittet finner rett og slett ikke mer data - det er ikke en
     reell fjordaapning eller et smett, bare fravaer av data.
 
-    `fetch_km_72_endelig` er derfor den egentlige fiksen: hver straale
-    klassifiseres som "kyst" (traff ekte kystkontur - bruk den maalte
-    lengden) eller "bbox_kant" (forlot utsnittet uten aa treffe noe - bruk
-    en kjent ANALYTISK avstand til land i stedet for aa gjette videre med
-    mer geometri, se ANALYTIC_SECTORS). Se compute_fetch_72_endelig().
+    `fetch_km_72_endelig` er derfor den egentlige fiksen for bbox-kant-
+    problemet: hver straale klassifiseres som "kyst" (traff ekte kystkontur
+    - bruk den maalte lengden) eller "bbox_kant" (forlot utsnittet uten aa
+    treffe noe - bruk en kjent ANALYTISK avstand til land, se
+    ANALYTIC_SECTORS). Se compute_fetch_72_endelig().
+
+    `fetch_km_72_kjegle` (2026-08-31) fikser et ANNET problem, fysisk
+    begrunnet: en enkeltstraale er ren geometri og stoppes av en holme paa
+    200 m, men en boelge diffrakterer rundt en slik holme og bygger seg
+    videre - straalekasting maaler noe annet enn boelgefetch. Kjeglekasting
+    (21 delstraaler over +-10 grader per hovedretning) tar 80-persentilen
+    av KUN kyst-klassifiserte delstraaler, saa en enkelt holme rett i
+    siktelinjen ikke lenger stopper hele retningen, mens en sammenhengende
+    kystlinje fortsatt gjor det. Se compute_fetch_72_kjegle().
   - Steg 3: for spotens `facing`-retning, finner avstanden til 20-, 30- og
     50-meterskoten i dybdekurve-laget. Skrevet som `dybde_20m_km`,
     `dybde_30m_km`, `dybde_50m_km` (null hvis koten ikke finnes/treffes
@@ -42,6 +51,7 @@ Dette skriptet endrer ALDRI physics.py, ensemble.py eller agent.py.
 """
 
 import argparse
+import math
 import statistics
 import sys
 from pathlib import Path
@@ -165,14 +175,121 @@ def compute_fetch_72_endelig(lon, lat, fetch_km_72, edge_tree, edge_lines):
     return values, categories
 
 
-def report_deviation_kyst_only(spot_id, manual, measured_72, categories):
+CONE_HALF_WIDTH_DEG = 10.0
+CONE_N_RAYS = 21
+# 21 straaler jevnt fordelt over +-10 grader gir aritmetisk 1 grad mellomrom
+# ((2*10)/(21-1) = 1.0), IKKE en halv grad. Ordren 2026-08-31 ba om baade
+# "21 straaler over +-10 grader" og "hver halve grad", som er selvmotsigende
+# for den vifta (0.5 graders steg over +-10 grader ville krevd 41 straaler).
+# Valgte det eksplisitte straaletallet (21); se rapport til bruker.
+CONE_STEP_DEG = (2 * CONE_HALF_WIDTH_DEG) / (CONE_N_RAYS - 1)
+CONE_PERCENTILE = 80
+CONE_OPEN_SEA_FRACTION = 0.5  # over halvparten av kjeglen bbox_kant -> "apent_hav"
+
+
+def percentile(values, pct):
+    """
+    Lineaer interpolert persentil (0-100) - samme metode ("linear") som
+    numpy sin default. Implementert eksplisitt i stedet for
+    statistics.quantiles(), som har hatt ulik standard interpolasjonsmetode
+    mellom Python-versjoner og dermed ikke er deterministisk paa tvers av
+    miljoer.
+    """
+    xs = sorted(values)
+    n = len(xs)
+    if n == 1:
+        return xs[0]
+    rank = (pct / 100.0) * (n - 1)
+    lo = int(math.floor(rank))
+    hi = int(math.ceil(rank))
+    if lo == hi:
+        return xs[lo]
+    frac = rank - lo
+    return xs[lo] * (1 - frac) + xs[hi] * frac
+
+
+def compute_fetch_72_kjegle(lon, lat, kyst_tree, kyst_lines, edge_tree, edge_lines):
+    """
+    Kjeglekasting: fysisk begrunnet i at en holme stopper en GEOMETRISK
+    straale, men ikke en boelge - den diffrakterer rundt og bygger seg
+    videre. Enkeltstraale maaler geometri; boelgefetch er noe annet.
+
+    For hver av de 72 hovedretningene, skyt CONE_N_RAYS (21) delstraaler
+    jevnt fordelt over +-CONE_HALF_WIDTH_DEG (10) grader rundt retningen.
+    Klassifiser hver delstraale som "kyst" eller "bbox_kant" (samme regel
+    som compute_fetch_72_endelig - se classify_ray_category()).
+
+    Er MER ENN halvparten av de 21 delstraalene "bbox_kant", er hele
+    hovedretningen i praksis aapent hav innenfor kjeglen - marker den
+    "apent_hav" og fyll analytisk (samme sektorer som bbox_kant, se
+    analytic_fill_km()). Ellers er verdien CONE_PERCENTILE-persentilen
+    (80.) av lengdene til KUN kyst-delstraalene: en enkelt holme rett i
+    siktelinjen (kort delstraale, i mindretall) druknes da av de andre 20,
+    mens en sammenhengende kystlinje (de fleste/alle delstraaler korte)
+    fortsatt gir en kort persentilverdi.
+
+    Returnerer (values, categories, p80_minus_median) - tre 72-lister.
+    p80_minus_median er None for "apent_hav"-retninger (ingen meningsfull
+    kyst-fordeling der aa sammenligne median/p80 for).
+    """
+    values, categories, skew = [], [], []
+    for i in range(N_RAYS):
+        bearing = i * FETCH_STEP_DEG
+        kyst_lengths = []
+        n_kant = 0
+        for k in range(CONE_N_RAYS):
+            sub_bearing = bearing - CONE_HALF_WIDTH_DEG + k * CONE_STEP_DEG
+            d = G.cast_ray_km(lon, lat, sub_bearing, FETCH_MAX_KM, kyst_tree, kyst_lines)
+            edge_km = G.cast_ray_km(lon, lat, sub_bearing, 1000.0, edge_tree, edge_lines)
+            if classify_ray_category(d, edge_km) == "kyst":
+                kyst_lengths.append(d)
+            else:
+                n_kant += 1
+
+        if n_kant > CONE_N_RAYS * CONE_OPEN_SEA_FRACTION:
+            km, usikker = analytic_fill_km(bearing)
+            values.append(km)
+            categories.append("apent_hav_usikker" if usikker else "apent_hav")
+            skew.append(None)
+        else:
+            p80 = percentile(kyst_lengths, CONE_PERCENTILE)
+            med = statistics.median(kyst_lengths)
+            values.append(round(p80, 1))
+            categories.append("kyst")
+            skew.append(round(p80 - med, 2))
+    return values, categories, skew
+
+
+def report_kjegle_skew(spot_id, skew):
+    """
+    Hvor mye 80-persentilen avviker fra medianen i kjeglekastingen, per
+    hovedretning, aggregert per spot. Se ordre 2026-08-31: er de like,
+    spiller skjaerene i kjeglen liten rolle for denne spotten (fordelingen
+    av delstraale-lengder er jevn). Er de svaert ulike, er skjaergaarden
+    dominerende - noen delstraaler er mye kortere enn andre - og resultatet
+    boer vurderes paa nytt, ikke tas for gitt.
+    """
+    vals = [s for s in skew if s is not None]
+    if not vals:
+        log(f"  {spot_id}: ingen retninger med kyst-flertall i kjeglen - kan ikke vurdere p80 vs median")
+        return None, None
+    mean_abs = sum(abs(v) for v in vals) / len(vals)
+    worst_i = max((i for i, s in enumerate(skew) if s is not None), key=lambda i: abs(skew[i]))
+    log(f"  {spot_id}: p80 vs median i kjeglen - gj.snitt avvik {mean_abs:.2f} km, "
+        f"storst {skew[worst_i]:+.2f} km ved {worst_i * FETCH_STEP_DEG} grader "
+        f"({len(vals)}/{N_RAYS} retninger vurdert)")
+    return mean_abs, skew[worst_i]
+
+
+def report_deviation_kyst_only(spot_id, manual, measured_72, categories, label="kyst-straaler"):
     """
     Manuell vs maalt, KUN for de 16-punktsretningene der begge 5-graders
-    naboraastraalene som interpoleres mellom er klassifisert "kyst". En
-    sammenligning mot en analytisk fylt "bbox_kant"-verdi maaler ingenting
-    - den er ikke en maaling i utgangspunktet. Se ordre 2026-08-31.
+    naboraastraalene som interpoleres mellom er klassifisert "kyst" (eller
+    en annen "reell maaling"-kategori - alt annet enn eksakt "kyst" hoppes
+    over). En sammenligning mot en analytisk fylt verdi maaler ingenting -
+    den er ikke en maaling i utgangspunktet. Se ordre 2026-08-31.
     """
-    log(f"\n  {spot_id}: manuell vs kyst-straaler (kun retninger med rene kyst-treff i nabolaget)")
+    log(f"\n  {spot_id}: manuell vs {label} (kun retninger med rene kyst-treff i nabolaget)")
     log(f"  {'ret':<5}{'manuell':>9}{'maalt':>9}{'avvik':>9}")
     n = len(measured_72)
     deltas = []
@@ -300,34 +417,52 @@ def main():
     log("=" * 70)
 
     all_mean_abs = []
+    all_mean_abs_kjegle = []
     for spot in doc["spots"]:
         lon, lat = spot["lon"], spot["lat"]
         measured_72 = compute_fetch_72(lon, lat, kyst_tree, kyst_lines)
         measured_72_eff = compute_fetch_72_effektiv(measured_72)
         endelig, categories = compute_fetch_72_endelig(lon, lat, measured_72, edge_tree, edge_lines)
+        kjegle, categories_kjegle, skew = compute_fetch_72_kjegle(
+            lon, lat, kyst_tree, kyst_lines, edge_tree, edge_lines)
         spot["fetch_km_72"] = make_flow_seq(measured_72)
         spot["fetch_km_72_effektiv"] = make_flow_seq(measured_72_eff)
         spot["fetch_km_72_endelig"] = make_flow_seq(endelig)
+        spot["fetch_km_72_kjegle"] = make_flow_seq(kjegle)
 
         n_kyst = categories.count("kyst")
         n_kant = categories.count("bbox_kant")
         n_kant_usikker = categories.count("bbox_kant_usikker")
+        n_apent = categories_kjegle.count("apent_hav") + categories_kjegle.count("apent_hav_usikker")
         log(f"\n  {spot['id']}: {n_kyst} kyst, {n_kant} bbox_kant (analytisk sektor), "
-            f"{n_kant_usikker} bbox_kant_usikker ({ANALYTIC_DEFAULT_KM:.0f} km default)")
+            f"{n_kant_usikker} bbox_kant_usikker ({ANALYTIC_DEFAULT_KM:.0f} km default)   "
+            f"[kjegle: {N_RAYS - n_apent} kyst-flertall, {n_apent} apent_hav]")
+        report_kjegle_skew(spot["id"], skew)
 
         manual = spot.get("fetch_km") or spot.get("local_fetch_km")
         if manual:
             spot["fetch_km_manuell"] = make_flow_seq(list(manual))
             mean_abs, worst_delta, worst_label, n_skipped = report_deviation_kyst_only(
-                spot["id"], manual, measured_72, categories)
+                spot["id"], manual, measured_72, categories, label="kyst-straaler (fetch_km_72_endelig)")
             if mean_abs is not None:
                 all_mean_abs.append((spot["id"], mean_abs, worst_delta, worst_label, n_skipped))
+
+            mean_abs_kj, worst_delta_kj, worst_label_kj, n_skipped_kj = report_deviation_kyst_only(
+                spot["id"], manual, kjegle, categories_kjegle, label="kjeglekasting (fetch_km_72_kjegle)")
+            if mean_abs_kj is not None:
+                all_mean_abs_kjegle.append((spot["id"], mean_abs_kj, worst_delta_kj, worst_label_kj, n_skipped_kj))
         else:
             log("  ingen haandlaget tabell - ingen sammenligning")
 
     log("\n" + "-" * 70)
-    log("Oppsummering avvik (manuell vs kyst-straaler - den eneste sammenligningen som betyr noe):")
+    log("Oppsummering avvik, fetch_km_72_endelig (manuell vs kyst-straaler):")
     for spot_id, mean_abs, worst_delta, worst_label, n_skipped in sorted(all_mean_abs, key=lambda x: -x[1]):
+        log(f"  {spot_id:<16} gj.snitt |avvik| {mean_abs:6.1f} km   "
+            f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
+
+    log("\n" + "-" * 70)
+    log("Oppsummering avvik, fetch_km_72_kjegle (manuell vs kjeglekasting - den eneste sammenligningen som betyr noe):")
+    for spot_id, mean_abs, worst_delta, worst_label, n_skipped in sorted(all_mean_abs_kjegle, key=lambda x: -x[1]):
         log(f"  {spot_id:<16} gj.snitt |avvik| {mean_abs:6.1f} km   "
             f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
 

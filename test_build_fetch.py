@@ -137,6 +137,100 @@ def test_report_deviation_kyst_only_ingen_kyst_gir_none():
     assert n_skipped == 16
 
 
+def test_percentile_kjente_verdier():
+    xs = [10, 20, 30, 40, 50]
+    assert B.percentile(xs, 0) == 10
+    assert B.percentile(xs, 100) == 50
+    assert B.percentile(xs, 50) == 30
+
+
+def test_percentile_interpolerer_lineaert():
+    xs = [0, 10]
+    assert B.percentile(xs, 25) == 2.5
+    assert B.percentile(xs, 80) == 8.0
+
+
+def test_percentile_ett_element():
+    assert B.percentile([42], 80) == 42
+
+
+def test_compute_fetch_72_kjegle_drukner_enkelt_skjaer_i_flertallet():
+    """Kjernen i ordren 2026-08-31: en holme rett i siktelinjen skal ikke
+    stoppe hele retningen naar resten av kjeglen ser lenger. p80 av
+    kyst-delstraalene skal ligge naer den fjerne, sammenhengende kysten
+    (~50 km), IKKE naer den lille holmen (2 km)."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+
+    # "bbox"-kant lagt kjempelangt unna - ingen delstraale skal klassifiseres bbox_kant her
+    huge_edge = LineString([(ox - 5_000_000, oy - 5_000_000), (ox + 5_000_000, oy - 5_000_000)])
+    edge_tree, edge_lines = G.build_strtree([huge_edge]), [huge_edge]
+
+    far_coast = LineString([(ox - 30000, oy + 50000), (ox + 30000, oy + 50000)])  # ~50 km nord, bred
+    skerry = LineString([(ox - 40, oy + 2000), (ox + 40, oy + 2000)])  # liten holme, 2 km nord
+    kyst_lines = [far_coast, skerry]
+    kyst_tree = G.build_strtree(kyst_lines)
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, kyst_lines, edge_tree, edge_lines)
+
+    assert categories[0] == "kyst"  # retning 0 = nord, midt i kjeglen som ser holmen
+    assert values[0] > 30.0  # naer den fjerne kysten, IKKE naer 2 km-holmen
+    assert skew[0] is not None
+
+
+def test_compute_fetch_72_kjegle_flertall_bbox_kant_gir_apent_hav():
+    """Er over halvparten av kjeglen bbox_kant, skal hovedretningen
+    markeres apent_hav og fylles analytisk - ikke persentil av et
+    mindretall kyst-delstraaler."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+
+    # Bitteliten bbox - de aller fleste delstraaler i kjeglen forlater den
+    # innenfor faa hundre meter og finner aldri kyst_lines (som ligger langt unna)
+    tiny_edge = LineString([(ox - 100, oy + 100), (ox + 100, oy + 100)])
+    edge_tree, edge_lines = G.build_strtree([tiny_edge]), [tiny_edge]
+
+    far_coast = LineString([(ox - 30000, oy + 200000), (ox + 30000, oy + 200000)])
+    kyst_tree = G.build_strtree([far_coast])
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, [far_coast], edge_tree, edge_lines)
+
+    assert categories[0] in ("apent_hav", "apent_hav_usikker")
+    assert skew[0] is None
+    # bearing=0 (N) er ikke i noen ANALYTIC_SECTORS -> usikker default
+    assert values[0] == B.ANALYTIC_DEFAULT_KM
+    assert categories[0] == "apent_hav_usikker"
+
+
+def test_compute_fetch_72_kjegle_analytisk_sektor_riktig_verdi():
+    """bearing=180 (S) faller i Skagen-sektoren (160-200) naar hele
+    kjeglen er apent hav."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    tiny_edge = LineString([(ox - 100, oy - 100), (ox + 100, oy - 100)])
+    edge_tree, edge_lines = G.build_strtree([tiny_edge]), [tiny_edge]
+    far_coast = LineString([(ox - 30000, oy - 200000), (ox + 30000, oy - 200000)])
+    kyst_tree = G.build_strtree([far_coast])
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, [far_coast], edge_tree, edge_lines)
+    idx_180 = 180 // B.FETCH_STEP_DEG
+    assert categories[idx_180] == "apent_hav"
+    assert values[idx_180] == 145.0
+
+
+def test_report_kjegle_skew_beregner_gjennomsnitt_og_verste():
+    skew = [1.0, -2.0, None, 5.0, None, -0.5]
+    mean_abs, worst = B.report_kjegle_skew("test", skew)
+    assert mean_abs == pytest.approx((1.0 + 2.0 + 5.0 + 0.5) / 4)
+    assert worst == 5.0
+
+
+def test_report_kjegle_skew_alle_none_gir_none():
+    mean_abs, worst = B.report_kjegle_skew("test", [None] * 5)
+    assert mean_abs is None
+    assert worst is None
+
+
 def test_group_by_depth_filtrerer_pa_toleranse():
     close = LineString([(0, 0), (100, 0)])
     far = LineString([(0, 100), (100, 100)])
