@@ -764,7 +764,11 @@ def append_shadow_log(payload):
               "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
               # kalibreringsgrunnlag for swell/vindsjo-andel (se
               # physics.swell_fraction() - ikke i scoringen ennaa)
-              "swell_hs", "windsea_hs", "swell_andel"]
+              "swell_hs", "windsea_hs", "swell_andel",
+              # kalibreringsgrunnlag for ensemble.GLOBAL_MODEL_HS_REL_PENALTY -
+              # uten denne kan paaslaget aldri etterproeves mot faktiske
+              # utfall, se calibrate.py
+              "partisjon_kilde"]
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:
