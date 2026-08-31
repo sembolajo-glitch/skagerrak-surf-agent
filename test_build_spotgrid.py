@@ -76,12 +76,37 @@ def test_open_sector_blokkert_innenfor_terskel_gir_ingen_apen_retning():
     assert center is None
 
 
+def test_depth_profiles_8dir_riktig_retning_finner_koten():
+    """En 20 m-kote rett i SYD (bearing 180, en av de 8 faste retningene i
+    DEPTH_BEARINGS_DEG) skal finnes paa den ene bearingen og ingen andre."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    # kort linjestykke (ikke 100 km bredt) - ellers krysser ogsaa 135/225
+    # graders straaler den lenger unna (5000/cos(45)=7.07 km), og testen
+    # skiller ikke lenger "riktig retning" fra "alle retninger sorover"
+    depth20 = LineString([(ox - 100, oy - 5000), (ox + 100, oy - 5000)])
+    depth_trees = {20: (G.build_strtree([depth20]), [depth20])}
+
+    profiles = S.depth_profiles_8dir(lon0, lat0, depth_trees,
+                                      edge_tree=None, edge_lines=[],
+                                      kyst_tree=None, kyst_lines=[])
+
+    assert len(profiles[20]) == len(S.DEPTH_BEARINGS_DEG) == 8
+    i_180 = S.DEPTH_BEARINGS_DEG.index(180)
+    for i, v in enumerate(profiles[20]):
+        if i == i_180:
+            assert v is not None and 4.5 < v < 5.5
+        else:
+            assert v is None
+    assert profiles[30] == [None] * 8  # ingen 30 m-kote i depth_trees
+    assert profiles[50] == [None] * 8
+
+
 def test_build_points_integrasjon_sjopunkt_naer_land():
     """Ett rutepunkt (bbox er akkurat dette ene punktet): kystlinje 300 m
     NORD for punktet (sjoe, naer land - se in_sea-testene over for hvorfor
     kysten maa ligge nord for at straalen sorover skal telle 0 kryssinger),
-    og en 20 m-dybdekote lagt langs den apne sektoren (rett i syd, innenfor
-    135-250) 5 km unna."""
+    og en 20 m-dybdekote lagt rett i syd (bearing 180) 5 km unna."""
     lon0, lat0 = 10.0, 59.0
     ox, oy = G.to_utm(lon0, lat0)
 
@@ -89,7 +114,10 @@ def test_build_points_integrasjon_sjopunkt_naer_land():
     kyst_tree = G.build_strtree([coast])
     kyst_lines = [coast]
 
-    depth20 = LineString([(ox - 50000, oy - 5000), (ox + 50000, oy - 5000)])
+    # kort linjestykke (ikke 100 km bredt) - ellers krysser ogsaa 135/225
+    # graders straaler den lenger unna (5000/cos(45)=7.07 km), og testen
+    # skiller ikke lenger "riktig retning" fra "alle retninger sorover"
+    depth20 = LineString([(ox - 100, oy - 5000), (ox + 100, oy - 5000)])
     depth_trees = {20: (G.build_strtree([depth20]), [depth20])}
 
     points = S.build_points(
@@ -102,12 +130,12 @@ def test_build_points_integrasjon_sjopunkt_naer_land():
     assert p["lo"] == lon0 and p["la"] == lat0
     assert p["as"] == len(range(S.SECTOR_LO_DEG, S.SECTOR_HI_DEG + 1, S.SECTOR_STEP_DEG)) * S.SECTOR_STEP_DEG
     assert p["ar"] == pytest.approx((S.SECTOR_LO_DEG + S.SECTOR_HI_DEG) / 2)
-    assert p["d20"] is not None and 4.5 < p["d20"] < 5.5
-    assert p["d20s"] == "maalt"
-    assert p["d30"] is None  # ingen 30 m-kote i depth_trees
-    assert p["d30s"] == "ingen_kote"
-    assert p["d50"] is None
-    assert p["d50s"] == "ingen_kote"
+    assert len(p["d20"]) == 8
+    i_180 = S.DEPTH_BEARINGS_DEG.index(180)
+    assert p["d20"][i_180] is not None and 4.5 < p["d20"][i_180] < 5.5
+    assert all(v is None for i, v in enumerate(p["d20"]) if i != i_180)
+    assert p["d30"] == [None] * 8  # ingen 30 m-kote i depth_trees
+    assert p["d50"] == [None] * 8
 
 
 def test_build_points_ekskluderer_land_og_fjernt_fra_land():
