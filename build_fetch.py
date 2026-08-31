@@ -11,14 +11,21 @@ For hvert spot i spots.yaml:
     kompass/med klokka) fra spotens (lat, lon) til foerste skjaering med
     kystkontur, tak 300 km. Skrevet som `fetch_km_72` (raa enkeltstraale).
 
-    Raa enkeltstraale kan smette gjennom trange passasjer mellom skjaer og
-    gi f.eks. 300 km i en retning der naboretningene er blokkert paa under
-    en kilometer - det er en metodeforskjell mot haandmaalt "fetch i
-    boelgeforstand" (som ser bort fra slike smett), ikke en feil i
-    straaleskytingen. `fetch_km_72_effektiv` er medianen av de fem
-    straalene i en +-10 grader sektor rundt hver retning (se
-    compute_fetch_72_effektiv()) - drukner enkeltsmett, og er den som
-    faktisk sammenlignes mot de haandlagde tabellene i avviksrapporten.
+    `fetch_km_72_effektiv` er medianen av de fem straalene i en +-10 grader
+    sektor rundt hver retning (se compute_fetch_72_effektiv()) - forsokte
+    opprinnelig aa fikse straaler som smetter gjennom trange passasjer, men
+    debug_fetch_rays.py (2026-08-31) viste at den egentlige aarsaken til de
+    fleste 300 km-verdiene var noe medianen ikke kan fikse: FETCH_MAX_KM
+    (300 km) er langt storre enn det nedlastede bbox-utsnittets egen
+    diagonal (~150 km), saa en straale som ikke finner land FOER den
+    forlater utsnittet finner rett og slett ikke mer data - det er ikke en
+    reell fjordaapning eller et smett, bare fravaer av data.
+
+    `fetch_km_72_endelig` er derfor den egentlige fiksen: hver straale
+    klassifiseres som "kyst" (traff ekte kystkontur - bruk den maalte
+    lengden) eller "bbox_kant" (forlot utsnittet uten aa treffe noe - bruk
+    en kjent ANALYTISK avstand til land i stedet for aa gjette videre med
+    mer geometri, se ANALYTIC_SECTORS). Se compute_fetch_72_endelig().
   - Steg 3: for spotens `facing`-retning, finner avstanden til 20-, 30- og
     50-meterskoten i dybdekurve-laget. Skrevet som `dybde_20m_km`,
     `dybde_30m_km`, `dybde_50m_km` (null hvis koten ikke finnes/treffes
@@ -55,6 +62,22 @@ N_RAYS = 360 // FETCH_STEP_DEG  # 72
 DEPTH_TARGETS_M = (20, 30, 50)
 DEPTH_MAX_KM = 100.0
 DEPTH_TOLERANCE_M = 0.5
+
+# En straale klassifiseres "bbox_kant" (ikke en reell maaling) naar dens
+# lengde er innenfor denne toleransen av avstanden til kanten av det
+# nedlastede bbox-utsnittet i samme retning - se compute_fetch_72_endelig().
+EDGE_TOL_KM = 1.0
+
+# Analytiske fetch-verdier for "bbox_kant"-straaler sorover fra Ytre
+# Oslofjord/Skagerrak-munningen - IKKE maalt fra nedlastet kystkontur.
+# Unodvendig aa laste ned Jyllands kystlinje for tall som allerede er kjent
+# (ordre 2026-08-31). (lo, hi, km): halvaapent intervall [lo, hi) i grader.
+ANALYTIC_SECTORS = [
+    (160, 200, 145.0),  # Skagen (Danmark)
+    (200, 230, 200.0),  # Hirtshals
+    (230, 250, 240.0),  # Skagerrak-aapningen mot Nordsjoen
+]
+ANALYTIC_DEFAULT_KM = 60.0  # andre bbox_kant-retninger - usikkert, markert som saadan
 
 # rekkefoelgen brukt i de haandlagde 16-punkts tabellene (se spots.yaml-header)
 COMPASS_16 = ["N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO",
@@ -100,26 +123,85 @@ def compute_fetch_72_effektiv(fetch_km_72, window=2):
     ]
 
 
-def report_deviation(spot_id, manual, measured_72_eff):
-    """`measured_72_eff` skal vaere fetch_km_72_effektiv (median-i-sektor),
-    ikke raa fetch_km_72 - raa enkeltstraale gir kunstig store avvik pga.
-    smett gjennom trange passasjer, se compute_fetch_72_effektiv()."""
-    log(f"\n  {spot_id}: manuell vs maalt-effektiv (72 pkt interpolert til 16 pkt)")
-    log(f"  {'ret':<5}{'manuell':>9}{'maalt-eff':>10}{'avvik':>9}")
+def classify_ray_category(fetch_km, edge_km, tol_km=EDGE_TOL_KM):
+    """"kyst" (ekte treff mot nedlastet kystkontur) eller "bbox_kant"
+    (straalen forlot bbox-utsnittet uten aa treffe noe - fetch_km er da
+    (naer) lik avstanden til bbox-kanten, edge_km, eller rett og slett
+    FETCH_MAX_KM-taket)."""
+    return "bbox_kant" if fetch_km >= edge_km - tol_km else "kyst"
+
+
+def analytic_fill_km(bearing):
+    """Kjent, analytisk avstand til land for en "bbox_kant"-straale i en
+    gitt retning - se ANALYTIC_SECTORS. Returnerer (km, usikker: bool)."""
+    b = bearing % 360
+    for lo, hi, km in ANALYTIC_SECTORS:
+        if lo <= b < hi:
+            return km, False
+    return ANALYTIC_DEFAULT_KM, True
+
+
+def compute_fetch_72_endelig(lon, lat, fetch_km_72, edge_tree, edge_lines):
+    """
+    Endelig fetch: for hver av de 72 retningene, bruk den maalte lengden
+    for "kyst"-straaler, og en analytisk avstand (se analytic_fill_km) for
+    "bbox_kant"-straaler i stedet for aa stole paa FETCH_MAX_KM-taket.
+
+    Returnerer (values, categories) - to 72-lister. categories er
+    "kyst", "bbox_kant" (analytisk sektor-treff) eller "bbox_kant_usikker"
+    (ANALYTIC_DEFAULT_KM brukt, ingen sektor matchet).
+    """
+    values, categories = [], []
+    for i, d in enumerate(fetch_km_72):
+        bearing = i * FETCH_STEP_DEG
+        edge_km = G.cast_ray_km(lon, lat, bearing, 1000.0, edge_tree, edge_lines)
+        if classify_ray_category(d, edge_km) == "kyst":
+            values.append(d)
+            categories.append("kyst")
+        else:
+            km, usikker = analytic_fill_km(bearing)
+            values.append(km)
+            categories.append("bbox_kant_usikker" if usikker else "bbox_kant")
+    return values, categories
+
+
+def report_deviation_kyst_only(spot_id, manual, measured_72, categories):
+    """
+    Manuell vs maalt, KUN for de 16-punktsretningene der begge 5-graders
+    naboraastraalene som interpoleres mellom er klassifisert "kyst". En
+    sammenligning mot en analytisk fylt "bbox_kant"-verdi maaler ingenting
+    - den er ikke en maaling i utgangspunktet. Se ordre 2026-08-31.
+    """
+    log(f"\n  {spot_id}: manuell vs kyst-straaler (kun retninger med rene kyst-treff i nabolaget)")
+    log(f"  {'ret':<5}{'manuell':>9}{'maalt':>9}{'avvik':>9}")
+    n = len(measured_72)
     deltas = []
+    worst = None
+    n_skipped = 0
     for j, label in enumerate(COMPASS_16):
         bearing = j * 22.5
+        pos = (bearing % 360) / FETCH_STEP_DEG
+        i0, i1 = int(pos) % n, (int(pos) + 1) % n
+        if categories[i0] != "kyst" or categories[i1] != "kyst":
+            log(f"  {label:<5}{'-':>9}{'-':>9}   hoppet over (bbox_kant i nabolaget)")
+            n_skipped += 1
+            continue
         m = manual[j]
-        measured = interp_table(measured_72_eff, FETCH_STEP_DEG, bearing)
+        measured = interp_table(measured_72, FETCH_STEP_DEG, bearing)
         d = measured - m
         deltas.append(d)
-        log(f"  {label:<5}{m:>9.1f}{measured:>10.1f}{d:>+9.1f}")
+        log(f"  {label:<5}{m:>9.1f}{measured:>9.1f}{d:>+9.1f}")
+        if worst is None or abs(d) > abs(worst[1]):
+            worst = (label, d, m, measured)
+
+    if not deltas:
+        log("  ingen retninger med rene kyst-treff aa sammenligne")
+        return None, None, None, n_skipped
+
     mean_abs = sum(abs(d) for d in deltas) / len(deltas)
-    worst_i = max(range(len(deltas)), key=lambda k: abs(deltas[k]))
-    log(f"  gj.snitt |avvik|: {mean_abs:.1f} km   "
-        f"storst avvik: {COMPASS_16[worst_i]} ({deltas[worst_i]:+.1f} km, "
-        f"manuell {manual[worst_i]:.1f} -> maalt-eff. {interp_table(measured_72_eff, FETCH_STEP_DEG, worst_i*22.5):.1f})")
-    return mean_abs, deltas[worst_i], COMPASS_16[worst_i]
+    log(f"  gj.snitt |avvik| ({len(deltas)}/16 retninger, {n_skipped} hoppet over): {mean_abs:.1f} km   "
+        f"storst avvik: {worst[0]} ({worst[1]:+.1f} km, manuell {worst[2]:.1f} -> maalt {worst[3]:.1f})")
+    return mean_abs, worst[1], worst[0], n_skipped
 
 
 # --------------------------------------------------------------- steg 3
@@ -190,6 +272,16 @@ def main():
     kyst_tree = G.build_strtree(kyst_lines)
     log(f"  {len(kyst_raw)} features -> {len(kyst_lines)} linjestykker")
 
+    # Bbox brukt til aa klassifisere "kyst" vs "bbox_kant" er det FAKTISK
+    # nedlastede utsnittets egen ytterkant, ikke en antatt konstant - regnes
+    # ut fra dataene selv.
+    kyst_lines_wgs84 = G.to_boundary_lines(kyst_raw)
+    all_lons = [c[0] for line in kyst_lines_wgs84 for c in line.coords]
+    all_lats = [c[1] for line in kyst_lines_wgs84 for c in line.coords]
+    bbox_actual = (min(all_lats), min(all_lons), max(all_lats), max(all_lons))
+    edge_tree, edge_lines = G.bbox_edge_tree(bbox_actual)
+    log(f"  bbox (faktisk nedlastet utsnitt): {bbox_actual}")
+
     log(f"Laster {dybde_path} ...")
     dybde_raw = G.load_geojson(dybde_path)
     dybde_utm = [(G.reproject_geom(g, G.WGS84, G.UTM32), p) for g, p in dybde_raw]
@@ -212,22 +304,32 @@ def main():
         lon, lat = spot["lon"], spot["lat"]
         measured_72 = compute_fetch_72(lon, lat, kyst_tree, kyst_lines)
         measured_72_eff = compute_fetch_72_effektiv(measured_72)
+        endelig, categories = compute_fetch_72_endelig(lon, lat, measured_72, edge_tree, edge_lines)
         spot["fetch_km_72"] = make_flow_seq(measured_72)
         spot["fetch_km_72_effektiv"] = make_flow_seq(measured_72_eff)
+        spot["fetch_km_72_endelig"] = make_flow_seq(endelig)
+
+        n_kyst = categories.count("kyst")
+        n_kant = categories.count("bbox_kant")
+        n_kant_usikker = categories.count("bbox_kant_usikker")
+        log(f"\n  {spot['id']}: {n_kyst} kyst, {n_kant} bbox_kant (analytisk sektor), "
+            f"{n_kant_usikker} bbox_kant_usikker ({ANALYTIC_DEFAULT_KM:.0f} km default)")
 
         manual = spot.get("fetch_km") or spot.get("local_fetch_km")
         if manual:
             spot["fetch_km_manuell"] = make_flow_seq(list(manual))
-            mean_abs, worst_delta, worst_label = report_deviation(spot["id"], manual, measured_72_eff)
-            all_mean_abs.append((spot["id"], mean_abs, worst_delta, worst_label))
+            mean_abs, worst_delta, worst_label, n_skipped = report_deviation_kyst_only(
+                spot["id"], manual, measured_72, categories)
+            if mean_abs is not None:
+                all_mean_abs.append((spot["id"], mean_abs, worst_delta, worst_label, n_skipped))
         else:
-            log(f"\n  {spot['id']}: ingen haandlaget tabell - ingen sammenligning")
+            log("  ingen haandlaget tabell - ingen sammenligning")
 
     log("\n" + "-" * 70)
-    log("Oppsummering avvik (manuell - haandlaget vs maalt-effektiv fra kystkontur):")
-    for spot_id, mean_abs, worst_delta, worst_label in sorted(all_mean_abs, key=lambda x: -x[1]):
+    log("Oppsummering avvik (manuell vs kyst-straaler - den eneste sammenligningen som betyr noe):")
+    for spot_id, mean_abs, worst_delta, worst_label, n_skipped in sorted(all_mean_abs, key=lambda x: -x[1]):
         log(f"  {spot_id:<16} gj.snitt |avvik| {mean_abs:6.1f} km   "
-            f"storst {worst_delta:+7.1f} km ({worst_label})")
+            f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
 
     log("\n" + "=" * 70)
     log("STEG 3 - dybdeprofil langs facing")

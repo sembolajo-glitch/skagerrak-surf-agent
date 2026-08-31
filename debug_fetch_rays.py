@@ -32,17 +32,16 @@ import sys
 from pathlib import Path
 
 import yaml
-from shapely.geometry import box
 
+import build_fetch as B
 import geo_utils as G
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SPOTS_YAML = ROOT / "spots.yaml"
 
-FETCH_STEP_DEG = 5
-N_RAYS = 72
-EDGE_TOL_KM = 1.0  # innenfor denne avstanden fra kant-distansen -> klassifisert "kant"
+FETCH_STEP_DEG = B.FETCH_STEP_DEG
+N_RAYS = B.N_RAYS
 
 CLASS_C_IDS = ["slagen", "skallevold", "sletteroyene", "bastoy_odden", "larkollen"]
 
@@ -54,29 +53,20 @@ def log(*a):
     print(*a, file=sys.stderr)
 
 
-def bbox_edge_tree(bbox):
-    """bbox = (lat_min, lon_min, lat_max, lon_max). Bygg en STRtree over
-    bbox-rektangelets fire kanter i UTM, saa vi kan gjenbruke
-    geo_utils.cast_ray_km() til aa finne avstanden til naermeste kant."""
-    lat_min, lon_min, lat_max, lon_max = bbox
-    poly = box(lon_min, lat_min, lon_max, lat_max)
-    poly_utm = G.reproject_geom(poly, G.WGS84, G.UTM32)
-    lines = G.to_boundary_lines([poly_utm])
-    return G.build_strtree(lines), lines
-
-
 def classify_rays(lon, lat, fetch_km_72, edge_tree, edge_lines):
     """
     For hver av de 72 retningene: (bearing, fetch_km, kant_km, kategori).
-    kategori="kant" hvis straalen ALDRI fant ekte kystkontur - fetch_km er
-    da (naer) lik avstanden til bbox-kanten (kant_km), eller rett og slett
-    300-kilometerstaket. kategori="kyst" er et reelt treff innenfor dataene.
+    kategori (her forenklet til "kant"/"kyst" for tabell/SVG-formaal) bruker
+    SAMME regel som build_fetch.classify_ray_category() - den kanoniske
+    klassifiseringen som ogsaa fetch_km_72_endelig bygger paa, saa denne
+    visualiseringen aldri kan komme i utakt med det som faktisk skrives til
+    spots.yaml.
     """
     rows = []
     for i, d in enumerate(fetch_km_72):
         bearing = i * FETCH_STEP_DEG
         edge_km = G.cast_ray_km(lon, lat, bearing, 1000.0, edge_tree, edge_lines)
-        category = "kant" if d >= edge_km - EDGE_TOL_KM else "kyst"
+        category = "kant" if B.classify_ray_category(d, edge_km) == "bbox_kant" else "kyst"
         rows.append((bearing, d, edge_km, category))
     return rows
 
@@ -177,7 +167,7 @@ def main():
     all_lats = [c[1] for line in kyst_lines_wgs84 for c in line.coords]
     bbox = (min(all_lats), min(all_lons), max(all_lats), max(all_lons))
     lat_min, lon_min, lat_max, lon_max = bbox
-    edge_tree, edge_lines = bbox_edge_tree(bbox)
+    edge_tree, edge_lines = G.bbox_edge_tree(bbox)
 
     with open(args.spots_yaml, encoding="utf-8") as f:
         doc = yaml.safe_load(f)

@@ -21,6 +21,7 @@
 #
 #  fetch_km_72,
 #  fetch_km_72_effektiv,
+#  fetch_km_72_endelig,
 #  fetch_km_manuell,
 #  dybde_Xm_km:   MAALTE felt fra build_fetch.py (Kartverket Kystkontur/
 #                 Dybdekurve, CC BY 4.0 - se fetch_geodata.py). IKKE brukt av
@@ -30,17 +31,29 @@
 #                     saa ut foer maaling, saa de to kan diffes.
 #                   fetch_km_72 = 72 verdier (hver 5. grad fra N, med klokka)
 #                     fra RAA enkelt-straaleskyting mot kystkontur, tak 300 km.
-#                     Kan smette gjennom trange passasjer mellom skjaer og gi
-#                     urealistisk store verdier - IKKE fetch i boelgeforstand.
+#                     Mange av "300 km"-verdiene er IKKE reell fetch - de er
+#                     straaler som forlot det nedlastede bbox-utsnittet uten
+#                     aa treffe land (se fetch_km_72_endelig).
 #                   fetch_km_72_effektiv = medianen av straalen og naboene i
-#                     en +-10 graders sektor rundt hver retning. Drukner slike
-#                     enkeltsmett - dette er tabellen som faktisk sammenlignes
-#                     mot fetch_km_manuell i avviksrapporten.
+#                     en +-10 graders sektor rundt hver retning. Fikser IKKE
+#                     bbox-kant-problemet (en median av fem kant-verdier er
+#                     fortsatt en kant-verdi) - beholdt for referanse.
+#                   fetch_km_72_endelig = DEN som faktisk boer brukes. Hver
+#                     straale er klassifisert "kyst" (ekte treff mot
+#                     kystkontur - maalt lengde brukt) eller "bbox_kant"
+#                     (forlot utsnittet uten aa treffe noe - en kjent
+#                     ANALYTISK avstand til land brukt i stedet, se
+#                     ANALYTIC_SECTORS i build_fetch.py: 160-200 grader mot
+#                     Skagen ~145 km, 200-230 mot Hirtshals ~200 km, 230-250
+#                     mot Skagerrak-aapningen ~240 km, ellers 60 km/usikker).
+#                     Avviksrapporten sammenligner KUN "kyst"-retninger mot
+#                     fetch_km_manuell - det er den eneste sammenligningen
+#                     som maaler noe reelt.
 #                   dybde_20m_km/_30m_km/_50m_km = avstand fra spottens
 #                     koordinat til hhv. 20-, 30- og 50-meterskoten langs
 #                     `facing`-retningen. null hvis koten ikke ble truffet.
-#                     Ingen etterbehandling tilsvarende _effektiv - brukes
-#                     som de maales.
+#                     Ingen etterbehandling tilsvarende _effektiv/_endelig -
+#                     brukes som de maales.
 #
 #  gate:          kun klasse C. Punktet i fjordmunningen der vi leser
 #                 WW3-output og propagerer innover.
@@ -99,6 +112,7 @@ spots:
     dybde_20m_km: 0.0
     dybde_30m_km: 0.38
     dybde_50m_km: 0.4
+    fetch_km_72_endelig: [0.6, 0.7, 0.6, 0.5, 0.5, 0.4, 0.4, 0.5, 1.4, 2.7, 2.5, 2.6, 0.6, 0.9, 0.5, 0.5, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.5, 1.6, 1.5, 1.2, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 17.8, 13.3, 18.7, 10.0, 13.2, 13.6, 10.3, 13.2, 9.4, 8.3, 9.1, 10.1, 6.7, 10.1, 6.9, 7.4, 2.4, 2.1, 1.7, 1.6, 0.5, 1.6, 0.4, 0.5, 0.6]
   - id: svenner
     name: Svenner
     klasse: A
@@ -121,6 +135,7 @@ spots:
     dybde_20m_km: 0.59
     dybde_30m_km: 0.62
     dybde_50m_km: 0.94
+    fetch_km_72_endelig: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 60.0, 145.0, 145.0, 145.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1]
   - id: jomfruland_ost
     name: Jomfruland østside
     klasse: A
@@ -145,6 +160,7 @@ spots:
     dybde_20m_km:
     dybde_30m_km: 0.13
     dybde_50m_km: 1.4
+    fetch_km_72_endelig: [7.5, 6.3, 5.6, 4.3, 3.6, 3.4, 5.0, 17.5, 16.5, 16.7, 17.2, 17.3, 22.3, 19.9, 54.9, 78.3, 78.5, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 3.5, 2.5, 2.1, 1.8, 1.5, 1.3, 1.2, 1.2, 1.1, 1.1, 1.1, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8, 0.8, 0.9, 1.1, 1.1, 1.2, 1.6, 1.8, 2.0, 6.1]
   - id: rakke
     name: Rakke / Kjølen, Stavern
     klasse: A
@@ -166,6 +182,7 @@ spots:
     dybde_20m_km: 1.6
     dybde_30m_km: 2.41
     dybde_50m_km: 3.15
+    fetch_km_72_endelig: [60.0, 60.0, 6.0, 5.4, 5.0, 4.7, 3.9, 3.7, 4.2, 7.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 0.7, 0.7, 0.9, 1.0, 1.3, 1.3, 16.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0]
   - id: molen
     name: Mølen
     klasse: A
@@ -187,6 +204,7 @@ spots:
     dybde_20m_km:
     dybde_30m_km:
     dybde_50m_km:
+    fetch_km_72_endelig: [1.2, 1.1, 3.2, 1.3, 1.3, 5.8, 4.6, 3.2, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.2, 1.3, 1.8, 1.8, 2.3, 2.7, 2.8, 2.9, 3.6, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 15.8, 8.3, 14.7, 13.1, 15.3, 11.3, 9.2, 7.2, 6.5, 5.5, 5.9, 5.9, 7.8, 6.1, 3.5, 6.3, 3.8, 4.0, 3.8, 4.3, 5.0, 3.2, 3.7, 5.4, 6.0, 2.8, 1.3]
   - id: portor
     name: Portør
     klasse: A
@@ -209,6 +227,7 @@ spots:
     dybde_20m_km: 1.34
     dybde_30m_km: 1.8
     dybde_50m_km: 5.54
+    fetch_km_72_endelig: [0.2, 0.2, 0.2, 0.3, 0.2, 0.3, 0.4, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.3, 0.3, 0.5, 0.4, 0.0, 0.0, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.2, 0.6, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
   - id: verdens_ende
     name: Verdens Ende / Tristein
     klasse: B
@@ -230,6 +249,7 @@ spots:
     dybde_20m_km:
     dybde_30m_km:
     dybde_50m_km:
+    fetch_km_72_endelig: [8.0, 7.3, 17.2, 19.1, 31.3, 35.7, 4.2, 3.6, 20.9, 3.1, 2.8, 18.1, 18.9, 18.9, 22.1, 21.9, 24.8, 23.5, 2.7, 2.7, 17.9, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 69.2, 14.5, 30.3, 3.6, 17.1, 15.1, 12.0, 10.5, 4.8, 9.7, 6.6, 10.6, 4.9, 4.8, 4.8, 5.1, 3.0, 2.7, 4.5, 2.6, 3.5, 5.4, 4.5]
   - id: hvasser_sando
     name: Hvasser / Sandø østside
     klasse: B
@@ -256,6 +276,7 @@ spots:
     dybde_20m_km: 0.28
     dybde_30m_km: 0.3
     dybde_50m_km: 3.47
+    fetch_km_72_endelig: [1.6, 6.3, 3.1, 4.0, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.2, 0.2, 0.2, 0.7, 0.8, 0.2, 0.2, 0.2, 4.0, 4.2, 4.6, 60.0, 5.1, 6.4, 145.0, 145.0, 145.0, 2.0, 1.7, 1.6, 1.8, 1.7, 1.6, 4.5, 2.0, 1.8, 1.7, 1.6, 1.5, 1.4, 1.2, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.3, 0.3, 0.5, 1.0, 1.0, 0.2, 0.2, 0.3, 3.1, 1.9, 1.7, 1.9, 3.3, 3.7, 1.7, 1.5, 1.5]
   - id: orekroken
     name: Ørekroken, Kirkøy (Hvaler)
     klasse: B
@@ -278,6 +299,7 @@ spots:
     dybde_20m_km: 1.84
     dybde_30m_km:
     dybde_50m_km: 0.34
+    fetch_km_72_endelig: [5.1, 3.7, 2.8, 2.7, 2.9, 2.9, 3.6, 2.8, 3.1, 2.5, 2.5, 2.5, 2.8, 2.0, 1.4, 2.0, 1.4, 1.4, 1.3, 1.3, 1.4, 1.3, 2.0, 2.4, 1.8, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 2.2, 145.0, 2.5, 2.3, 2.2, 1.7, 200.0, 2.0, 8.0, 240.0, 3.7, 240.0, 60.0, 91.1, 77.6, 43.1, 46.3, 39.5, 27.3, 27.3, 29.8, 5.3, 32.6, 6.4, 6.5, 7.0, 9.3, 3.5, 3.8, 3.8, 3.9, 3.7, 8.1, 5.6]
   - id: slagen
     name: Slagen
     klasse: C
@@ -315,6 +337,7 @@ spots:
     dybde_20m_km: 2.06
     dybde_30m_km: 2.16
     dybde_50m_km: 2.23
+    fetch_km_72_endelig: [60.0, 60.0, 6.0, 5.8, 13.7, 12.1, 0.5, 0.7, 0.8, 0.8, 0.8, 0.8, 0.9, 0.9, 1.0, 1.2, 1.3, 1.4, 1.4, 1.4, 1.5, 1.7, 1.7, 1.7, 1.7, 2.0, 2.0, 2.0, 2.0, 2.1, 2.4, 3.0, 3.1, 3.1, 3.0, 3.0, 3.4, 6.1, 8.2, 8.6, 7.9, 7.3, 6.8, 6.4, 5.8, 7.9, 7.5, 8.3, 8.5, 9.0, 9.4, 9.2, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 19.0, 0.2, 0.2, 0.2, 0.2, 0.2]
   - id: skallevold
     name: Skallevold
     klasse: C
@@ -349,6 +372,7 @@ spots:
     dybde_20m_km: 2.33
     dybde_30m_km: 15.26
     dybde_50m_km: 2.49
+    fetch_km_72_endelig: [6.5, 5.9, 5.0, 4.7, 4.1, 15.8, 4.5, 4.5, 4.6, 4.4, 4.0, 4.0, 3.3, 3.1, 3.0, 3.0, 1.7, 1.7, 1.6, 1.6, 1.6, 1.8, 1.8, 2.0, 2.2, 2.2, 2.0, 2.0, 2.0, 2.1, 2.6, 4.1, 3.0, 5.1, 3.4, 4.5, 5.0, 5.1, 4.8, 4.7, 4.0, 3.6, 3.3, 3.0, 2.9, 2.9, 2.7, 2.5, 2.4, 2.3, 2.1, 5.4, 5.7, 6.3, 7.1, 7.3, 7.5, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 21.8, 18.0, 17.0, 16.6]
   - id: sletteroyene
     name: Sletterøyene
     klasse: C
@@ -385,6 +409,7 @@ spots:
     dybde_20m_km: 13.03
     dybde_30m_km: 19.47
     dybde_50m_km: 11.88
+    fetch_km_72_endelig: [8.2, 8.2, 9.2, 6.1, 4.7, 3.8, 3.4, 3.0, 3.7, 3.2, 3.0, 2.7, 2.6, 2.6, 2.2, 2.2, 2.1, 2.3, 2.3, 2.4, 2.4, 2.3, 2.6, 2.7, 2.7, 3.0, 3.3, 2.2, 5.8, 2.8, 3.2, 3.2, 12.3, 145.0, 145.0, 145.0, 145.0, 145.0, 16.0, 15.2, 15.4, 13.1, 13.0, 11.8, 9.9, 7.9, 6.8, 6.5, 6.4, 6.9, 7.5, 7.6, 7.8, 8.1, 60.0, 8.8, 6.4, 9.3, 5.2, 5.2, 5.4, 5.8, 10.0, 10.1, 11.4, 60.0, 60.0, 16.7, 60.0, 9.7, 7.7, 8.0]
   - id: bastoy_odden
     name: Bastøy odden
     klasse: C
@@ -422,6 +447,7 @@ spots:
     dybde_20m_km: 0.41
     dybde_30m_km: 1.71
     dybde_50m_km: 1.83
+    fetch_km_72_endelig: [0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.3, 0.3, 0.3, 6.8, 7.4, 60.0, 7.1, 6.9, 7.5, 7.5, 7.4, 7.4, 7.7, 8.0, 7.4, 7.8, 7.9, 10.1, 10.9, 15.8, 16.2, 22.9, 29.9, 145.0, 145.0, 18.2, 16.4, 5.4, 4.8, 4.7, 4.6, 5.1, 4.4, 4.2, 4.2, 3.9, 3.7, 3.7, 3.8, 1.2, 1.2, 1.0, 0.9, 1.0, 3.7, 3.8, 3.9, 3.9, 3.9, 3.8, 3.6, 3.5, 3.8, 3.9, 4.1, 4.4, 4.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
   - id: larkollen
     name: Larkollen
     klasse: C
@@ -452,3 +478,4 @@ spots:
     dybde_20m_km: 1.72
     dybde_30m_km: 1.79
     dybde_50m_km: 5.02
+    fetch_km_72_endelig: [60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 3.5, 2.7, 2.6, 2.5, 2.2, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 2.0, 2.0, 2.2, 2.6, 2.7, 3.4, 1.0, 0.9, 1.3, 1.3, 1.6, 1.7, 1.5, 1.5, 1.3, 1.2, 1.2, 1.3, 1.4, 1.3, 1.3, 1.3, 1.3, 1.2, 1.3, 1.5, 1.4, 1.4, 1.4, 1.4, 1.5, 1.9, 1.8, 1.9, 2.2, 2.4, 2.4, 2.6, 2.6, 2.8, 10.5, 13.2]

@@ -15,7 +15,7 @@ import json
 import math
 
 import pyproj
-from shapely.geometry import shape, mapping, LineString, Point
+from shapely.geometry import shape, mapping, LineString, Point, box
 from shapely.ops import transform as shp_transform
 from shapely.strtree import STRtree
 
@@ -178,6 +178,21 @@ def nearest_distance_km(lon, lat, tree, line_geoms):
     pt = Point(x, y)
     idx = tree.nearest(pt)
     return pt.distance(line_geoms[idx]) / 1000.0
+
+
+def bbox_edge_tree(bbox):
+    """
+    bbox = (lat_min, lon_min, lat_max, lon_max). Bygg en STRtree over
+    bbox-rektangelets fire kanter i UTM. Brukt til aa finne avstanden til
+    kanten av et nedlastet datautsnitt i en gitt retning (via cast_ray_km
+    mot dette treet) - skiller "straalen fant ekte land" fra "straalen gikk
+    tom fordi dataene ikke daekker lenger i den retningen".
+    """
+    lat_min, lon_min, lat_max, lon_max = bbox
+    poly = box(lon_min, lat_min, lon_max, lat_max)
+    poly_utm = reproject_geom(poly, WGS84, UTM32)
+    lines = to_boundary_lines([poly_utm])
+    return build_strtree(lines), lines
 
 
 def _iter_points(geom):

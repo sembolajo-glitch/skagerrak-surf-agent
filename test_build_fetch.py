@@ -79,6 +79,64 @@ def test_compute_fetch_72_effektiv_wrap_rundt_0():
     assert eff[1] == 5.0
 
 
+def test_classify_ray_category_kyst_vs_bbox_kant():
+    assert B.classify_ray_category(2.0, 50.0) == "kyst"
+    assert B.classify_ray_category(49.5, 50.0) == "bbox_kant"  # innenfor toleranse
+    assert B.classify_ray_category(300.0, 50.0) == "bbox_kant"  # taket, langt over kanten
+
+
+def test_analytic_fill_km_sektorer():
+    assert B.analytic_fill_km(180) == (145.0, False)  # Skagen
+    assert B.analytic_fill_km(160) == (145.0, False)  # nedre grense inkludert
+    assert B.analytic_fill_km(215) == (200.0, False)  # Hirtshals
+    assert B.analytic_fill_km(240) == (240.0, False)  # Skagerrak-aapningen
+    assert B.analytic_fill_km(250) == (60.0, True)     # ovre grense IKKE inkludert -> usikker
+    assert B.analytic_fill_km(0) == (60.0, True)
+    assert B.analytic_fill_km(90) == (60.0, True)
+
+
+def test_compute_fetch_72_endelig_bruker_maalt_for_kyst_analytisk_for_kant():
+    bbox = (58.0, 9.0, 59.0, 10.0)
+    tree, lines = G.bbox_edge_tree(bbox)
+    lon0, lat0 = 9.5, 58.5
+
+    fetch = [2.0] * B.N_RAYS  # alt "kyst" i utgangspunktet (godt innenfor kanten)
+    idx_180 = 180 // B.FETCH_STEP_DEG
+    idx_0 = 0
+    edge_km_180 = G.cast_ray_km(lon0, lat0, 180, 1000.0, tree, lines)
+    fetch[idx_180] = round(edge_km_180, 1)  # -> "bbox_kant" i retning 180 (Skagen-sektor)
+
+    values, categories = B.compute_fetch_72_endelig(lon0, lat0, fetch, tree, lines)
+    assert categories[idx_0] == "kyst"
+    assert values[idx_0] == 2.0
+    assert categories[idx_180] == "bbox_kant"
+    assert values[idx_180] == 145.0  # analytisk Skagen-verdi, ikke edge_km/300
+
+
+def test_report_deviation_kyst_only_hopper_over_bbox_kant(capsys):
+    manual = [10.0] * 16
+    measured_72 = [10.0] * B.N_RAYS
+    categories = ["kyst"] * B.N_RAYS
+    # bearing=180 (retning j=8 i 16-tabellen) sine to nabo-raastraaler (idx 35,36) er bbox_kant
+    categories[35] = "bbox_kant"
+    categories[36] = "bbox_kant"
+
+    mean_abs, worst_delta, worst_label, n_skipped = B.report_deviation_kyst_only(
+        "test", manual, measured_72, categories)
+    assert n_skipped == 1
+    assert mean_abs is not None
+
+
+def test_report_deviation_kyst_only_ingen_kyst_gir_none():
+    manual = [10.0] * 16
+    measured_72 = [10.0] * B.N_RAYS
+    categories = ["bbox_kant"] * B.N_RAYS
+    mean_abs, worst_delta, worst_label, n_skipped = B.report_deviation_kyst_only(
+        "test", manual, measured_72, categories)
+    assert mean_abs is None
+    assert n_skipped == 16
+
+
 def test_group_by_depth_filtrerer_pa_toleranse():
     close = LineString([(0, 0), (100, 0)])
     far = LineString([(0, 100), (100, 100)])

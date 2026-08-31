@@ -222,32 +222,52 @@ responser.
 
 `build_fetch.py` endrer **aldri** `physics.py`, `ensemble.py` eller de
 eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –
-det legger bare til `fetch_km_72`, `fetch_km_72_effektiv`, `fetch_km_manuell`
-og `dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan
+det legger bare til `fetch_km_72`, `fetch_km_72_effektiv`,
+`fetch_km_72_endelig`, `fetch_km_manuell` og
+`dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan
 de nye tallene skal erstatte de håndlagde, er et eget steg.
 
-**`fetch_km_72` vs. `fetch_km_72_effektiv`.** Rå enkelt-stråleskyting kan
-smette gjennom en trang passasje mellom skjær og gi f.eks. 300 km i en
-retning der naboretningene er blokkert på under en kilometer – det er en
-metodeforskjell mot håndmålt "fetch i bølgeforstand" (som ser bort fra slike
-smett), ikke en feil i strålene selv. `fetch_km_72_effektiv` tar medianen av
-strålen og de fire naboene i en ±10°-sektor (samme 5°-oppløsning som
-`fetch_km_72` selv – vinduet dekker akkurat ±10°), og er tabellen
-avviksrapporten faktisk sammenligner mot `fetch_km_manuell`.
+**`fetch_km_72` vs. `fetch_km_72_effektiv` vs. `fetch_km_72_endelig`.** Rå
+enkelt-stråleskyting kan gi 300 km i retninger der naboretningene er
+under 1 km. `fetch_km_72_effektiv` (medianen av strålen og de fire naboene
+i en ±10°-sektor) var det første forsøket på å fikse dette – men en
+oppfølgende diagnose (`debug_fetch_rays.py`, se under) fant den egentlige
+årsaken: `FETCH_MAX_KM` (300 km) er langt større enn diagonalen på det
+nedlastede bbox-utsnittet (9,3–11,2 Ø / 58,7–59,5 N, diagonal ca. 150 km).
+Alle klasse C-spottene ligger nær kanten av utsnittet. En stråle som ikke
+treffer kystkontur *før* den forlater utsnittet finner rett og slett ikke
+mer data, og faller tilbake på 300 km-taket – det er verken en reell
+fjordåpning eller et smett mellom skjær, bare fravær av data lenger unna.
+Ingen median kan fikse dette, uansett vindusbredde – medianen av fem
+"kant"-verdier er fortsatt en kant-verdi.
 
-**Kjørt mot ekte data, effekten var blandet** – og en oppfølgende diagnose
-(`debug_fetch_rays.py`, se under) fant den egentlige årsaken: `FETCH_MAX_KM`
-(300 km) er langt større enn diagonalen på det nedlastede bbox-utsnittet
-(9,3–11,2 Ø / 58,7–59,5 N, diagonal ca. 150 km). Alle klasse C-spottene
-ligger nær kanten av utsnittet. En stråle som ikke treffer kystkontur *før*
-den forlater utsnittet finner rett og slett ikke mer data, og faller
-tilbake på 300 km-taket – det er verken en reell fjordåpning eller et smett
-mellom skjær, bare fravær av data lenger unna. `fetch_km_72_effektiv` kan
-aldri fikse dette, uansett vindusbredde – medianen av fem "kant"-verdier
-er fortsatt en kant-verdi. Se `debug_fetch_rays.py` for detaljene og
-hvilke stråler som faktisk er reelle kysttreff. Ikke prøv flere
-korreksjoner av *hvordan* strålen regnes ut – problemet er *hvor langt*
-dataene rekker, ikke algoritmen.
+`fetch_km_72_endelig` er den faktiske fiksen: hver av de 72 strålene
+klassifiseres (`classify_ray_category()`) som **kyst** (traff ekte
+kystkontur innenfor utsnittet – bruker den målte lengden) eller
+**bbox_kant** (forlot utsnittet uten å treffe noe). For `bbox_kant` brukes
+en kjent, analytisk avstand i stedet for å laste ned mer kystlinje – neste
+land sørover fra fjordmunningen er Danmark, og de avstandene er kjent uten
+måling (`ANALYTIC_SECTORS` i `build_fetch.py`):
+
+| Retning (grader) | Avstand | Sted |
+|---|---|---|
+| 160–200 | 145 km | Skagen |
+| 200–230 | 200 km | Hirtshals |
+| 230–250 | 240 km | Skagerrak-åpningen mot Nordsjøen |
+| andre `bbox_kant`-retninger | 60 km | usikker – markert som sådan |
+
+Avviksrapporten sammenligner nå **kun** de 16-punktsretningene der begge
+5°-naborastrålene er ekte `kyst`-treff mot `fetch_km_manuell` – det er den
+eneste sammenligningen der begge sider er et reelt tall. Retninger med
+`bbox_kant` i nabolaget hoppes over og telles opp i loggen i stedet for å
+gi et falskt avvik.
+
+**Kjørt mot ekte data:** de resterende avvikene (8–20 km i snitt per spot,
+størst for S/SSO-retningene) er nå en reell metodeforskjell, ikke et
+databug – rå stråleskyting stopper ved *enhver* kystkontur-linje
+(inkludert et lite skjær rett i siktelinjen), mens håndmålingene
+tilsynelatende har sett forbi slike skjær til det som faktisk begrenser
+bølgeenergien. Det er ikke noe skriptet kan avgjøre selv.
 
 **`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
 

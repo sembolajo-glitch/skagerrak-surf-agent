@@ -9,18 +9,9 @@ import geo_utils as G
 from shapely.geometry import LineString
 
 
-def test_bbox_edge_tree_finner_kant_i_alle_retninger():
-    bbox = (58.0, 9.0, 59.0, 10.0)  # lat_min, lon_min, lat_max, lon_max
-    tree, lines = R.bbox_edge_tree(bbox)
-    lon0, lat0 = 9.5, 58.5  # midt i boksen
-    for bearing in (0, 90, 180, 270):
-        d = G.cast_ray_km(lon0, lat0, bearing, 1000.0, tree, lines)
-        assert 0 < d < 200  # boksen er ~111x60 km, straalen MAA treffe en kant lenge for 1000 km
-
-
 def test_classify_rays_skiller_kant_fra_kyst():
     bbox = (58.0, 9.0, 59.0, 10.0)
-    tree, lines = R.bbox_edge_tree(bbox)
+    tree, lines = G.bbox_edge_tree(bbox)
     lon0, lat0 = 9.5, 58.5
 
     edge_km_ost = G.cast_ray_km(lon0, lat0, 90, 1000.0, tree, lines)
@@ -38,7 +29,7 @@ def test_classify_rays_300km_tak_er_alltid_kant_i_liten_bbox():
     bbox-diagonalen, betyr en 300 km-verdi at straalen gikk tom av data,
     ikke at det er 300 km reelt aapent vann."""
     bbox = (58.0, 9.0, 59.0, 10.0)  # diagonal godt under 300 km
-    tree, lines = R.bbox_edge_tree(bbox)
+    tree, lines = G.bbox_edge_tree(bbox)
     lon0, lat0 = 9.5, 58.5
     fetch = [300.0] * R.N_RAYS
     rows = R.classify_rays(lon0, lat0, fetch, tree, lines)
