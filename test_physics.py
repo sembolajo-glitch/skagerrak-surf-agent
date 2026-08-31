@@ -166,17 +166,22 @@ def test_swell_fraction_kvadrert_ikke_lineaer():
     assert P.swell_fraction(2.0, 1.0, hs_eff=2.2) == 0.8
 
 
-def test_swell_fraction_begge_none_gir_null_ikke_nan():
+def test_swell_fraction_begge_none_gir_none_ikke_nan_eller_null():
     """Open-Meteo kan levere null/mangle begge partisjonene paa flate
-    dager - skal gi 0.0, ikke NaN eller ZeroDivisionError."""
-    assert P.swell_fraction(None, None, hs_eff=1.0) == 0.0
+    dager - skal gi None (ingen partisjonsdata aa regne en andel av),
+    ikke NaN, ikke ZeroDivisionError, og IKKE 0.0 (det ville paastaatt
+    "0 % swell" i stedet for "vet ikke")."""
+    assert P.swell_fraction(None, None, hs_eff=1.0) is None
 
 
-def test_swell_fraction_begge_null_gir_null_ikke_nan():
-    assert P.swell_fraction(0.0, 0.0, hs_eff=1.0) == 0.0
+def test_swell_fraction_begge_null_gir_none():
+    assert P.swell_fraction(0.0, 0.0, hs_eff=1.0) is None
 
 
-def test_swell_fraction_en_none_en_verdi():
+def test_swell_fraction_en_manglende_en_reell_verdi_gir_ekte_null():
+    """Forskjell fra testen over: her MANGLER bare EN partisjon, den andre
+    er en reell maalt verdi - da vet vi faktisk at andelen er 0 %
+    (henholdsvis 100 %), det er ikke "ingen data" lenger."""
     assert P.swell_fraction(None, 2.0, hs_eff=2.0) == 0.0
     assert P.swell_fraction(2.0, None, hs_eff=2.0) == 1.0
 
@@ -186,20 +191,21 @@ def test_swell_fraction_rundes_til_to_desimaler():
     assert val == round(val, 2)
 
 
-def test_swell_fraction_under_terskel_gir_null_selv_med_rent_swell_forhold():
+def test_swell_fraction_under_terskel_gir_none_selv_med_rent_swell_forhold():
     """Kjernen i forbeholdet: naar hs_eff < 0.5 m er forholdet mellom
-    komponentene meningslost uansett - andelen skal vaere 0.0 selv om
-    swell_hs/windsea_hs alene ville gitt "ren swell" (1.0)."""
-    assert P.swell_fraction(0.3, 0.0, hs_eff=0.3) == 0.0
-    assert P.swell_fraction(0.24, 0.02, hs_eff=0.49) == 0.0
+    komponentene meningslost uansett - andelen skal vaere None (IKKE 0.0,
+    som ville paastaatt "0 % swell") selv om swell_hs/windsea_hs alene
+    ville gitt "ren swell" (1.0)."""
+    assert P.swell_fraction(0.3, 0.0, hs_eff=0.3) is None
+    assert P.swell_fraction(0.24, 0.02, hs_eff=0.49) is None
 
 
 def test_swell_fraction_rett_paa_terskelen_slipper_gjennom():
     assert P.swell_fraction(1.0, 0.0, hs_eff=P.MIN_HS_FOR_SWELL_FRACTION_M) == 1.0
 
 
-def test_swell_fraction_hs_eff_none_gir_null():
-    assert P.swell_fraction(2.0, 0.0, hs_eff=None) == 0.0
+def test_swell_fraction_hs_eff_none_gir_none():
+    assert P.swell_fraction(2.0, 0.0, hs_eff=None) is None
 
 
 def test_swell_fraction_tvetydigheten_forbeholdet_dekker():
@@ -208,7 +214,7 @@ def test_swell_fraction_tvetydigheten_forbeholdet_dekker():
     tvetydig under terskelen, og hvorfor swell_hs_abs (raa meter) trengs
     ved siden av. Over terskelen (der andelen faktisk brukes) er de ulike
     absoluttverdiene fortsatt tilgjengelige i swell_hs_abs."""
-    liten = P.swell_fraction(0.24, 0.02, hs_eff=0.49)  # under terskel -> 0.0
+    liten = P.swell_fraction(0.24, 0.02, hs_eff=0.49)  # under terskel -> None
     stor = P.swell_fraction(2.1, 0.18, hs_eff=2.1)      # over terskel -> reell andel
-    assert liten == 0.0
+    assert liten is None
     assert stor > 0.9

@@ -281,32 +281,36 @@ def swell_fraction(swell_hs, windsea_hs, hs_eff):
     kalibreringsdata foerst for aa se om hoy swell-andel faktisk
     korrelerer med gode okter.
 
-    VIKTIG FORBEHOLD - andelen er TVETYDIG naar sjoen er nesten flat:
-    naar hs_eff < MIN_HS_FOR_SWELL_FRACTION_M (0.5 m) returneres 0.0
-    UANSETT hva forholdet mellom komponentene sier. Grunnen: naermer
-    begge partisjonene seg null, kollapser nevneren, og en andel naer
-    1.0 kan da bety enten "stor ren swell" ELLER "nesten ingenting
-    igjen av noen av delene" - to helt forskjellige forhold som samme
-    tall ikke skiller mellom (0.24 m ren "swell" mot en reell 2.1
-    m-swell gir samme andel naer 1.0). Under terskelen er 0.0 riktigere
-    enn et tall som garantert blir feiltolket - det tvinger frontenden
-    til aa vise tankestrek i stedet for et tall. Bruk swell_hs (raa
-    meter, ikke normalisert - se agent.py sitt swell_hs_abs-felt) for aa
-    faktisk skille "stor ren swell" fra "rester": 2.1 m mot 0.24 m er
-    entydig der andelen ikke er det.
+    Returnerer None (ALDRI 0.0) naar andelen ikke er meningsfull aa regne
+    ut i det hele tatt:
 
-    Begge partisjonene kan ogsaa i seg selv vaere None eller 0 (Open-Meteo
-    leverer ikke alltid tall) - da er det ingen energi aa fordele.
-    Returnerer 0.0 i det tilfellet ogsaa, i stedet for aa dele paa null
-    (NaN).
+    1. hs_eff < MIN_HS_FOR_SWELL_FRACTION_M (0.5 m) - VIKTIG FORBEHOLD:
+       andelen er TVETYDIG naar sjoen er nesten flat. Naermer begge
+       partisjonene seg null, kollapser nevneren, og en andel naer 1.0
+       kan da bety enten "stor ren swell" ELLER "nesten ingenting igjen
+       av noen av delene" - to helt forskjellige forhold som samme tall
+       ikke skiller mellom (0.24 m ren "swell" mot en reell 2.1 m-swell
+       gir samme andel naer 1.0). Bruk swell_hs (raa meter, ikke
+       normalisert - se agent.py sitt swell_hs_abs-felt) for aa faktisk
+       skille "stor ren swell" fra "rester": 2.1 m mot 0.24 m er entydig
+       der andelen ikke er det.
+    2. begge partisjonene er None/0 (Open-Meteo leverer ikke alltid tall,
+       uavhengig av om hs_eff selv er meningsfull - hs_eff kan komme fra
+       en annen kilde, se agent.py) - da er det ingen partisjonsdata aa
+       regne en andel av.
+
+    I begge tilfeller er 0.0 FEIL svar: det er en PAASTAND om "0 % swell"
+    i grensesnittet, mens det vi faktisk mener er "ikke meningsfullt" /
+    "vet ikke". None tvinger frontenden til aa vise tankestrek i stedet
+    for et tall som garantert blir feiltolket.
     """
     if hs_eff is None or hs_eff < MIN_HS_FOR_SWELL_FRACTION_M:
-        return 0.0
+        return None
     s = swell_hs or 0.0
     w = windsea_hs or 0.0
     total = s * s + w * w
     if total <= 0:
-        return 0.0
+        return None
     return round(s * s / total, 2)
 
 
