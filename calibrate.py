@@ -150,6 +150,51 @@ def report(pairs, spot_filter=None):
                 print(f"  {label:<10} bra={st.mean(vals_good):.2f} "
                       f"flatt={st.mean(vals_bad):.2f}  {verdict}")
 
+        # EWAM vs global boelgemodell - underlaget for aa etterproeve
+        # ensemble.GLOBAL_MODEL_HS_REL_PENALTY mot faktiske utfall. Bruker
+        # samme treff/bomtur/missa-definisjon som over, men delt paa
+        # partisjon_kilde. "score" her er den DETERMINISTISKE
+        # kontroll-scoren (upaavirket av ensemble-spredningen selv), saa en
+        # forskjell i bomtur-rate mellom kildene er et reelt signal om at
+        # selve Hs-ESTIMATET er mindre til aa stole paa fra den ene kilden
+        # - ikke sirkulaert med straffen den skal begrunne.
+        by_kilde = {"ewam": [], "global": [], "ukjent": []}
+        for x in rated:
+            kilde = (x[3].get("partisjon_kilde") or "").strip()
+            by_kilde[kilde if kilde in ("ewam", "global") else "ukjent"].append(x)
+
+        if by_kilde["ewam"] or by_kilde["global"]:
+            print("\n  EWAM vs global modell (partisjon_kilde):")
+            rates = {}
+            for kilde in ("ewam", "global"):
+                group = by_kilde[kilde]
+                n = len(group)
+                if n < 3:
+                    print(f"    {kilde:<7} n={n:<3}  for fa til statistikk")
+                    continue
+                g_hits = sum(1 for x in group if x[0] >= 3 and x[1] >= 55)
+                g_skunk = sum(1 for x in group if x[0] <= 1 and x[1] >= 55)
+                g_missed = sum(1 for x in group if x[0] >= 3 and x[1] < 55)
+                called_good = g_hits + g_skunk
+                skunk_rate = g_skunk / called_good if called_good else None
+                rates[kilde] = skunk_rate
+                rate_txt = f"{100*skunk_rate:.0f} %" if skunk_rate is not None else "-"
+                print(f"    {kilde:<7} n={n:<3}  treff={g_hits:>2}  bomtur={g_skunk:>2}  "
+                      f"missa={g_missed:>2}  bomtur-rate av 'agenten sa god'={rate_txt}")
+            if by_kilde["ukjent"]:
+                print(f"    ukjent  n={len(by_kilde['ukjent']):<3}  "
+                      f"(ingen partisjon_kilde i loggen - eldre rader eller ingen Open-Meteo-data)")
+
+            if "ewam" in rates and "global" in rates and rates["ewam"] is not None and rates["global"] is not None:
+                diff = rates["global"] - rates["ewam"]
+                if diff > 0.15:
+                    print(f"    -> global bommer {100*diff:.0f} prosentpoeng oftere enn EWAM "
+                          f"naar den sier 'god' - systematisk verre. OK "
+                          f"ensemble.GLOBAL_MODEL_HS_REL_PENALTY.")
+                else:
+                    print("    -> global bommer ikke tydelig mer enn EWAM her - like god. "
+                          "Vurder aa senke eller fjerne ensemble.GLOBAL_MODEL_HS_REL_PENALTY.")
+
 
 def main():
     ap = argparse.ArgumentParser()

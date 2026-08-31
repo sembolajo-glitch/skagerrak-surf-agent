@@ -39,6 +39,18 @@ SPOTS_OUT.mkdir(exist_ok=True)
 
 OSLO = zoneinfo.ZoneInfo("Europe/Oslo")
 
+# Ren sikkerhetsgrense, ikke den reelle begrensningen i dag - kildene gir
+# selv opp lenge for dette. MET Locationforecast faller fra timesoppløsning
+# til 6-timers etter ca. 55 timer, og Open-Meteo sine swell/vindsjø-
+# partisjoner (EWAM) stopper aa levere tall etter ca. 66 timer, selv om
+# forecast_days=7 er det som spørres om (se sources.py sin
+# openmeteo_waves() og agent.py sin gather()) - EWAM sitt eget modellrun
+# rekker rett og slett ikke saa langt, Open-Meteo fyller bare inn null for
+# resten av det spurte vinduet. 200 er derfor bare et tak mot en fremtidig
+# kildeoppgradering som faktisk leverer lenger enn ca. 8-9 dager, ikke noe
+# som binder med dagens kilder.
+MAX_HOURS = 200
+
 
 # --------------------------------------------------------------- konfig
 
@@ -176,6 +188,7 @@ def evaluate_class_ab(spot, times, wind_series, wave_series):
             "windsea_hs": w.get("windsea_hs"),
             "windsea_tp": w.get("windsea_tp"),
             "windsea_dir": w.get("windsea_dir"),
+            "partisjon_kilde": w.get("partisjon_kilde"),
             "local_hs": None,
             "local_tp": None,
             "local_wind_mean": 0.0,
@@ -265,6 +278,12 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
             "hs_met": w.get("hs_met"),
             "hs_openmeteo": w.get("hs_openmeteo"),
             "hs_dmi": w.get("hs_dmi"),
+            # hvilken Open-Meteo-modell GATENS lesning kom fra denne
+            # timen ("ewam"/"global"/None) - IKKE det samme som
+            # swell_hs/windsea_hs under (de er fysisk utledet, ikke
+            # hentet direkte herfra), men relevant for hvor mye aa stole
+            # paa den PROPAGERTE komponenten - se ensemble.py.
+            "partisjon_kilde": w.get("partisjon_kilde"),
             # lokal vindsjo
             "local_hs": round(loc["hs"], 2),
             "local_tp": round(loc["tp"], 1),
@@ -575,6 +594,11 @@ def gather(spot, mock=None):
             "windsea_hs": o.get("windsea_hs"),
             "windsea_tp": o.get("windsea_tp"),
             "windsea_dir": o.get("windsea_dir"),
+            # "ewam", "global" eller None - hvilken Open-Meteo-modell
+            # partisjonene over faktisk kom fra, se sources.py sin
+            # openmeteo_waves() og ensemble.py sin
+            # GLOBAL_MODEL_HS_REL_PENALTY.
+            "partisjon_kilde": o.get("partisjon_kilde"),
         }
 
     if os.environ.get("DMI_API_KEY"):
@@ -620,9 +644,9 @@ def run(args):
             continue
 
         times = sorted(set(wind) & set(waves)) if waves else sorted(wind)
-        times = [t for t in times if t >= now.isoformat()][:96]
+        times = [t for t in times if t >= now.isoformat()][:MAX_HOURS]
         if not times:
-            times = sorted(wind)[:96]
+            times = sorted(wind)[:MAX_HOURS]
 
         if spot["klasse"] == "C":
             computed = evaluate_class_c(spot, times, wind, waves)
@@ -740,7 +764,11 @@ def append_shadow_log(payload):
               "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
               # kalibreringsgrunnlag for swell/vindsjo-andel (se
               # physics.swell_fraction() - ikke i scoringen ennaa)
-              "swell_hs", "windsea_hs", "swell_andel"]
+              "swell_hs", "windsea_hs", "swell_andel",
+              # kalibreringsgrunnlag for ensemble.GLOBAL_MODEL_HS_REL_PENALTY -
+              # uten denne kan paaslaget aldri etterproeves mot faktiske
+              # utfall, se calibrate.py
+              "partisjon_kilde"]
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:

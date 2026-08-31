@@ -103,12 +103,31 @@ def met_waves(lat, lon):
 
 # ============================================================ Open-Meteo Marine
 
+# EWAM (DWD): Europa (30-66 N, 10.5 V-42 O), ~5 km rutenett (0.05 grader),
+# rekker ca 3 dogn fram (~72 t, kortere i praksis avhengig av hvor i
+# modellsyklusen forespoerselen treffer - se agent.py sin MAX_HOURS).
+# GWAM (DWD): globalt, ~25-28 km rutenett (0.25 grader) - 4-5x grovere enn
+# EWAM og opploser ikke Skagerrak-kysten/fjordmunningene i det hele tatt,
+# men rekker til gjengjeld ca 7.5 dogn fram. Kilde: Open-Meteo sin egen
+# dokumentasjon (open-meteo.com/en/docs/marine-weather-api).
+#
+# openmeteo_waves() bruker EWAM der den har data, GWAM der den ikke har
+# det - se der for hvordan og for partisjon_kilde-feltet. ensemble.py sin
+# GLOBAL_MODEL_HS_REL_PENALTY bruker partisjon_kilde til aa oke
+# usikkerheten naar en time faktisk kommer fra det grove globale rutenettet.
+_OPENMETEO_FIELDS = (
+    "hs", "tp", "wave_from_direction",
+    "windsea_hs", "windsea_tp", "windsea_dir",
+    "swell_hs", "swell_tp", "swell_dir",
+)
 
-def openmeteo_waves(lat, lon, model="ewam"):
+
+def _openmeteo_marine_single(lat, lon, model):
     """
-    Gratis, ingen nokkel. EWAM (DWD) har 0.05 grader oppløsning over Europa,
-    altsa ca 5 km - sammenlignbart med MET sin WW3. Gir partisjonert swell og
-    vindsjo separat, noe MET ikke gjor. Bruk den til Tp og til kryssjekk.
+    Ett Open-Meteo Marine-kall for ÉN modell ("ewam" eller "gwam").
+    Returnerer {tidspunkt: {hs, tp, wave_from_direction, windsea_*,
+    swell_*}} - se openmeteo_waves() for hvordan EWAM og GWAM kombineres
+    til én tidsserie derfra.
     """
     url = "https://marine-api.open-meteo.com/v1/marine"
     params = {
@@ -121,9 +140,8 @@ def openmeteo_waves(lat, lon, model="ewam"):
         ]),
         "timezone": "UTC",
         "forecast_days": 7,
+        "models": model,
     }
-    if model:
-        params["models"] = model
     h = _get(url, params=params).json()["hourly"]
 
     out = {}
@@ -145,6 +163,60 @@ def openmeteo_waves(lat, lon, model="ewam"):
             "swell_tp": v("swell_wave_period"),
             "swell_dir": v("swell_wave_direction"),
         }
+    return out
+
+
+def openmeteo_waves(lat, lon):
+    """
+    Gratis, ingen nokkel. Bruk EWAM (DWD) der den har data - 0.05 grader
+    oppløsning over Europa, altsa ca 5 km, sammenlignbart med MET sin
+    WW3 - og fall tilbake til GWAM (globalt, ~25-28 km) for timene lenger
+    fram enn EWAM rekker. Gir partisjonert swell og vindsjo separat, noe
+    MET ikke gjor. Bruk den til Tp og til kryssjekk.
+
+    `partisjon_kilde` per time forteller HVILKEN av de to modellene som
+    faktisk ble brukt for den timen: "ewam", "global", eller None (ingen
+    av dem hadde data). Se modulhodet over for opplosning/rekkevidde per
+    modell, og ensemble.py sin GLOBAL_MODEL_HS_REL_PENALTY for hvorfor
+    dette feltet finnes: en time paa det grove globale rutenettet er
+    mindre til aa stole paa enn en EWAM-time med samme varslingslengde,
+    ikke bare fordi den ligger langt fram.
+
+    De to modellkallene feiler UAVHENGIG av hverandre - i traad med
+    modulens eget prinsipp om at hver kilde er valgfri og feiler mykt
+    (se modulens docstring). Feiler kun ett av dem, brukes det andre
+    alene i stedet for aa kaste bort begge. Feiler BEGGE, kastes
+    unntaket videre (i stedet for aa late som Open-Meteo svarte tomt),
+    saa S.safe() fortsatt fanger og logger det som en reell feilkilde.
+    """
+    try:
+        ewam = _openmeteo_marine_single(lat, lon, "ewam")
+    except Exception as exc:  # noqa: BLE001
+        ewam, ewam_exc = {}, exc
+    else:
+        ewam_exc = None
+
+    try:
+        gwam = _openmeteo_marine_single(lat, lon, "gwam")
+    except Exception as exc:  # noqa: BLE001
+        gwam, gwam_exc = {}, exc
+    else:
+        gwam_exc = None
+
+    if ewam_exc is not None and gwam_exc is not None:
+        raise ewam_exc
+
+    out = {}
+    for ts in sorted(set(ewam) | set(gwam)):
+        e = ewam.get(ts)
+        g = gwam.get(ts)
+        if e and e.get("hs") is not None:
+            rec, kilde = e, "ewam"
+        elif g and g.get("hs") is not None:
+            rec, kilde = g, "global"
+        else:
+            rec, kilde = {k: None for k in _OPENMETEO_FIELDS}, None
+        out[ts] = dict(rec, partisjon_kilde=kilde)
     return out
 
 
