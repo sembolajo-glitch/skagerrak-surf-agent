@@ -93,7 +93,7 @@ def test_build_points_integrasjon_sjopunkt_naer_land():
     depth_trees = {20: (G.build_strtree([depth20]), [depth20])}
 
     points = S.build_points(
-        kyst_tree, kyst_lines, depth_trees,
+        kyst_tree, kyst_lines, depth_trees, edge_tree=None, edge_lines=[],
         bbox=(lat0, lon0, lat0, lon0), res_deg=S.RES_DEG,
     )
 
@@ -103,8 +103,11 @@ def test_build_points_integrasjon_sjopunkt_naer_land():
     assert p["as"] == len(range(S.SECTOR_LO_DEG, S.SECTOR_HI_DEG + 1, S.SECTOR_STEP_DEG)) * S.SECTOR_STEP_DEG
     assert p["ar"] == pytest.approx((S.SECTOR_LO_DEG + S.SECTOR_HI_DEG) / 2)
     assert p["d20"] is not None and 4.5 < p["d20"] < 5.5
+    assert p["d20s"] == "maalt"
     assert p["d30"] is None  # ingen 30 m-kote i depth_trees
+    assert p["d30s"] == "ingen_kote"
     assert p["d50"] is None
+    assert p["d50s"] == "ingen_kote"
 
 
 def test_build_points_ekskluderer_land_og_fjernt_fra_land():
@@ -120,7 +123,7 @@ def test_build_points_ekskluderer_land_og_fjernt_fra_land():
     kyst_tree = G.build_strtree([coast])
 
     points = S.build_points(
-        kyst_tree, [coast], depth_trees={},
+        kyst_tree, [coast], depth_trees={}, edge_tree=None, edge_lines=[],
         bbox=(lat0, lon_land, lat0, lon_far), res_deg=0.05,
     )
     assert points == []

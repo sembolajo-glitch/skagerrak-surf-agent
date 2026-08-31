@@ -119,6 +119,33 @@ def test_ray_crossing_count_to_kryss():
     assert G.ray_crossing_count(lon0, lat0, 180, 50, tree, [near, far]) == 2
 
 
+def test_cast_ray_hits_km_tomt_tre_gir_tom_liste():
+    assert G.cast_ray_hits_km(10.0, 59.0, 180, 50, None, []) == []
+
+
+def test_cast_ray_hits_km_ingen_treff_gir_tom_liste():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    coast = LineString([(ox - 50000, oy - 10000), (ox + 50000, oy - 10000)])
+    tree = G.build_strtree([coast])
+    assert G.cast_ray_hits_km(lon0, lat0, 180, 5, tree, [coast]) == []
+
+
+def test_cast_ray_hits_km_sortert_paa_avstand_med_lengde():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    # 200 m lang, 10 km unna; 50 km lang, 5 km unna - listen skal komme
+    # ut sortert paa AVSTAND, ikke lengde
+    short_near = LineString([(ox - 100, oy - 5000), (ox + 100, oy - 5000)])
+    long_far = LineString([(ox - 25000, oy - 10000), (ox + 25000, oy - 10000)])
+    tree = G.build_strtree([short_near, long_far])
+    hits = G.cast_ray_hits_km(lon0, lat0, 180, 50, tree, [short_near, long_far])
+    assert len(hits) == 2
+    (d0, len0), (d1, len1) = hits
+    assert d0 == pytest.approx(5.0, abs=0.01) and len0 == pytest.approx(200.0, abs=1)
+    assert d1 == pytest.approx(10.0, abs=0.01) and len1 == pytest.approx(50000.0, abs=1)
+
+
 def test_bbox_edge_tree_finner_kant_i_alle_retninger():
     bbox = (58.0, 9.0, 59.0, 10.0)  # lat_min, lon_min, lat_max, lon_max
     tree, lines = G.bbox_edge_tree(bbox)

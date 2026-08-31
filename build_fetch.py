@@ -55,9 +55,64 @@ For hvert spot i spots.yaml:
     ennaa - kun skrevet til spots.yaml.
   - Steg 3: for spotens `facing`-retning, finner avstanden til 20-, 30- og
     50-meterskoten i dybdekurve-laget. Skrevet som `dybde_20m_km`,
-    `dybde_30m_km`, `dybde_50m_km` (null hvis koten ikke finnes/treffes
-    innenfor taket). Disse trenger ingen etterbehandling tilsvarende
-    fetch_km_72_effektiv - skrives rett inn som de maales.
+    `dybde_30m_km`, `dybde_50m_km`, HVER MED en `dybde_Xm_status`
+    ved siden av - se compute_depth_profile().
+
+    (ordre 2026-09-01, etter at dybdeprofilene viste seg ikke-monotone for
+    flere spots - Sletteroeyene/Skallevold hadde 30 m-koten lenger ute enn
+    50 m, Moelen/Verdens Ende null paa alle tre): straalen for en enkelt
+    maaldybde soekte tidligere blindt til DEPTH_MAX_KM eller til det
+    nedlastede utsnittet tok slutt, uansett hva som laa i veien. To
+    distinkte problemer, begge fikset her:
+
+      a) "data_slutt" vs "ingen_kote": en straale som forlater det
+         nedlastede bbox-utsnittet uten treff ga null, akkurat som en
+         straale som reelt sett IKKE finner koten innenfor DEPTH_MAX_KM -
+         de to ble ikke skilt. Samme bbox-kant-problem som
+         fetch_km_72_endelig loeste for fetch (se edge_tree/EDGE_TOL_KM
+         over) - gjenbrukt her via samme edge_tree.
+
+      b) straalen kunne krysse ekte kystlinje (en oy/skjaergaard) og
+         plukke opp en kote som hoerer til en helt annen, adskilt bukt
+         paa den andre siden - geometrisk et gyldig treff mot RIKTIG
+         maaldybdes eget tre, men fysisk meningslost, siden ingen boelge
+         tar den veien. Fikset ved aa kappe soeket ved naermeste
+         SUBSTANSIELLE kystkryssing (se SUBSTANTIAL_LAND_MIN_LENGTH_M og
+         substantial_land_crossing_km()) - et skjaer under 100 m
+         tverrsnitt stopper ikke soeket, akkurat som det ikke stopper en
+         reell boelge.
+
+    Se ogsaa rapporten til brukeren (samtalen, 2026-09-01) for hvorfor
+    "straalen tar feil kote"-hypotesen ble avvist (hver maaldybde soekes
+    mot sitt EGET tre, ingen kryss-kontaminering), og for funnet at
+    `facing` brukes til to formaal som kan kreve ulik retning i en bukt
+    (vindkvalitet: hvilken vei stedet vender: physics.wind_quality via
+    ensemble.py/agent.py) vs (dybdeprofil her: hvilken vei swellen faktisk
+    kommer fra) - IKKE endret her, kun rapportert.
+
+    VIKTIG ved etterkontroll av fiksen: 9 av 14 spots endret seg da dette
+    ble kjort paa nytt, ikke bare de 4 som saa aapenbart feil ut (jf.
+    "ikke-monotone" over). For de andre 5 (rakke, portoer, hvasser_sando,
+    slagen, larkollen) var bug (b) til stede paa ALLE TRE maaldybder samtidig
+    - straalen krysset substansiell kyst foer den naadde NOEN av dem, saa
+    tallene som kom ut var fortsatt innbyrdes monotone (20 < 30 < 50) og sa
+    dermed plausible ut ved et blikk paa tallene alene. Bugen var med andre
+    ord konsistent nok per spot til aa vaere usynlig uten aa sjekke hver
+    verdi mot en uavhengig kystkryssing-beregning (som her). Monotoni er
+    IKKE et tilstrekkelig sunnhetstegn for disse verdiene.
+
+    Kjent, IKKE fikset (rapportert 2026-09-01, se samtalen): oerekroken
+    hadde d50 (0.34 km) naermere enn d20 (1.84 km) med IKKE noen kystlinje
+    i veien - undersoekt og forklart, men bevisst ikke rettet (utenfor de
+    to bugene over). Den naermeste 50 m-treffet er en liten, kompakt
+    (~700 m diameter, delvis lukkede ringer paa 27-180 m) isolert
+    dybdeanomali (en skuret grop/hull naer neset), IKKE et fragment av en
+    ANNEN maaldybdes kote (den hypotesen ble avkreftet - depth_m=50.0 er
+    korrekt paa featuren), men et fragment av en annen KLASSE feature:
+    en lokal punktanomali, ikke den brede kystnaere isobaten swell-
+    fysikken faktisk bryr seg om. Single-straale-soek kan ikke skille
+    disse to uten en egen "er dette en liten lukket ring"-sjekk, som
+    verken bug (a) eller (b) sin fiks daekker.
 
 Eksisterende 16-punkts fetch-tabeller (`fetch_km` / `local_fetch_km`)
 BEHOLDES uendret - agent.py/physics.py bruker dem fortsatt. En kopi
@@ -90,6 +145,12 @@ N_RAYS = 360 // FETCH_STEP_DEG  # 72
 DEPTH_TARGETS_M = (20, 30, 50)
 DEPTH_MAX_KM = 100.0
 DEPTH_TOLERANCE_M = 0.5
+
+# Et kystlinjestykke maa vaere minst saa langt for aa kappe dybdesoeket -
+# se substantial_land_crossing_km(). Et skjaer/fragment kortere enn dette
+# stopper ikke soeket, akkurat som det ikke stopper en reell boelge
+# (ordre 2026-09-01).
+SUBSTANTIAL_LAND_MIN_LENGTH_M = 100.0
 
 # En straale klassifiseres "bbox_kant" (ikke en reell maaling) naar dens
 # lengde er innenfor denne toleransen av avstanden til kanten av det
@@ -364,15 +425,102 @@ def group_by_depth(dybde_features, target_depths, tolerance_m=DEPTH_TOLERANCE_M)
     return out
 
 
-def compute_depth_profile(lon, lat, facing, depth_trees):
+def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+                                  max_km=DEPTH_MAX_KM,
+                                  min_length_m=SUBSTANTIAL_LAND_MIN_LENGTH_M,
+                                  label=None):
+    """
+    Avstand til naermeste SUBSTANSIELLE kystkryssing langs facing, eller
+    None hvis det ikke finnes noen innen max_km.
+
+    Brukt til aa kappe dybdesoeket foer straalen kan passere over land og
+    plukke opp en kote som hoerer til en helt annen, adskilt bukt -
+    geometrisk et gyldig treff mot riktig maaldybdes eget tre, men fysisk
+    meningslost, siden ingen boelge tar den veien (se rapporten til
+    brukeren om Skallevold/Sletteroeyene, 2026-09-01).
+
+    "Substansiell" = det krysse linjestykket (se G.cast_ray_hits_km) er
+    minst min_length_m langt - en grov proxy (se den funksjonens
+    docstring for hvorfor), men godt nok til at et lite skjaer/fragment
+    ikke stopper soeket, akkurat som det ikke stopper en reell boelge.
+    Kryssinger under grensa logges (ignorert), ikke bare hoppes stille over.
+    """
+    hits = G.cast_ray_hits_km(lon, lat, facing, max_km, kyst_tree, kyst_lines)
+    ignored = []
+    for d_km, length_m in hits:
+        if length_m >= min_length_m:
+            if ignored:
+                skipped = ", ".join(f"{d:.2f} km/{ln:.0f} m" for d, ln in ignored)
+                log(f"    {label + ': ' if label else ''}ignorerte {len(ignored)} "
+                    f"kystkryssing(er) under {min_length_m:.0f} m foer substansiell "
+                    f"kystlinje ved {d_km:.2f} km: {skipped}")
+            return d_km
+        ignored.append((d_km, length_m))
+    if ignored:
+        skipped = ", ".join(f"{d:.2f} km/{ln:.0f} m" for d, ln in ignored)
+        log(f"    {label + ': ' if label else ''}ignorerte {len(ignored)} kystkryssing(er) "
+            f"under {min_length_m:.0f} m, ingen substansiell kystlinje innen {max_km:.0f} km: {skipped}")
+    return None
+
+
+def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
+                           kyst_tree, kyst_lines, label=None):
+    """
+    For hver maaldybde: avstand langs facing til koten, med en status ved
+    siden av som forteller hvor mye aa stole paa verdien:
+
+      "maalt"       reell treff innenfor den gyldige rekkevidden - stol paa den.
+      "ingen_kote"  soekt hele den gyldige rekkevidden (DEPTH_MAX_KM,
+                    eller kortere hvis en substansiell kystkryssing eller
+                    bbox-kanten var naermere - se under) uten treff. Et
+                    paalitelig NEI, ikke mangel paa data.
+      "data_slutt"  det nedlastede utsnittet tok slutt FOER noe ble
+                    funnet, og det - ikke DEPTH_MAX_KM eller en
+                    kystkryssing - var det som stanset soeket. Vet IKKE
+                    hva som er lenger ute; ikke tolk som "ingen kote".
+
+    Returnerer {target: (verdi_km_eller_None, status)}.
+
+    Soeket kappes ved MIN(DEPTH_MAX_KM, avstand til bbox-kanten,
+    avstand til naermeste substansielle kystkryssing) - se
+    substantial_land_crossing_km() for hvorfor det siste er noedvendig.
+    Kappingen er den samme for alle tre maaldybder (avhenger bare av
+    posisjon/retning, ikke av hvilken dybde), saa kyst-/kant-oppslaget
+    gjoeres ÉN gang her, ikke per maaldybde.
+
+    IKKE daekket av "maalt": naermeste treff kan vaere en liten, LUKKET
+    depth-ring (en isolert grop/pinnacle, typisk under noen hundre meter i
+    utstrekning) i stedet for den brede kystnaere isobaten - straalen ser
+    ingen forskjell paa de to, kun at begge har riktig depth_m. Ingen
+    kystkryssing i veien til aa kappe mot i det tilfellet. Sett oerekroken
+    (rapportert til bruker 2026-09-01, bevisst IKKE fikset her): d50 paa
+    0.34 km var en ~700 m stor lokal anomali, ikke den generelle 50 m-
+    fronten (som laa 3.9+ km unna langs samme straale).
+    """
+    edge_km = G.cast_ray_km(lon, lat, facing, DEPTH_MAX_KM, edge_tree, edge_lines)
+    land_km = substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+                                            max_km=DEPTH_MAX_KM, label=label)
+    effective_cap = min(DEPTH_MAX_KM, edge_km, land_km if land_km is not None else DEPTH_MAX_KM)
+
     out = {}
     for target in DEPTH_TARGETS_M:
         if target not in depth_trees:
-            out[target] = None
+            out[target] = (None, "ingen_kote")
             continue
         tree, lines = depth_trees[target]
-        d = G.cast_ray_km(lon, lat, facing, DEPTH_MAX_KM, tree, lines)
-        out[target] = round(d, 2) if d < DEPTH_MAX_KM else None
+        d = G.cast_ray_km(lon, lat, facing, effective_cap, tree, lines)
+        if d < effective_cap:
+            out[target] = (round(d, 2), "maalt")
+        elif land_km is not None and land_km <= edge_km and land_km <= DEPTH_MAX_KM:
+            # substansiell kystlinje var det naermeste - reell grense, paalitelig nei
+            out[target] = (None, "ingen_kote")
+        elif edge_km < DEPTH_MAX_KM and edge_km <= (land_km if land_km is not None else DEPTH_MAX_KM):
+            # bbox-utsnittet tok slutt foerst - usikkert, ikke en reell null
+            out[target] = (None, "data_slutt")
+        else:
+            # DEPTH_MAX_KM selv var den strammeste grensa - soekt hele den
+            # tiltenkte rekkevidden, reell null
+            out[target] = (None, "ingen_kote")
     return out
 
 
@@ -491,11 +639,15 @@ def main():
     log("=" * 70)
     for spot in doc["spots"]:
         lon, lat, facing = spot["lon"], spot["lat"], spot["facing"]
-        profile = compute_depth_profile(lon, lat, facing, depth_trees)
+        profile = compute_depth_profile(lon, lat, facing, depth_trees,
+                                         edge_tree, edge_lines, kyst_tree, kyst_lines,
+                                         label=spot["id"])
         for target in DEPTH_TARGETS_M:
-            spot[f"dybde_{target}m_km"] = profile[target]
+            value, status = profile[target]
+            spot[f"dybde_{target}m_km"] = value
+            spot[f"dybde_{target}m_status"] = status
         log(f"  {spot['id']:<16} facing={facing:<4} "
-            + "  ".join(f"{t}m={profile[t]}" for t in DEPTH_TARGETS_M))
+            + "  ".join(f"{t}m={profile[t][0]}({profile[t][1]})" for t in DEPTH_TARGETS_M))
 
     if args.dry_run:
         log("\n--dry-run: spots.yaml IKKE endret")

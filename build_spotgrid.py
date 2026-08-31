@@ -15,6 +15,10 @@ For hvert rutepunkt som ligger i SJOEN og er naermere enn NEAR_LAND_MAX_KM
                   `ar` (apen_retning under) - samme metode som
                   build_fetch.py sin compute_depth_profile(), gjenbrukt
                   direkte herfra.
+  d20s, d30s, d50s  status ved siden av hver verdi - "maalt", "ingen_kote"
+                  eller "data_slutt", se compute_depth_profile() sin
+                  docstring. null naar d20/d30/d50 ogsaa er null (ingen
+                  apen_retning aa maale langs).
   as (apen_sektor)  bredden i grader paa den aapne sektoren mellom
                   SECTOR_LO_DEG og SECTOR_HI_DEG (135-250, SO til VSV -
                   den generelle retningen mot aapent Skagerrak for denne
@@ -129,7 +133,8 @@ def open_sector(lon, lat, kyst_tree, kyst_lines):
     return width_deg, round(center_deg, 1)
 
 
-def build_points(kyst_tree, kyst_lines, depth_trees, bbox=BBOX, res_deg=RES_DEG):
+def build_points(kyst_tree, kyst_lines, depth_trees, edge_tree, edge_lines,
+                  bbox=BBOX, res_deg=RES_DEG):
     lats, lons = grid_coords(bbox, res_deg)
     log(f"rutenett: {len(lats)} x {len(lons)} = {len(lats) * len(lons)} punkter "
         f"({bbox}, {res_deg} grader oppløsning)")
@@ -147,16 +152,20 @@ def build_points(kyst_tree, kyst_lines, depth_trees, bbox=BBOX, res_deg=RES_DEG)
 
             sektor, retning = open_sector(lon, lat, kyst_tree, kyst_lines)
             if retning is None:
-                profile = {t: None for t in DEPTH_TARGETS_M}
+                profile = {t: (None, None) for t in DEPTH_TARGETS_M}
             else:
-                profile = compute_depth_profile(lon, lat, retning, depth_trees)
+                profile = compute_depth_profile(lon, lat, retning, depth_trees,
+                                                 edge_tree, edge_lines, kyst_tree, kyst_lines)
 
             points.append({
                 "lo": lon,
                 "la": lat,
-                "d20": profile[20],
-                "d30": profile[30],
-                "d50": profile[50],
+                "d20": profile[20][0],
+                "d20s": profile[20][1],
+                "d30": profile[30][0],
+                "d30s": profile[30][1],
+                "d50": profile[50][0],
+                "d50s": profile[50][1],
                 "as": sektor,
                 "ar": retning,
             })
@@ -187,12 +196,16 @@ def main():
     kyst_tree = G.build_strtree(kyst_lines)
     log(f"  {len(kyst_raw)} features -> {len(kyst_lines)} linjestykker")
 
+    # Samme bbox-kant-treff som build_fetch.py bruker til aa skille
+    # "data slutt her" fra "ingen kote" i compute_depth_profile().
+    edge_tree, edge_lines = G.bbox_edge_tree(BBOX)
+
     log(f"Laster {dybde_path} ...")
     dybde_raw = G.load_geojson(dybde_path)
     dybde_utm = [(G.reproject_geom(g, G.WGS84, G.UTM32), p) for g, p in dybde_raw]
     depth_trees = group_by_depth(dybde_utm, DEPTH_TARGETS_M, DEPTH_TOLERANCE_M)
 
-    points = build_points(kyst_tree, kyst_lines, depth_trees)
+    points = build_points(kyst_tree, kyst_lines, depth_trees, edge_tree, edge_lines)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
