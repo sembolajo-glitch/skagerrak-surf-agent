@@ -164,6 +164,45 @@ def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     return best_m / 1000.0
 
 
+def cast_ray_hits_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
+    """
+    Som cast_ray_km, men returnerer ALLE skjaeringer langs straalen (ikke
+    bare den naermeste), sortert paa avstand: liste av
+    (avstand_km, linjelengde_m) - linjelengde_m er lengden PAA HELE
+    linjestykket som ble krysset (line_geoms[i].length, i meter siden
+    geometrien er i UTM32), til bruk som et grovt "hvor substansielt er
+    dette" - se build_fetch.py sin substantial_land_crossing_km().
+
+    Kystkontur er lagret som mange smaa, oppdelte linjestykker (ikke en
+    ren polygon-boundary per oy/skjaer), saa linjelengden til ETT
+    linjestykke er en STOEYETE approksimasjon av selve landmassens
+    stoerrelse - en stor sammenhengende kystlinje kan vaere delt opp i
+    flere korte fragmenter. Godt nok til aa skille "et skjaer paa noen
+    faa meter" fra "sammenhengende kystlinje", ikke presist nok til noe mer.
+
+    `tree` maa vaere bygget over `line_geoms` i UTM32 (meter). Origin gis i
+    WGS84 og projiseres internt.
+    """
+    if tree is None:
+        return []
+
+    ox, oy = to_utm(origin_lon, origin_lat)
+    dx, dy = bearing_vector(bearing_deg)
+    max_m = max_km * 1000.0
+    ray = LineString([(ox, oy), (ox + dx * max_m, oy + dy * max_m)])
+
+    idx = tree.query(ray, predicate="intersects")
+    hits = []
+    for i in idx:
+        cand = line_geoms[i]
+        inter = ray.intersection(cand)
+        for pt in _iter_points(inter):
+            d_m = math.hypot(pt[0] - ox, pt[1] - oy)
+            hits.append((d_m / 1000.0, cand.length))
+    hits.sort(key=lambda h: h[0])
+    return hits
+
+
 def ray_crossing_count(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     """
     Tell antall kryssinger mellom en straale fra (origin_lon, origin_lat) i

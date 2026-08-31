@@ -249,8 +249,12 @@ def test_group_by_depth_ingen_treff_utelates():
 
 
 def test_compute_depth_profile_manglende_dybde_gir_none():
-    profile = B.compute_depth_profile(10.0, 59.0, 180, depth_trees={})
-    assert profile == {20: None, 30: None, 50: None}
+    profile = B.compute_depth_profile(10.0, 59.0, 180, depth_trees={},
+                                       edge_tree=None, edge_lines=[],
+                                       kyst_tree=None, kyst_lines=[])
+    assert profile == {
+        20: (None, "ingen_kote"), 30: (None, "ingen_kote"), 50: (None, "ingen_kote"),
+    }
 
 
 def test_compute_depth_profile_finner_avstand():
@@ -259,7 +263,87 @@ def test_compute_depth_profile_finner_avstand():
     contour = LineString([(ox - 5000, oy - 5000), (ox + 5000, oy - 5000)])  # sor for origo
     tree = G.build_strtree([contour])
     depth_trees = {20: (tree, [contour])}
-    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees)  # facing sor
-    assert profile[20] is not None
-    assert 4.9 < profile[20] < 5.1
-    assert profile[30] is None
+    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,  # facing sor
+                                       edge_tree=None, edge_lines=[],
+                                       kyst_tree=None, kyst_lines=[])
+    value, status = profile[20]
+    assert status == "maalt"
+    assert 4.9 < value < 5.1
+    assert profile[30] == (None, "ingen_kote")
+
+
+def test_compute_depth_profile_bbox_kant_gir_data_slutt_ikke_ingen_kote():
+    """Straalen forlater det nedlastede utsnittet FOER den ville naadd
+    DEPTH_MAX_KM - status skal skille dette fra et reelt "fant ingenting"."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    # bbox-kant kun 5 km unna sorover - ingen dybdekote i det hele tatt der
+    edge = LineString([(ox - 50000, oy - 5000), (ox + 50000, oy - 5000)])
+    edge_tree = G.build_strtree([edge])
+    # en 20 m-kote finnes, men langt bak (50 km) kanten - skal ikke naas
+    contour_far = LineString([(ox - 50000, oy - 50000), (ox + 50000, oy - 50000)])
+    depth_trees = {20: (G.build_strtree([contour_far]), [contour_far])}
+    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,
+                                       edge_tree=edge_tree, edge_lines=[edge],
+                                       kyst_tree=None, kyst_lines=[])
+    assert profile[20] == (None, "data_slutt")
+
+
+def test_compute_depth_profile_substansiell_kystkryssing_kapper_soeket():
+    """Kjernen i fiksen: en 30 m-kote som ligger BAK (lenger unna enn) en
+    substansiell kystkryssing skal IKKE rapporteres - den kan hoere til en
+    helt annen, adskilt bukt (se Skallevold/Sletteroeyene-rapporten)."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    # solid kystlinje (200 m) 3 km unna
+    coast = LineString([(ox - 100, oy - 3000), (ox + 100, oy - 3000)])
+    kyst_tree = G.build_strtree([coast])
+    # en 30 m-kote paa den andre siden, 10 km unna
+    contour = LineString([(ox - 5000, oy - 10000), (ox + 5000, oy - 10000)])
+    depth_trees = {30: (G.build_strtree([contour]), [contour])}
+
+    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,
+                                       edge_tree=None, edge_lines=[],
+                                       kyst_tree=kyst_tree, kyst_lines=[coast])
+    assert profile[30] == (None, "ingen_kote")
+
+
+def test_compute_depth_profile_lite_skjaer_stopper_ikke_soeket():
+    """Motsatt av testen over: et skjaer UNDER substansialitetsgrensa (her
+    40 m, grensa er 100 m) skal ikke kappe soeket - koten bak det skal
+    fortsatt finnes."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    tiny_reef = LineString([(ox - 20, oy - 3000), (ox + 20, oy - 3000)])  # 40 m
+    kyst_tree = G.build_strtree([tiny_reef])
+    contour = LineString([(ox - 5000, oy - 10000), (ox + 5000, oy - 10000)])
+    depth_trees = {30: (G.build_strtree([contour]), [contour])}
+
+    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,
+                                       edge_tree=None, edge_lines=[],
+                                       kyst_tree=kyst_tree, kyst_lines=[tiny_reef])
+    value, status = profile[30]
+    assert status == "maalt"
+    assert 9.9 < value < 10.1
+
+
+def test_substantial_land_crossing_km_ignorerer_smaa_skjaer():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    tiny = LineString([(ox - 20, oy - 2000), (ox + 20, oy - 2000)])       # 40 m, ignoreres
+    solid = LineString([(ox - 200, oy - 8000), (ox + 200, oy - 8000)])   # 400 m, teller
+    tree = G.build_strtree([tiny, solid])
+    d = B.substantial_land_crossing_km(lon0, lat0, 180, tree, [tiny, solid])
+    assert d == pytest.approx(8.0, abs=0.01)
+
+
+def test_substantial_land_crossing_km_ingen_substansiell_gir_none():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    tiny = LineString([(ox - 20, oy - 2000), (ox + 20, oy - 2000)])  # 40 m
+    tree = G.build_strtree([tiny])
+    assert B.substantial_land_crossing_km(lon0, lat0, 180, tree, [tiny]) is None
+
+
+def test_substantial_land_crossing_km_tomt_tre_gir_none():
+    assert B.substantial_land_crossing_km(10.0, 59.0, 180, None, []) is None
