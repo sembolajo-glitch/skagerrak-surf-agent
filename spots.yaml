@@ -23,6 +23,7 @@
 #  fetch_km_72_effektiv,
 #  fetch_km_72_endelig,
 #  fetch_km_72_kjegle,
+#  skjaergaard_indeks,
 #  fetch_km_manuell,
 #  dybde_Xm_km:   MAALTE felt fra build_fetch.py (Kartverket Kystkontur/
 #                 Dybdekurve, CC BY 4.0 - se fetch_geodata.py). IKKE brukt av
@@ -66,12 +67,29 @@
 #                     sammenhengende kystlinje fortsatt gjoer det. Samme
 #                     analytiske utfylling som _endelig brukes naar over
 #                     halvparten av kjeglen er bbox_kant (aapent hav).
-#                     DETTE er feltet som boer brukes fremfor _endelig -
-#                     avviksrapporten kjores mot dette til slutt.
+#                   STOPP (ordre 2026-08-31): alle tre varianter over
+#                     (fetch_km_72/_endelig/_kjegle) gir fortsatt 8-20 km
+#                     avvik mot haandmaalingene - IKKE en feil som kan
+#                     kodes bort, men en metodeforskjell. Straalekasting i
+#                     alle varianter maaler geometrisk siktelinje;
+#                     haandmaalingene maaler boelgerelevant aapent vann -
+#                     bare den siste er riktig for fetch-begrenset
+#                     boelgevekst. Ingen av fetch_km_72*-feltene erstatter
+#                     derfor fetch_km/local_fetch_km. De blir staaende som
+#                     referanse. Flere korreksjonsforsok er ikke planlagt.
+#                   skjaergaard_indeks = gjennomsnittlig |80-persentil minus
+#                     median| over kjeglens hovedretninger (samme tall som
+#                     report_kjegle_skew() logger). Hoy verdi betyr at
+#                     enkeltskjaer i kjeglen varierer mye - spotten er
+#                     skjaergaardsdominert, og enhver geometrisk fetch-
+#                     maaling der er mindre til aa stole paa. Tiltenkt aa
+#                     senke `confidence` i ensemble.py for hoy-indeks-
+#                     spotter, men IKKE koblet inn der ennaa.
 #                   dybde_20m_km/_30m_km/_50m_km = avstand fra spottens
 #                     koordinat til hhv. 20-, 30- og 50-meterskoten langs
 #                     `facing`-retningen. null hvis koten ikke ble truffet.
-#                     Ingen etterbehandling tilsvarende _effektiv/_endelig -
+#                     MAALT og paalitelig - ingen del av fetch-uenigheten
+#                     over. Ingen etterbehandling tilsvarende _effektiv/_endelig -
 #                     brukes som de maales.
 #
 #  gate:          kun klasse C. Punktet i fjordmunningen der vi leser

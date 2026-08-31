@@ -335,6 +335,38 @@ faktisk har et skjær rett i siktelinjen. De gjenværende store avvikene
 kjeglekasting og er trolig en annen effekt enn punktvis diffraksjon rundt
 enkeltskjær – se «Hva den ikke gjør» under.
 
+### Konklusjon (ordre 2026-08-31): fetch erstattes ikke – dybdeprofilene gjør
+
+Tre metoder – rå enkeltstråle (`fetch_km_72`), analytisk bbox-fiks
+(`fetch_km_72_endelig`) og kjeglekasting (`fetch_km_72_kjegle`) – gir alle
+8–20 km avvik mot håndmålingene. Det er **ikke** en feil som kan kodes
+bort: alle tre er varianter av geometrisk siktelinje mot kystkontur, mens
+håndmålingene måler noe annet – hvor langt åpent vann som faktisk driver
+bølgevekst, der bølgeenergi diffrakterer rundt små hindre på en måte
+ingen av disse metodene modellerer fullt ut. For fetch-begrenset
+bølgevekst er det håndmålingen som er riktig, ikke strålegeometrien.
+
+Derfor: **`fetch_km`/`local_fetch_km` – feltene `agent.py`/`physics.py`
+faktisk bruker – forblir håndlaget og uendret.** Alle fire beregnede
+variantene (`fetch_km_72`, `_effektiv`, `_endelig`, `_kjegle`) står igjen
+i `spots.yaml` som referanse og diagnostikk, ikke som erstatning. Flere
+korreksjonsforsøk på fetch-siden er ikke planlagt.
+
+**`skjaergaard_indeks`** er derimot brukbar ut av dette arbeidet: samme
+tall som i skjærgårds-tabellen over (gjennomsnittlig |80-persentil minus
+median| over kjeglens hovedretninger), skrevet per spot i `spots.yaml`.
+Den sier hvor skjærgårdsdominert en spot er – høy indeks betyr at
+enkeltskjær i kjeglen varierer mye, altså at *enhver* geometrisk
+fetch-måling for den spotten er mindre til å stole på. Tiltenkt å senke
+`confidence` i `ensemble.py` for høy-indeks-spotter, men **ikke koblet
+inn der ennå** – kun skrevet til `spots.yaml` som forberedelse.
+
+**Dybdeprofilene (`dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km`) er derimot
+målte og pålitelige, og var aldri en del av denne uenigheten** – de er en
+ren avstandsmåling langs `facing`-retningen til en gitt dybdekote, uten
+den fetch-vs-siktelinje-tvetydigheten over. De ble lagt inn i `spots.yaml`
+som de måles, uten etterbehandling, tidligere i dette arbeidet.
+
 **`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
 
 1. *Referansepunkter.* Avstand fra `data/kystkontur.geojson` til fem punkter

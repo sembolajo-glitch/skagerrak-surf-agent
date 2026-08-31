@@ -35,6 +35,24 @@ For hvert spot i spots.yaml:
     av KUN kyst-klassifiserte delstraaler, saa en enkelt holme rett i
     siktelinjen ikke lenger stopper hele retningen, mens en sammenhengende
     kystlinje fortsatt gjor det. Se compute_fetch_72_kjegle().
+
+    STOPP (ordre 2026-08-31): tre metoder (raa, endelig, kjegle) gir alle
+    8-20 km avvik mot haandmaalingene. Dette er IKKE en feil som kan kodes
+    bort - straalekasting (i alle varianter over) maaler geometrisk
+    siktelinje, mens haandmaalingene maaler boelgerelevant aapent vann.
+    Bare den siste er riktig for fetch-begrenset boelgevekst. Ingen av
+    `fetch_km_72*`-feltene erstatter derfor `fetch_km`/`local_fetch_km` -
+    de star som referanse. Se `skjaergaard_indeks` under og README.md for
+    hva som faktisk brukes videre. Flere korreksjonsforsok paa fetch-siden
+    er ikke planlagt.
+
+    `skjaergaard_indeks` er derimot brukbar: gjennomsnittlig |80-persentil
+    minus median| over kjeglens hovedretninger (fra report_kjegle_skew()),
+    et maal paa hvor skjaergaardsdominert spotten er. Hoy indeks betyr at
+    enkeltskjaer i kjeglen varierer mye - resultatet for akkurat den
+    spotten boer vektlegges mindre. Tiltenkt aa senke `confidence` i
+    ensemble.py for skjaergaardsdominerte spotter, men IKKE koblet inn der
+    ennaa - kun skrevet til spots.yaml.
   - Steg 3: for spotens `facing`-retning, finner avstanden til 20-, 30- og
     50-meterskoten i dybdekurve-laget. Skrevet som `dybde_20m_km`,
     `dybde_30m_km`, `dybde_50m_km` (null hvis koten ikke finnes/treffes
@@ -437,7 +455,9 @@ def main():
         log(f"\n  {spot['id']}: {n_kyst} kyst, {n_kant} bbox_kant (analytisk sektor), "
             f"{n_kant_usikker} bbox_kant_usikker ({ANALYTIC_DEFAULT_KM:.0f} km default)   "
             f"[kjegle: {N_RAYS - n_apent} kyst-flertall, {n_apent} apent_hav]")
-        report_kjegle_skew(spot["id"], skew)
+        mean_abs_skew, _worst_skew = report_kjegle_skew(spot["id"], skew)
+        if mean_abs_skew is not None:
+            spot["skjaergaard_indeks"] = round(mean_abs_skew, 2)
 
         manual = spot.get("fetch_km") or spot.get("local_fetch_km")
         if manual:
