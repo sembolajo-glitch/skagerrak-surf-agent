@@ -264,6 +264,32 @@ def wave_power(hs, tp):
     return RHO_SEAWATER * G ** 2 * hs ** 2 * tp / (64 * math.pi) / 1000.0
 
 
+# ------------------------------------------------------- swell/vindsjo-andel
+
+
+def swell_fraction(swell_hs, windsea_hs):
+    """
+    Swellens andel av boelgeenergien, 0-1: swell_hs^2 / (swell_hs^2 +
+    windsea_hs^2) - de to Open-Meteo-partisjonene (se sources.py sin
+    openmeteo_waves() og agent.py sin gather()).
+
+    Rent beskrivende, IKKE en scorekomponent (se agent.py) - vi trenger
+    kalibreringsdata foerst for aa se om hoy swell-andel faktisk
+    korrelerer med gode okter.
+
+    Begge partisjonene kan vaere None eller 0 paa flate dager (Open-Meteo
+    leverer ikke alltid tall, eller begge er reelt null) - da er det
+    ingen energi aa fordele. Returnerer 0.0 i det tilfellet i stedet for
+    aa dele paa null (NaN).
+    """
+    s = swell_hs or 0.0
+    w = windsea_hs or 0.0
+    total = s * s + w * w
+    if total <= 0:
+        return 0.0
+    return round(s * s / total, 2)
+
+
 # ------------------------------------------------------------- vindkvalitet
 
 

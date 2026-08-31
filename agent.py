@@ -94,6 +94,9 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
 
     score = 100.0 * q_size * q_period * q_wind * q_water
 
+    # beskrivende, ikke en scorekomponent - se physics.swell_fraction()
+    swell_andel = P.swell_fraction(computed.get("swell_hs"), computed.get("windsea_hs"))
+
     ens = E.evaluate(spot, computed, wind, lead_h, water_cm, waves)
 
     return {
@@ -114,6 +117,8 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
         "dir_eff": round(wdir, 0) if wdir is not None else None,
         # beskrivende, ikke en scorekomponent - se physics.wave_power()
         "power_kw": round(P.wave_power(hs, tp)),
+        # beskrivende, ikke en scorekomponent - se physics.swell_fraction()
+        "swell_andel": swell_andel,
         # delscorer - dette er knappene du skrur pa
         "q_size": round(q_size, 3),
         "q_period": round(q_period, 3),
@@ -155,6 +160,12 @@ def evaluate_class_ab(spot, times, wind_series, wave_series):
             "hs_met": w.get("hs_met"),
             "hs_openmeteo": w.get("hs_openmeteo"),
             "hs_dmi": w.get("hs_dmi"),
+            "swell_hs": w.get("swell_hs"),
+            "swell_tp": w.get("swell_tp"),
+            "swell_dir": w.get("swell_dir"),
+            "windsea_hs": w.get("windsea_hs"),
+            "windsea_tp": w.get("windsea_tp"),
+            "windsea_dir": w.get("windsea_dir"),
             "local_hs": None,
             "local_tp": None,
             "local_wind_mean": 0.0,
@@ -260,6 +271,12 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
             "gate_energy_frac": round(energy_frac, 3),
             "gate_delay_h": round(delay, 1),
             "prop_hs": round(prop_hs, 2),
+            # samme feltnavn som klasse A/B (evaluate_class_ab), saa
+            # frontenden kan lese swell_hs/windsea_hs uansett klasse -
+            # her er prop_hs swellkomponenten (fra munningen) og local_hs
+            # vindsjoen. Originalene (prop_hs/local_hs) beholdes uendret.
+            "swell_hs": round(prop_hs, 2),
+            "windsea_hs": round(loc["hs"], 2),
         }))
     return rows
 
@@ -540,6 +557,14 @@ def gather(spot, mock=None):
             "hs_met": m.get("hs"),
             "hs_openmeteo": o.get("hs"),
             "tp_source": tp_source,
+            # partisjonert swell/vindsjo - kun Open-Meteo leverer dette (MET
+            # gjor det ikke, se met_waves()). Kan vaere None paa flate dager.
+            "swell_hs": o.get("swell_hs"),
+            "swell_tp": o.get("swell_tp"),
+            "swell_dir": o.get("swell_dir"),
+            "windsea_hs": o.get("windsea_hs"),
+            "windsea_tp": o.get("windsea_tp"),
+            "windsea_dir": o.get("windsea_dir"),
         }
 
     if os.environ.get("DMI_API_KEY"):
@@ -702,7 +727,10 @@ def append_shadow_log(payload):
     fields = ["run_at", "spot", "time", "score", "hs_eff", "tp_eff", "dir_eff",
               "wind_speed", "wind_from", "wind_label", "q_size", "q_period",
               "q_wind", "q_water", "local_hs", "prop_hs", "gate_hs", "gate_tp",
-              "gate_energy_frac", "local_fetch_km", "local_duration_h", "source"]
+              "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
+              # kalibreringsgrunnlag for swell/vindsjo-andel (se
+              # physics.swell_fraction() - ikke i scoringen ennaa)
+              "swell_hs", "windsea_hs", "swell_andel"]
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:
