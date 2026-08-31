@@ -94,8 +94,14 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
 
     score = 100.0 * q_size * q_period * q_wind * q_water
 
-    # beskrivende, ikke en scorekomponent - se physics.swell_fraction()
-    swell_andel = P.swell_fraction(computed.get("swell_hs"), computed.get("windsea_hs"))
+    # beskrivende, ikke en scorekomponent - se physics.swell_fraction() for
+    # forbeholdet: andelen er tvetydig naar sjoen er nesten flat (nevneren
+    # kollapser), saa funksjonen returnerer None (IKKE 0.0 - det ville
+    # paastaatt "0 % swell") under hs_eff 0.5 m eller uten partisjonsdata.
+    # tidy() lenger ned i run() lar None vaere None, og JSON/CSV-skriving
+    # haandterer det uten aa krasje (json.dumps -> null, csv -> tomt felt)
+    # - bruk swell_hs_abs for aa faktisk skille stor swell fra rester.
+    swell_andel = P.swell_fraction(computed.get("swell_hs"), computed.get("windsea_hs"), hs)
 
     ens = E.evaluate(spot, computed, wind, lead_h, water_cm, waves)
 
@@ -119,6 +125,10 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
         "power_kw": round(P.wave_power(hs, tp)),
         # beskrivende, ikke en scorekomponent - se physics.swell_fraction()
         "swell_andel": swell_andel,
+        # raa swell-hoyde i meter, UTEN normalisering - i motsetning til
+        # swell_andel er denne entydig naar sjoen er nesten flat (2.1 m mot
+        # 0.24 m er ikke det samme, selv om andelen kan bli lik)
+        "swell_hs_abs": computed.get("swell_hs"),
         # delscorer - dette er knappene du skrur pa
         "q_size": round(q_size, 3),
         "q_period": round(q_period, 3),
