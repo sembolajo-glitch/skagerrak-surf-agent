@@ -223,7 +223,7 @@ responser.
 `build_fetch.py` endrer **aldri** `physics.py`, `ensemble.py` eller de
 eksisterende `fetch_km`/`local_fetch_km`-feltene agenten faktisk bruker –
 det legger bare til `fetch_km_72`, `fetch_km_72_effektiv`,
-`fetch_km_72_endelig`, `fetch_km_manuell` og
+`fetch_km_72_endelig`, `fetch_km_72_kjegle`, `fetch_km_manuell` og
 `dybde_20m_km`/`dybde_30m_km`/`dybde_50m_km` ved siden av. Om og hvordan
 de nye tallene skal erstatte de håndlagde, er et eget steg.
 
@@ -268,6 +268,72 @@ databug – rå stråleskyting stopper ved *enhver* kystkontur-linje
 (inkludert et lite skjær rett i siktelinjen), mens håndmålingene
 tilsynelatende har sett forbi slike skjær til det som faktisk begrenser
 bølgeenergien. Det er ikke noe skriptet kan avgjøre selv.
+
+**`fetch_km_72_kjegle` – kjeglekasting i stedet for enkeltstråle.**
+Forklaringen over ble bekreftet: en enkelt stråle måler geometri, ikke
+bølgefetch. En holme på noen hundre meter stopper en stråle fullstendig,
+men stopper ikke bølgeenergien – den diffrakterer rundt og bygger seg
+videre. For hver av de 72 hovedretningene skytes nå 21 delstråler over
+±10° (`CONE_HALF_WIDTH_DEG`/`CONE_N_RAYS` i `build_fetch.py`, 1°
+mellomrom – bestillingen sa «21 stråler over ±10 grader (hvert halve
+grad)», som er aritmetisk selvmotsigende: ±10° i 0,5°-skritt gir 41
+stråler, ikke 21. Jeg har valgt det bokstavelige stråletallet, 21, og
+flagget avviket her i stedet for å stille velge den ene eller den andre
+tolkningen). `percentile()` beregner 80-persentilen av de delstrålene som
+traff ekte kystkontur ("kyst") i kjeglen – ikke medianen og ikke maksimum
+– slik at ett enkelt skjær rett i siktelinjen ikke lenger stopper hele
+retningen, mens en sammenhengende kystlinje fortsatt gjør det. Er over
+halvparten av kjeglens delstråler `bbox_kant`, markeres hele
+hovedretningen som åpent hav og samme analytiske utfylling som
+`fetch_km_72_endelig` brukes.
+
+*Skjærgårdens betydning per spot* – `report_kjegle_skew()` måler hvor mye
+80-persentilen avviker fra medianen i kjeglen, retning for retning.
+**Kjørt mot ekte data 2026-08-31:**
+
+| Spot | Snittavvik p80–median | Størst avvik |
+|---|---|---|
+| verdens_ende | 6.10 km | +37.46 km (245°) |
+| orekroken | 3.21 km | +32.73 km (265°) |
+| jomfruland_ost | 2.81 km | +42.01 km (65°) |
+| bastoy_odden | 1.39 km | +12.77 km (150°) |
+| molen | 1.27 km | +4.74 km (225°) |
+| sletteroyene | 1.16 km | +9.57 km (160°) |
+| slagen | 0.94 km | +11.53 km (30°) |
+| saltstein | 0.80 km | +5.07 km (240°) |
+| rakke, skallevold | 0.71 km | +15.32 / +10.30 km |
+| hvasser_sando | 0.62 km | +4.28 km (0°) |
+| larkollen | 0.52 km | +8.79 km (345°) |
+| svenner, portor | ≤0.03 km | ≤0.4 km – praktisk talt null |
+
+To grupper: for `svenner` og `portor` gjør skjærene nesten ingen forskjell
+(kysten der er enten sammenhengende eller reelt åpen langs hele kjeglen).
+For `verdens_ende`, `orekroken` og `jomfruland_ost` er avviket stort nok
+(30–40+ km i enkeltretninger) til at skjærgården tydelig er dominerende
+der – enkeltstråler mot disse spottene ville gitt et systematisk for lavt
+fetch-tall i akkurat de retningene.
+
+*Avviksrapporten mot `fetch_km_manuell`* – kjørt på nytt mot
+`fetch_km_72_kjegle` for de seks spottene med håndlaget tabell (kun ekte
+`kyst`-treff sammenlignet, samme regel som for `_endelig`):
+
+| Spot | `_endelig` snitt|avvik| | `_kjegle` snitt|avvik| |
+|---|---|---|
+| hvasser_sando | 20.3 km | 20.3 km |
+| slagen | 13.8 km | 12.9 km |
+| skallevold | 12.3 km | 12.8 km |
+| larkollen | 12.6 km | 12.6 km |
+| sletteroyene | 9.1 km | 8.0 km |
+| bastoy_odden | 8.1 km | 6.6 km |
+
+Kjeglekasting bedrer avviket for tre av seks spotter (slagen,
+sletteroyene, bastoy_odden), er uendret for to (hvasser_sando, larkollen)
+og litt verre for én (skallevold). Det er en liten, ikke dramatisk,
+forbedring – konsistent med at bare et fåtall av spottenes retninger
+faktisk har et skjær rett i siktelinjen. De gjenværende store avvikene
+(fortsatt 7–20 km i snitt, størst for S/SSO) er ikke løst av
+kjeglekasting og er trolig en annen effekt enn punktvis diffraksjon rundt
+enkeltskjær – se «Hva den ikke gjør» under.
 
 **`validate_geodata.py`** – to sjekker før man stoler på en nedlasting:
 
@@ -318,7 +384,7 @@ betyr at dataene rett og slett ikke rekker langt nok i den retningen.
 
 - **Ingen refraksjon eller shoaling ved brytningen.** Hs er dypvannsverdi utenfor spotten, ikke bølgehøyden i ansiktet.
 - **Ingen strøm.** Utgående brakkvann mot sørlig vind gjør fjordsjøen brattere enn fetchen tilsier.
-- **Fetch-tabellene som faktisk brukes (`fetch_km`/`local_fetch_km`) er fortsatt håndlaget** fra kartlesing. Målte verdier finnes nå ved siden av som `fetch_km_72`/`dybde_Xm_km` (se «Geodata fra Kartverket» over), men er ikke koblet inn i beregningen ennå.
+- **Fetch-tabellene som faktisk brukes (`fetch_km`/`local_fetch_km`) er fortsatt håndlaget** fra kartlesing. Målte verdier finnes nå ved siden av som `fetch_km_72_kjegle`/`dybde_Xm_km` (se «Geodata fra Kartverket» over), men er ikke koblet inn i beregningen ennå.
 - **`min_hs` for de ti uprøvde spottene er gjetning.** Ensemblet gir dem automatisk lavere `confidence`, men det fikser ikke en systematisk feil terskel. Behandle varslene deres som hypoteser.
 
 Første sesong er datainnsamling. Andre sesong er den nyttig.
