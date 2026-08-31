@@ -266,8 +266,12 @@ def wave_power(hs, tp):
 
 # ------------------------------------------------------- swell/vindsjo-andel
 
+# Under denne hoyden er forholdet mellom swell/vindsjo-partisjonene
+# meningslost uansett - se swell_fraction()-docstringen for hvorfor.
+MIN_HS_FOR_SWELL_FRACTION_M = 0.5
 
-def swell_fraction(swell_hs, windsea_hs):
+
+def swell_fraction(swell_hs, windsea_hs, hs_eff):
     """
     Swellens andel av boelgeenergien, 0-1: swell_hs^2 / (swell_hs^2 +
     windsea_hs^2) - de to Open-Meteo-partisjonene (se sources.py sin
@@ -277,11 +281,27 @@ def swell_fraction(swell_hs, windsea_hs):
     kalibreringsdata foerst for aa se om hoy swell-andel faktisk
     korrelerer med gode okter.
 
-    Begge partisjonene kan vaere None eller 0 paa flate dager (Open-Meteo
-    leverer ikke alltid tall, eller begge er reelt null) - da er det
-    ingen energi aa fordele. Returnerer 0.0 i det tilfellet i stedet for
-    aa dele paa null (NaN).
+    VIKTIG FORBEHOLD - andelen er TVETYDIG naar sjoen er nesten flat:
+    naar hs_eff < MIN_HS_FOR_SWELL_FRACTION_M (0.5 m) returneres 0.0
+    UANSETT hva forholdet mellom komponentene sier. Grunnen: naermer
+    begge partisjonene seg null, kollapser nevneren, og en andel naer
+    1.0 kan da bety enten "stor ren swell" ELLER "nesten ingenting
+    igjen av noen av delene" - to helt forskjellige forhold som samme
+    tall ikke skiller mellom (0.24 m ren "swell" mot en reell 2.1
+    m-swell gir samme andel naer 1.0). Under terskelen er 0.0 riktigere
+    enn et tall som garantert blir feiltolket - det tvinger frontenden
+    til aa vise tankestrek i stedet for et tall. Bruk swell_hs (raa
+    meter, ikke normalisert - se agent.py sitt swell_hs_abs-felt) for aa
+    faktisk skille "stor ren swell" fra "rester": 2.1 m mot 0.24 m er
+    entydig der andelen ikke er det.
+
+    Begge partisjonene kan ogsaa i seg selv vaere None eller 0 (Open-Meteo
+    leverer ikke alltid tall) - da er det ingen energi aa fordele.
+    Returnerer 0.0 i det tilfellet ogsaa, i stedet for aa dele paa null
+    (NaN).
     """
+    if hs_eff is None or hs_eff < MIN_HS_FOR_SWELL_FRACTION_M:
+        return 0.0
     s = swell_hs or 0.0
     w = windsea_hs or 0.0
     total = s * s + w * w
