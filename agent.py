@@ -39,6 +39,18 @@ SPOTS_OUT.mkdir(exist_ok=True)
 
 OSLO = zoneinfo.ZoneInfo("Europe/Oslo")
 
+# Ren sikkerhetsgrense, ikke den reelle begrensningen i dag - kildene gir
+# selv opp lenge for dette. MET Locationforecast faller fra timesoppløsning
+# til 6-timers etter ca. 55 timer, og Open-Meteo sine swell/vindsjø-
+# partisjoner (EWAM) stopper aa levere tall etter ca. 66 timer, selv om
+# forecast_days=7 er det som spørres om (se sources.py sin
+# openmeteo_waves() og agent.py sin gather()) - EWAM sitt eget modellrun
+# rekker rett og slett ikke saa langt, Open-Meteo fyller bare inn null for
+# resten av det spurte vinduet. 200 er derfor bare et tak mot en fremtidig
+# kildeoppgradering som faktisk leverer lenger enn ca. 8-9 dager, ikke noe
+# som binder med dagens kilder.
+MAX_HOURS = 200
+
 
 # --------------------------------------------------------------- konfig
 
@@ -620,9 +632,9 @@ def run(args):
             continue
 
         times = sorted(set(wind) & set(waves)) if waves else sorted(wind)
-        times = [t for t in times if t >= now.isoformat()][:96]
+        times = [t for t in times if t >= now.isoformat()][:MAX_HOURS]
         if not times:
-            times = sorted(wind)[:96]
+            times = sorted(wind)[:MAX_HOURS]
 
         if spot["klasse"] == "C":
             computed = evaluate_class_c(spot, times, wind, waves)
