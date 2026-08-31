@@ -188,6 +188,7 @@ def evaluate_class_ab(spot, times, wind_series, wave_series):
             "windsea_hs": w.get("windsea_hs"),
             "windsea_tp": w.get("windsea_tp"),
             "windsea_dir": w.get("windsea_dir"),
+            "partisjon_kilde": w.get("partisjon_kilde"),
             "local_hs": None,
             "local_tp": None,
             "local_wind_mean": 0.0,
@@ -277,6 +278,12 @@ def evaluate_class_c(spot, times, wind_series, gate_wave_series):
             "hs_met": w.get("hs_met"),
             "hs_openmeteo": w.get("hs_openmeteo"),
             "hs_dmi": w.get("hs_dmi"),
+            # hvilken Open-Meteo-modell GATENS lesning kom fra denne
+            # timen ("ewam"/"global"/None) - IKKE det samme som
+            # swell_hs/windsea_hs under (de er fysisk utledet, ikke
+            # hentet direkte herfra), men relevant for hvor mye aa stole
+            # paa den PROPAGERTE komponenten - se ensemble.py.
+            "partisjon_kilde": w.get("partisjon_kilde"),
             # lokal vindsjo
             "local_hs": round(loc["hs"], 2),
             "local_tp": round(loc["tp"], 1),
@@ -587,6 +594,11 @@ def gather(spot, mock=None):
             "windsea_hs": o.get("windsea_hs"),
             "windsea_tp": o.get("windsea_tp"),
             "windsea_dir": o.get("windsea_dir"),
+            # "ewam", "global" eller None - hvilken Open-Meteo-modell
+            # partisjonene over faktisk kom fra, se sources.py sin
+            # openmeteo_waves() og ensemble.py sin
+            # GLOBAL_MODEL_HS_REL_PENALTY.
+            "partisjon_kilde": o.get("partisjon_kilde"),
         }
 
     if os.environ.get("DMI_API_KEY"):

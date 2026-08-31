@@ -40,7 +40,26 @@ SEED = 20261114
 # --------------------------------------------------------------- usikkerhet
 
 
-def sigmas(lead_h, spot, model_spread=0.0):
+# Open-Meteo sin globale boelgemodell (GWAM, ~25-28 km rutenett) er 4-5x
+# grovere enn EWAM (~5 km, Europa - se sources.py sin openmeteo_waves()).
+# Den opploser ikke Skagerrak-kysten/fjordmunningene i det hele tatt paa
+# den skalaen - hele det relevante omraadet er bare noen faa rutenett-
+# celler, saa lokal skjerming/eksponering (akkurat det spotene her lever
+# av) er strukturelt usynlig for modellen, ikke bare "stoyete".
+#
+# 0.15 er et STARTPUNKT, ikke en maalt verdi - vi har ingen EWAM-vs-GWAM-
+# kalibreringslogg aa maale mot ennaa (se README om aa kalibrere mot egen
+# logg). Valgt til aa vaere paa storrelse med selve grunn-usikkerheten i
+# hs_rel (default 0.15): "det aa vaere paa den globale modellen er
+# omtrent like mye grunn til tvil som modellens egen generiske Hs-
+# usikkerhet". Kombineres i kvadratur (samme metode som model_spread)
+# siden det er en uavhengig feilkilde - grov geometri, ikke modell-
+# uenighet innad i samme time. Juster naar det finnes data til aa
+# etterproeve det mot.
+GLOBAL_MODEL_HS_REL_PENALTY = 0.15
+
+
+def sigmas(lead_h, spot, model_spread=0.0, global_model=False):
     """
     Standardavvik for hver usikkerhetskilde, gitt varslingslengde i timer.
 
@@ -48,15 +67,23 @@ def sigmas(lead_h, spot, model_spread=0.0):
     vindfeil rundt 10 % paa analysetidspunktet, voksende til 25-30 %
     paa fem dogn. Juster i spots.yaml under `uncertainty` hvis din
     egen logg sier noe annet.
+
+    `global_model`: True naar timens boelgepartisjon kom fra GWAM i
+    stedet for EWAM (se GLOBAL_MODEL_HS_REL_PENALTY over) - legger paa
+    ekstra usikkerhet paa `gate_scale` fordi DATAGRUNNLAGET er
+    daarligere for den timen, ikke bare fordi den ligger langt fram.
     """
     u = spot.get("uncertainty", {})
     lead = max(0.0, lead_h)
     strukturell = 1.0 if spot.get("kalibrert") else 2.0
+    global_penalty = GLOBAL_MODEL_HS_REL_PENALTY if global_model else 0.0
 
     return {
         "wind_scale": u.get("wind_rel", 0.10) + 0.0013 * lead,
         "wind_dir": u.get("wind_dir_deg", 8.0) + 0.22 * lead,
-        "gate_scale": math.hypot(u.get("hs_rel", 0.15) + 0.0013 * lead, model_spread),
+        "gate_scale": math.hypot(
+            u.get("hs_rel", 0.15) + 0.0013 * lead, model_spread, global_penalty
+        ),
         "gate_dir": u.get("wave_dir_deg", 10.0) + 0.18 * lead,
         "transmission": u.get("transmission_rel", 0.20) * strukturell,
         "sector": u.get("sector_deg", 3.5) * strukturell,
@@ -150,7 +177,8 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
     Aritmetikk, ikke usikkerhet.
     """
     spread = model_spread(wave_rec or {})
-    sig = sigmas(lead_h, spot, spread)
+    global_model = (wave_rec or {}).get("partisjon_kilde") == "global"
+    sig = sigmas(lead_h, spot, spread, global_model)
     members = draw_members(sig, n)
 
     ws = wind.get("wind_speed") or 0.0
