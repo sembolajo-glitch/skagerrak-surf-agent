@@ -39,6 +39,198 @@ def test_compass_16_matcher_spots_yaml_konvensjon():
     assert len(B.COMPASS_16) == 16
 
 
+def test_compute_fetch_72_effektiv_flat_tabell_uendret():
+    tbl = [10.0] * 72
+    eff = B.compute_fetch_72_effektiv(tbl)
+    assert eff == tbl
+
+
+def test_compute_fetch_72_effektiv_drukner_enkelt_smett():
+    """Kjernen i brukerens funn: en enkelt straale som smetter gjennom et
+    trangt skjaer gir 300 km midt i en retning der naboene er blokkert paa
+    under 1 km - medianen skal droppe utliggeren, ikke ta den med."""
+    tbl = [0.5] * 72
+    tbl[10] = 300.0  # naboene (idx 8,9,11,12) er fortsatt 0.5
+    eff = B.compute_fetch_72_effektiv(tbl)
+    assert eff[10] == 0.5
+    # punktene rundt paavirkes ikke av en enkelt nabo-utligger heller
+    assert eff[8] == 0.5 and eff[12] == 0.5
+
+
+def test_compute_fetch_72_effektiv_bruker_riktig_vindu():
+    """window=2 med 5-graders steg -> +-10 grader (idx-2..idx+2, 5 verdier)."""
+    tbl = [1.0] * 72
+    tbl[10] = 100.0  # innenfor +-2 av idx 10,11,12 (avstand <=2)
+    eff = B.compute_fetch_72_effektiv(tbl)
+    # idx 10 selv: median([1,1,100,1,1]) = 1.0 (kun 1 utligger av 5)
+    assert eff[10] == 1.0
+    # idx 12 (2 unna): median([1,1,1,1,100]) fortsatt 1.0
+    assert eff[12] == 1.0
+    # idx 13 (3 unna, utenfor vinduet): helt upaavirket
+    assert eff[13] == 1.0
+
+
+def test_compute_fetch_72_effektiv_wrap_rundt_0():
+    tbl = [5.0] * 72
+    tbl[0] = 300.0
+    eff = B.compute_fetch_72_effektiv(tbl)
+    # idx 70, 71 er innenfor +-2 av idx 0 naar man teller med wrap
+    assert eff[71] == 5.0
+    assert eff[1] == 5.0
+
+
+def test_classify_ray_category_kyst_vs_bbox_kant():
+    assert B.classify_ray_category(2.0, 50.0) == "kyst"
+    assert B.classify_ray_category(49.5, 50.0) == "bbox_kant"  # innenfor toleranse
+    assert B.classify_ray_category(300.0, 50.0) == "bbox_kant"  # taket, langt over kanten
+
+
+def test_analytic_fill_km_sektorer():
+    assert B.analytic_fill_km(180) == (145.0, False)  # Skagen
+    assert B.analytic_fill_km(160) == (145.0, False)  # nedre grense inkludert
+    assert B.analytic_fill_km(215) == (200.0, False)  # Hirtshals
+    assert B.analytic_fill_km(240) == (240.0, False)  # Skagerrak-aapningen
+    assert B.analytic_fill_km(250) == (60.0, True)     # ovre grense IKKE inkludert -> usikker
+    assert B.analytic_fill_km(0) == (60.0, True)
+    assert B.analytic_fill_km(90) == (60.0, True)
+
+
+def test_compute_fetch_72_endelig_bruker_maalt_for_kyst_analytisk_for_kant():
+    bbox = (58.0, 9.0, 59.0, 10.0)
+    tree, lines = G.bbox_edge_tree(bbox)
+    lon0, lat0 = 9.5, 58.5
+
+    fetch = [2.0] * B.N_RAYS  # alt "kyst" i utgangspunktet (godt innenfor kanten)
+    idx_180 = 180 // B.FETCH_STEP_DEG
+    idx_0 = 0
+    edge_km_180 = G.cast_ray_km(lon0, lat0, 180, 1000.0, tree, lines)
+    fetch[idx_180] = round(edge_km_180, 1)  # -> "bbox_kant" i retning 180 (Skagen-sektor)
+
+    values, categories = B.compute_fetch_72_endelig(lon0, lat0, fetch, tree, lines)
+    assert categories[idx_0] == "kyst"
+    assert values[idx_0] == 2.0
+    assert categories[idx_180] == "bbox_kant"
+    assert values[idx_180] == 145.0  # analytisk Skagen-verdi, ikke edge_km/300
+
+
+def test_report_deviation_kyst_only_hopper_over_bbox_kant(capsys):
+    manual = [10.0] * 16
+    measured_72 = [10.0] * B.N_RAYS
+    categories = ["kyst"] * B.N_RAYS
+    # bearing=180 (retning j=8 i 16-tabellen) sine to nabo-raastraaler (idx 35,36) er bbox_kant
+    categories[35] = "bbox_kant"
+    categories[36] = "bbox_kant"
+
+    mean_abs, worst_delta, worst_label, n_skipped = B.report_deviation_kyst_only(
+        "test", manual, measured_72, categories)
+    assert n_skipped == 1
+    assert mean_abs is not None
+
+
+def test_report_deviation_kyst_only_ingen_kyst_gir_none():
+    manual = [10.0] * 16
+    measured_72 = [10.0] * B.N_RAYS
+    categories = ["bbox_kant"] * B.N_RAYS
+    mean_abs, worst_delta, worst_label, n_skipped = B.report_deviation_kyst_only(
+        "test", manual, measured_72, categories)
+    assert mean_abs is None
+    assert n_skipped == 16
+
+
+def test_percentile_kjente_verdier():
+    xs = [10, 20, 30, 40, 50]
+    assert B.percentile(xs, 0) == 10
+    assert B.percentile(xs, 100) == 50
+    assert B.percentile(xs, 50) == 30
+
+
+def test_percentile_interpolerer_lineaert():
+    xs = [0, 10]
+    assert B.percentile(xs, 25) == 2.5
+    assert B.percentile(xs, 80) == 8.0
+
+
+def test_percentile_ett_element():
+    assert B.percentile([42], 80) == 42
+
+
+def test_compute_fetch_72_kjegle_drukner_enkelt_skjaer_i_flertallet():
+    """Kjernen i ordren 2026-08-31: en holme rett i siktelinjen skal ikke
+    stoppe hele retningen naar resten av kjeglen ser lenger. p80 av
+    kyst-delstraalene skal ligge naer den fjerne, sammenhengende kysten
+    (~50 km), IKKE naer den lille holmen (2 km)."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+
+    # "bbox"-kant lagt kjempelangt unna - ingen delstraale skal klassifiseres bbox_kant her
+    huge_edge = LineString([(ox - 5_000_000, oy - 5_000_000), (ox + 5_000_000, oy - 5_000_000)])
+    edge_tree, edge_lines = G.build_strtree([huge_edge]), [huge_edge]
+
+    far_coast = LineString([(ox - 30000, oy + 50000), (ox + 30000, oy + 50000)])  # ~50 km nord, bred
+    skerry = LineString([(ox - 40, oy + 2000), (ox + 40, oy + 2000)])  # liten holme, 2 km nord
+    kyst_lines = [far_coast, skerry]
+    kyst_tree = G.build_strtree(kyst_lines)
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, kyst_lines, edge_tree, edge_lines)
+
+    assert categories[0] == "kyst"  # retning 0 = nord, midt i kjeglen som ser holmen
+    assert values[0] > 30.0  # naer den fjerne kysten, IKKE naer 2 km-holmen
+    assert skew[0] is not None
+
+
+def test_compute_fetch_72_kjegle_flertall_bbox_kant_gir_apent_hav():
+    """Er over halvparten av kjeglen bbox_kant, skal hovedretningen
+    markeres apent_hav og fylles analytisk - ikke persentil av et
+    mindretall kyst-delstraaler."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+
+    # Bitteliten bbox - de aller fleste delstraaler i kjeglen forlater den
+    # innenfor faa hundre meter og finner aldri kyst_lines (som ligger langt unna)
+    tiny_edge = LineString([(ox - 100, oy + 100), (ox + 100, oy + 100)])
+    edge_tree, edge_lines = G.build_strtree([tiny_edge]), [tiny_edge]
+
+    far_coast = LineString([(ox - 30000, oy + 200000), (ox + 30000, oy + 200000)])
+    kyst_tree = G.build_strtree([far_coast])
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, [far_coast], edge_tree, edge_lines)
+
+    assert categories[0] in ("apent_hav", "apent_hav_usikker")
+    assert skew[0] is None
+    # bearing=0 (N) er ikke i noen ANALYTIC_SECTORS -> usikker default
+    assert values[0] == B.ANALYTIC_DEFAULT_KM
+    assert categories[0] == "apent_hav_usikker"
+
+
+def test_compute_fetch_72_kjegle_analytisk_sektor_riktig_verdi():
+    """bearing=180 (S) faller i Skagen-sektoren (160-200) naar hele
+    kjeglen er apent hav."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    tiny_edge = LineString([(ox - 100, oy - 100), (ox + 100, oy - 100)])
+    edge_tree, edge_lines = G.build_strtree([tiny_edge]), [tiny_edge]
+    far_coast = LineString([(ox - 30000, oy - 200000), (ox + 30000, oy - 200000)])
+    kyst_tree = G.build_strtree([far_coast])
+
+    values, categories, skew = B.compute_fetch_72_kjegle(lon0, lat0, kyst_tree, [far_coast], edge_tree, edge_lines)
+    idx_180 = 180 // B.FETCH_STEP_DEG
+    assert categories[idx_180] == "apent_hav"
+    assert values[idx_180] == 145.0
+
+
+def test_report_kjegle_skew_beregner_gjennomsnitt_og_verste():
+    skew = [1.0, -2.0, None, 5.0, None, -0.5]
+    mean_abs, worst = B.report_kjegle_skew("test", skew)
+    assert mean_abs == pytest.approx((1.0 + 2.0 + 5.0 + 0.5) / 4)
+    assert worst == 5.0
+
+
+def test_report_kjegle_skew_alle_none_gir_none():
+    mean_abs, worst = B.report_kjegle_skew("test", [None] * 5)
+    assert mean_abs is None
+    assert worst is None
+
+
 def test_group_by_depth_filtrerer_pa_toleranse():
     close = LineString([(0, 0), (100, 0)])
     far = LineString([(0, 100), (100, 100)])

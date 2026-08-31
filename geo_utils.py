@@ -15,7 +15,7 @@ import json
 import math
 
 import pyproj
-from shapely.geometry import shape, mapping, LineString
+from shapely.geometry import shape, mapping, LineString, Point, box
 from shapely.ops import transform as shp_transform
 from shapely.strtree import STRtree
 
@@ -43,6 +43,13 @@ def to_utm(lon, lat):
 def to_wgs84_xy(x, y):
     lon, lat = _transformer(UTM32, WGS84).transform(x, y)
     return lon, lat
+
+
+def transform_point(lon, lat, to_crs, from_crs=WGS84):
+    """Generisk punkt-transform til en vilkaarlig EPSG-kode (f.eks. for
+    engangsdiagnostikk mot en annen projeksjon enn UTM32)."""
+    x, y = _transformer(from_crs, to_crs).transform(lon, lat)
+    return x, y
 
 
 def bearing_vector(bearing_deg):
@@ -153,6 +160,39 @@ def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     if best_m is None:
         return float(max_km)
     return best_m / 1000.0
+
+
+def nearest_distance_km(lon, lat, tree, line_geoms):
+    """
+    Korteste avstand fra et punkt til naermeste linje i `tree`/`line_geoms`,
+    i km. I motsetning til cast_ray_km (retningsavhengig, straaleskyting)
+    er dette en ren "avstand til naermeste kystlinje uansett retning" -
+    brukt til aa validere mot referansepunkter med kjent avstand til land.
+
+    `tree` maa vaere bygget over `line_geoms` i UTM32 (meter). Punktet gis
+    i WGS84 og projiseres internt. Returnerer None hvis treet er tomt.
+    """
+    if tree is None or not line_geoms:
+        return None
+    x, y = to_utm(lon, lat)
+    pt = Point(x, y)
+    idx = tree.nearest(pt)
+    return pt.distance(line_geoms[idx]) / 1000.0
+
+
+def bbox_edge_tree(bbox):
+    """
+    bbox = (lat_min, lon_min, lat_max, lon_max). Bygg en STRtree over
+    bbox-rektangelets fire kanter i UTM. Brukt til aa finne avstanden til
+    kanten av et nedlastet datautsnitt i en gitt retning (via cast_ray_km
+    mot dette treet) - skiller "straalen fant ekte land" fra "straalen gikk
+    tom fordi dataene ikke daekker lenger i den retningen".
+    """
+    lat_min, lon_min, lat_max, lon_max = bbox
+    poly = box(lon_min, lat_min, lon_max, lat_max)
+    poly_utm = reproject_geom(poly, WGS84, UTM32)
+    lines = to_boundary_lines([poly_utm])
+    return build_strtree(lines), lines
 
 
 def _iter_points(geom):

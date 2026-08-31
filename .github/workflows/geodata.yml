@@ -4,8 +4,16 @@ name: geodata
 # CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km. KUN manuell trigger - aldri
 # paa tidsplan. Ruerer ikke forecast.yml eller main: resultatet havner paa
 # en egen gren (geodata-resultat) for gjennomsyn foer eventuell merge.
+# Input "probe" bytter til fetch_geodata.py --probe (diagnostiser bbox/
+# akse/CRS mot layerne) og hopper over build_fetch.py og commit-steget -
+# artifact-opplastingen av data/_raw/ kjorer uansett.
 on:
   workflow_dispatch:
+    inputs:
+      probe:
+        description: "Bare diagnostiser bbox/akserekkefolge/CRS (fetch_geodata.py --probe) - ikke last ned eller committ noe"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -31,7 +39,12 @@ jobs:
       - name: Hent geodata fra Kartverket
         id: fetch
         continue-on-error: true
-        run: python fetch_geodata.py --dump-raw
+        run: |
+          if [ "${{ inputs.probe }}" = "true" ]; then
+            python fetch_geodata.py --probe
+          else
+            python fetch_geodata.py --dump-raw
+          fi
 
       - name: Sjekk filstorrelse
         run: |
@@ -55,12 +68,23 @@ jobs:
           fi
 
       - name: Beregn fetch og dybdeprofil (build_fetch.py)
+        if: inputs.probe != true
         run: python build_fetch.py
+
+      # Feiler (exit 1) hvis et referansepunkt bryter sin avstandsterskel -
+      # se validate_geodata.py. Tegner uansett ut/kystkontur_preview.svg,
+      # ogsaa ved feil, siden det er akkurat da bildet er mest nyttig
+      # (er konturen synlig speilvendt?). Blokkerer committ-steget under
+      # ved feil - vi skal ikke committe data vi ikke stoler paa.
+      - name: Valider geodata
+        if: inputs.probe != true
+        run: python validate_geodata.py
 
       - name: Kjor tester
         run: python -m pytest -q
 
       - name: Committ resultatet til geodata-resultat
+        if: inputs.probe != true
         run: |
           git config user.name  "surf-agent"
           git config user.email "surf-agent@users.noreply.github.com"
@@ -83,6 +107,15 @@ jobs:
         with:
           name: geodata-raw
           path: data/_raw/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Last opp kart-forhaandsvisning som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kystkontur-preview
+          path: out/kystkontur_preview.svg
           if-no-files-found: warn
           retention-days: 14
 

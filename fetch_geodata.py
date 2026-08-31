@@ -11,19 +11,43 @@ workflowen (forecast.yml kjoerer aldri dette).
 
 WMS-referansen oppgitt for datasettet er
     https://wms.geonorge.no/skwms1/wms.dybdedata2
-Vi kjenner ikke det eksakte WFS-endepunktet eller lagnavnene paa forhaand,
-saa skriptet:
-  1. proever en liste kandidat-URL-er + WFS-versjoner og kjoerer
-     GetCapabilities paa hver, til en svarer.
+Det AAPENBARE WFS-gjettet (samme vert/sti-monster) - wms.geonorge.no/skwms1/
+wfs.dybdedata2 - gir 404. Riktig URL slaas derfor opp paa forhaand, ikke
+gjettes: skriptet spoerr Geonorge sin kartkatalog-API om metadata for
+datasettet "Sjøkart - Dybdedata" (UUID 9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe,
+se DYBDEDATA_WFS_UUID) og leter gjennom svaret (rekursivt, uten aa anta
+eksakt feltnavn) etter et WFS GetCapabilities-felt. Den URL-en brukes
+direkte. --wfs-url overstyrer oppslaget helt; de gamle gjettede
+kandidat-URL-ene (WFS_URL_CANDIDATES) er beholdt som siste utvei hvis
+kartkatalog-oppslaget selv feiler.
+
+Naar en base-URL er bestemt (uansett kilde):
+  1. proever WFS-versjoner (2.0.0, 1.1.0, 1.0.0) med GetCapabilities til en
+     svarer.
   2. leser de faktiske FeatureType-navnene fra svaret og matcher dem mot
      "kyst"/"dybde"-noekkelord i stedet for aa anta faste navn.
-  3. proever outputFormat=application/json foerst; faller tilbake til GML
-     (standard WFS-output) hvis tjenesten ikke stoetter JSON.
-  4. paginerer med count/startIndex (WFS 2.0.0) eller maxFeatures
+  3. henter GetFeature som GML. outputFormat=application/json er IKKE
+     stottet av denne tjenesten (bekreftet 400 "not configured to handle
+     the output/input format 'application/json'" - se BBOX_SRS_NAME-
+     kommentaren og --probe under), saa det proeves ikke lenger.
+  4. bbox sendes LAAST INN som lat,lon med srsName=BBOX_SRS_NAME (urn-
+     formen) - bekreftet --probe 2026-08-30 som eneste variant som gir
+     treff (kortform EPSG:4326 og UTM33/EPSG:25833 ga begge 0 features).
+  5. paginerer med count/startIndex (WFS 2.0.0) eller maxFeatures
      (1.0.0/1.1.0), og stopper naar en side gir faerre features enn spurt.
+  6. akserekkefolgen paa koordinatene i selve GML-svaret rettes opp via
+     resolve_axis_swap() - denne tjenesten returnerer konsekvent
+     (breddegrad, lengdegrad), bekreftet --probe, ogsaa naar ingen srsName
+     ble sendt i det hele tatt.
+  7. fornuftssjekk (validate_bounds): enhver geometri utenfor SANITY_BOUNDS
+     (57-60 N, 8-12 O) feiler tydelig i stedet for aa skrives stille til
+     fil - se validate_bounds().
+  8. antall features + samlet bounding box logges FOER filen skrives.
 
-Alt dette er IKKE testet mot den levende tjenesten (naettverket i
-utviklingsmiljoeet hvor dette ble skrevet er sperret mot geonorge.no).
+Punkt 3-7 var opprinnelig ikke testet mot den levende tjenesten (naettverket
+i utviklingsmiljoeet hvor dette ble skrevet er sperret mot geonorge.no) -
+de er na verifisert via --probe-kjoringer 2026-08-30, se git-historikken for
+de faktiske responsene som avdekket dette.
 
 FEILSOEKING: hvert eneste HTTP-kall - ogsaa de som feiler - logges til
 stderr (full URL, statuskode/unntak, forste 500 tegn) og dumpes til
@@ -37,6 +61,16 @@ tilgjengelige lagnavn, uten aa proeve GetFeature i det hele tatt:
 
     python fetch_geodata.py --list-layers
     python fetch_geodata.py --list-layers --wfs-url https://annen.url/wfs
+
+Faar du 0 features for et lag som ellers matcher fint, er det som oftest
+bbox-en (akserekkefolge eller feil CRS), ikke tjenesten eller lagnavnet.
+Kjor --probe for aa diagnostisere det isolert, uten aa proeve aa laste ned
+noe: den proever (a) uten bbox i det hele tatt, (b) bbox lon,lat i EPSG:4326,
+(c) bbox lat,lon (WFS2.0-regelen for geografiske EPSG-koder skrevet som
+urn:...), og (d) bbox i UTM33 (EPSG:25833, ofte tjenestens native CRS) - og
+viser raa geometri + bounds for foerste treff i hver variant:
+
+    python fetch_geodata.py --probe
 """
 
 import argparse
@@ -62,13 +96,38 @@ TIMEOUT = 60
 
 USER_AGENT = "skagerrak-surf-agent/fetch_geodata (kartverket-geodata-integration)"
 
+# "Sjøkart - Dybdedata" i Geonorge sin kartkatalog. UUID-en er stabil selv
+# om den faktiske tjeneste-URL-en skulle endre seg igjen.
+DYBDEDATA_WFS_UUID = "9e01fc8e-e1d3-4d11-8b9d-22e1d132ddfe"
+KARTKATALOG_API = "https://kartkatalog.geonorge.no/api/getdata/{uuid}"
+
+# Siste utvei hvis oppslaget mot kartkatalogen selv feiler (nettverksfeil,
+# uventet svarskjema). Forste kandidat er BEKREFTET RIKTIG (kartkatalog-
+# oppslag 2026-08-30: https://wfs.geonorge.no/skwms1/wfs.dybdedata - MERK:
+# uten "2" paa slutten, i motsetning til WMS-en). De opprinnelige gjettene
+# under - alle med "wfs.dybdedata2" - er BEKREFTET FEIL (DNS-feil/404), men
+# staar igjen som dokumentasjon paa hva som er proevd.
 WFS_URL_CANDIDATES = [
+    "https://wfs.geonorge.no/skwms1/wfs.dybdedata",
     "https://wfs.geonorge.no/skwms1/wfs.dybdedata2",
     "https://openwfs.geonorge.no/skwms1/wfs.dybdedata2",
     "https://wms.geonorge.no/skwms1/wfs.dybdedata2",
 ]
 
 WFS_VERSIONS = ["2.0.0", "1.1.0", "1.0.0"]
+
+# lat_min, lon_min, lat_max, lon_max - fornuftssjekk for Ytre Oslofjord-
+# omraadet. Enhver geometri utenfor dette betyr med overveldende
+# sannsynlighet feil akserekkefolge/CRS i parsingen, ikke at dataene
+# faktisk er der - se validate_bounds(). Litt videre enn DEFAULT_BBOX for
+# aa tolerere features som stikker ut over kant-bbox-en.
+SANITY_BOUNDS = (57.0, 8.0, 60.0, 12.0)
+
+# WFS-en her stotter KUN GML (outputFormat=application/json gir 400 "not
+# configured to handle the output/input format" - bekreftet --probe
+# 2026-08-30). bbox LAAST INN til lat,lon med urn-formen etter samme probe:
+# kortform EPSG:4326 (lon,lat) og UTM33 (EPSG:25833) ga begge 0 features.
+BBOX_SRS_NAME = "urn:ogc:def:crs:EPSG::4326"
 
 LAYERS = {
     "kystkontur": ["kystkontur", "kyst"],
@@ -161,15 +220,148 @@ def _localname(tag):
     return tag.split("}", 1)[-1] if "}" in tag else tag
 
 
+# --------------------------------------------------------------- kartkatalog
+
+
+def _walk_json(obj, path=""):
+    """
+    Rekursiv generator over en JSON-struktur: yielder (path, key, value) for
+    hvert dict-felt (path er en '.'/'[i]'-notasjon for feilsoeking). Brukes
+    til aa lete etter en WFS-URL i kartkatalog-metadata UTEN aa anta et
+    eksakt skjema paa forhaand - vi vet ikke sikkert om feltet heter
+    GetCapabilitiesUrl, DistributionUrl, eller ligger i en Distributions-liste.
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            new_path = f"{path}.{k}" if path else k
+            yield (new_path, k, v)
+            yield from _walk_json(v, new_path)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            yield from _walk_json(v, f"{path}[{i}]")
+
+
+def _iter_dicts(obj):
+    """
+    Rekursiv generator over ALLE dict-objekter i en JSON-struktur - ogsaa de
+    som ligger som elementer i en liste (f.eks. hvert element i en
+    Distributions-liste). _walk_json alene fanger ikke disse som en
+    'value', siden listeelementer ikke har en dict-noekkel aa henge (path,
+    key, value) paa.
+    """
+    if isinstance(obj, dict):
+        yield obj
+        for v in obj.values():
+            yield from _iter_dicts(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _iter_dicts(v)
+
+
+def _extract_wfs_url(data):
+    """
+    Ren funksjon (ingen nettverk): let gjennom kartkatalog-metadata etter en
+    WFS GetCapabilities-URL. Returnerer base-URL-en (uten spoerrestreng -
+    discover_service bygger sine egne service/request/version-parametre).
+    Kaster RuntimeError med en liste over ALLE URL-er funnet i svaret hvis
+    ingenting matcher, saa feilen er lett aa undersoeke manuelt.
+
+    Prioritet:
+      1. et felt hvis navn inneholder "getcapabilit" og hvis verdi nevner wfs
+      2. et felt "protocol"/"type" = noe med "wfs" ved siden av en "url"
+         eller tilsvarende i samme objekt (vanlig i Distributions-lister)
+      3. enhver URL-streng som selv inneholder baade "wfs" og "getcapabilit"
+      4. enhver URL-streng som inneholder "wfs" (svakest signal, sist)
+    """
+    candidates = []  # (prioritet, url, beskrivelse)
+
+    for path, key, value in _walk_json(data):
+        if isinstance(value, str) and value.startswith("http"):
+            kl, vl = key.lower(), value.lower()
+            if "getcapabilit" in kl:
+                candidates.append((0, value, f"felt '{path}'"))
+            elif "wfs" in vl and "getcapabilit" in vl:
+                candidates.append((1, value, f"felt '{path}' (URL inneholder GetCapabilities)"))
+            elif "wfs" in vl:
+                candidates.append((3, value, f"felt '{path}' (URL inneholder 'wfs')"))
+
+    # "protocol"/"type" = noe med "wfs" ved siden av en "url" i SAMME objekt -
+    # vanlig i Distributions-lister. Maa skanne alle dict-er (ogsaa
+    # listeelementer), ikke bare _walk_json sine (path, key, value)-treff.
+    for d in _iter_dicts(data):
+        proto = url = None
+        for k2, v2 in d.items():
+            if k2.lower() in ("protocol", "type", "protocolname") and isinstance(v2, str) and "wfs" in v2.lower():
+                proto = v2
+            if k2.lower() in ("url", "getcapabilitiesurl", "distributionurl") and isinstance(v2, str) and v2.startswith("http"):
+                url = v2
+        if proto and url:
+            candidates.append((0, url, f"objekt (protocol={proto!r})"))
+
+    if not candidates:
+        all_urls = sorted({v for _, k, v in _walk_json(data) if isinstance(v, str) and v.startswith("http")})
+        raise RuntimeError(
+            "Fant ingen WFS-URL i kartkatalog-metadata. "
+            f"Alle URL-er i svaret: {all_urls or '(ingen URL-er funnet i det hele tatt)'}"
+        )
+
+    candidates.sort(key=lambda c: c[0])
+    best_score, best_url, desc = candidates[0]
+    others = [c for c in candidates[1:] if c[1] != best_url]
+    log(f"  fant WFS-URL via {desc}: {best_url}")
+    if others:
+        log(f"  ({len(others)} andre kandidat(er) vurdert og forkastet: "
+            f"{[c[1] for c in others[:5]]})")
+
+    return best_url.split("?")[0]
+
+
+def lookup_wfs_url(uuid=DYBDEDATA_WFS_UUID, dump_dir=None):
+    """
+    Slaa opp WFS-endepunktet for datasettet i Geonorge sin kartkatalog-API
+    i stedet for aa gjette paa URL-monster (det opplagte gjettet,
+    wms.geonorge.no/skwms1/wfs.dybdedata2, er bekreftet aa gi 404).
+    """
+    url = KARTKATALOG_API.format(uuid=uuid)
+    log(f"Slaar opp WFS-URL for datasett {uuid} i Geonorge kartkatalog ...")
+    r = _get(url, {}, dump_dir=dump_dir, tag=f"kartkatalog_{uuid}")
+    data = r.json()
+    return _extract_wfs_url(data)
+
+
+def build_candidates(args, dump_dir):
+    """
+    Bygg den ordnede lista av WFS-base-URL-er aa proeve:
+      1. --wfs-url, hvis satt - overstyrer alt annet, INGEN kartkatalog-oppslag.
+      2. ellers: URL-en slaatt opp i kartkatalogen for DYBDEDATA_WFS_UUID.
+      3. de gamle gjettede kandidatene, som siste utvei hvis 1-2 feiler/mangler.
+    """
+    if args.wfs_url:
+        log(f"--wfs-url overstyrer: {args.wfs_url} (hopper over kartkatalog-oppslag)")
+        return [args.wfs_url] + list(WFS_URL_CANDIDATES)
+
+    candidates = []
+    try:
+        looked_up = lookup_wfs_url(dump_dir=dump_dir)
+        candidates.append(looked_up)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ADVARSEL: kartkatalog-oppslag feilet ({type(exc).__name__}: {exc})")
+        log("  faller tilbake til gjettede kandidat-URL-er (se WFS_URL_CANDIDATES)")
+
+    for c in WFS_URL_CANDIDATES:
+        if c not in candidates:
+            candidates.append(c)
+    return candidates
+
+
 # ------------------------------------------------------------ GetCapabilities
 
 
-def discover_service(url_candidates, extra_url=None, dump_dir=None):
+def discover_service(candidates, dump_dir=None):
     """
-    Proev kandidat-URL-er x versjoner til GetCapabilities svarer.
-    Returnerer (base_url, version, {layer_name: xml_element}).
+    Proev kandidat-URL-er (se build_candidates) x WFS-versjoner til
+    GetCapabilities svarer. Returnerer (base_url, version, {layer_name: xml_element}).
     """
-    candidates = ([extra_url] if extra_url else []) + list(url_candidates)
     last_err = None
     for base_url in candidates:
         for version in WFS_VERSIONS:
@@ -314,9 +506,19 @@ def fetch_features_json(base_url, version, type_name, bbox, dump_dir=None):
 
 
 def fetch_features_gml(base_url, version, type_name, bbox, dump_dir=None):
-    """Fallback naar tjenesten ikke gir GeoJSON. Parser raa GML."""
+    """
+    Hent alle features for et lag som GML - eneste format denne tjenesten
+    stotter (outputFormat=application/json gir HTTP 400 "not configured to
+    handle the output/input format 'application/json'", bekreftet --probe
+    2026-08-30).
+
+    bbox sendes som lat,lon med srsName=BBOX_SRS_NAME (urn-formen) - LAAST
+    INN etter samme probe: kortformen EPSG:4326 (lon,lat) og UTM33
+    (EPSG:25833) ga begge 0 features for denne tjenesten, kun lat,lon+urn
+    traff.
+    """
     lat_min, lon_min, lat_max, lon_max = bbox
-    bbox_param = f"{lon_min},{lat_min},{lon_max},{lat_max}"
+    bbox_param = f"{lat_min},{lon_min},{lat_max},{lon_max}"
 
     start = 0
     page_no = 0
@@ -324,7 +526,7 @@ def fetch_features_gml(base_url, version, type_name, bbox, dump_dir=None):
         params = {
             "service": "WFS", "request": "GetFeature", "version": version,
             ("typeNames" if version == "2.0.0" else "typeName"): type_name,
-            "srsName": "EPSG:4326",
+            "srsName": BBOX_SRS_NAME,
             "bbox": bbox_param,
         }
         if version == "2.0.0":
@@ -340,7 +542,7 @@ def fetch_features_gml(base_url, version, type_name, bbox, dump_dir=None):
 
         n = 0
         for member in _iter_members(root):
-            geom, props = _parse_gml_member(member)
+            geom, props = _parse_gml_member(member, requested_srs_name=BBOX_SRS_NAME)
             if geom is not None:
                 n += 1
                 yield geom, props
@@ -357,8 +559,13 @@ def _iter_members(root):
             yield el
 
 
-def _parse_gml_member(member):
-    """Et wfs:member inneholder ett feature-element med geometri + attributter."""
+def _parse_gml_member(member, requested_srs_name=None):
+    """
+    Et wfs:member inneholder ett feature-element med geometri + attributter.
+    `requested_srs_name` er srsName-en VI sendte i forespoerselen (brukes som
+    fallback for akserekkefolge hvis svaret ikke selv oppgir en - se
+    resolve_axis_swap()).
+    """
     feature_el = list(member)[0] if len(member) else None
     if feature_el is None:
         return None, {}
@@ -370,6 +577,8 @@ def _parse_gml_member(member):
         geom_el = _find_geometry(child)
         if geom_el is not None:
             geom = gml_to_shapely(geom_el)
+            if geom is not None and resolve_axis_swap(geom_el, requested_srs_name):
+                geom = fix_axis_order(geom)
             continue
         if child.text and child.text.strip():
             props[local] = child.text.strip()
@@ -539,6 +748,88 @@ def shp_swap(geom):
     return _t(lambda x, y, z=None: (y, x), geom)
 
 
+def _explicit_srs_name(el):
+    """
+    Let etter en eksplisitt srsName-attributt paa geometrielementet selv
+    eller et hvilket som helst barn (ulike servere/GML-varianter legger den
+    paa forskjellige nivaaer - LineString, posList, ...).
+    """
+    for e in el.iter():
+        for k, v in e.attrib.items():
+            if _localname(k) == "srsName":
+                return v
+    return None
+
+
+def resolve_axis_swap(geom_el, requested_srs_name):
+    """
+    Avgjoer om en raapasrset GML-geometri maa byttes om fra
+    (breddegrad, lengdegrad) til shapely/GeoJSON sin (x=lengdegrad,
+    y=breddegrad) rekkefolge.
+
+    Prioritet:
+      1. Eksplisitt srsName PAA SELVE SVARET (geometrielementet) - mest
+         autoritativt, forteller hva serveren faktisk kodet ut fra.
+      2. srsName-en VI BA OM i forespoerselen - en spesifikasjonsfoelgende
+         WFS skal kode svaret i den CRS-ens akserekkefolge.
+      3. Ingen av delene funnet: default TRUE. Bekreftet empirisk mot
+         Kartverkets WFS (--probe, 2026-08-30): SELV UTEN noen srsName i
+         forespoerselen (variant A, "uten bbox") kom koordinatene i
+         lat/lon-rekkefolge - det er tydeligvis denne tjenestens
+         standardoppfoersel for EPSG:4326-geometri, ikke noe vi styrer.
+    """
+    srs = _explicit_srs_name(geom_el) or requested_srs_name
+    if srs is not None:
+        return axis_order_is_latlon(srs)
+    return True
+
+
+def validate_bounds(features, layer_key, sanity_bounds=SANITY_BOUNDS):
+    """
+    Fornuftssjekk (lat_min, lon_min, lat_max, lon_max): enhver geometri
+    utenfor dette omraadet betyr med overveldende sannsynlighet feil
+    akserekkefolge/CRS i GML-parsingen - IKKE at dataene faktisk ligger
+    der. Feiler tydelig i stedet for aa skrive dem stille til fil.
+
+    Motivert direkte av --probe-funn 2026-08-30: variant A (uten bbox)
+    returnerte geometri ved Skagen/Danmark (57.76 N, 6.04 O) fordi
+    tjenesten samplet fra hele det nasjonale datasettet uten spatial
+    filtrering - IKKE en akserekkefolge-feil i seg selv, men akkurat den
+    typen "et sted i Norge, men ikke der vi tror" som denne sjekken skal
+    fange for de features som faktisk SKAL vaere i Ytre Oslofjord.
+    """
+    lat_min, lon_min, lat_max, lon_max = sanity_bounds
+    bad = []
+    for i, (geom, _props) in enumerate(features):
+        minx, miny, maxx, maxy = geom.bounds  # x=lon, y=lat (etter evt. akse-fiks)
+        if not (lon_min <= minx <= lon_max and lon_min <= maxx <= lon_max
+                and lat_min <= miny <= lat_max and lat_min <= maxy <= lat_max):
+            bad.append((i, geom.bounds))
+    if bad:
+        raise RuntimeError(
+            f"{layer_key}: {len(bad)}/{len(features)} features har geometri utenfor "
+            f"fornuftsomraadet (lat {lat_min}-{lat_max}, lon {lon_min}-{lon_max}). "
+            f"Dette betyr sannsynligvis feil akserekkefolge/CRS i GML-parsingen, IKKE "
+            f"at dataene faktisk ligger der. Eksempler (indeks, bounds lon/lat): {bad[:5]}"
+        )
+
+
+def _union_bounds(geoms):
+    """Samlet bounding box (minx, miny, maxx, maxy) over en liste geometrier, eller None."""
+    xs_min, ys_min, xs_max, ys_max = [], [], [], []
+    for g in geoms:
+        if g is None or g.is_empty:
+            continue
+        minx, miny, maxx, maxy = g.bounds
+        xs_min.append(minx)
+        ys_min.append(miny)
+        xs_max.append(maxx)
+        ys_max.append(maxy)
+    if not xs_min:
+        return None
+    return (min(xs_min), min(ys_min), max(xs_max), max(ys_max))
+
+
 # --------------------------------------------------------------- pipeline
 
 
@@ -601,28 +892,25 @@ def run_layer(layer_key, keywords, base_url, version, feature_types, bbox,
         )
     log(f"  lag: {type_name}")
 
-    use_json = supports_json(base_url, version, type_name, dump_dir=dump_dir)
-    log(f"  format: {'GeoJSON' if use_json else 'GML (fallback)'}")
-
-    if use_json:
-        feats = list(fetch_features_json(base_url, version, type_name, bbox, dump_dir))
-    else:
-        raw = list(fetch_features_gml(base_url, version, type_name, bbox, dump_dir))
-        # GML-koordinatrekkefoelgen avhenger av srsName paa selve elementet;
-        # vi ba om srsName=EPSG:4326 (plain), som er lon/lat - ingen bytte
-        # trengs normalt. Hvis punktene havner i havet ved Afrika, er dette
-        # stedet aa bytte om: sett feats = [(fix_axis_order(g), p) for g, p in raw].
-        feats = raw
+    # JSON droppet - tjenesten svarer 400 "not configured to handle the
+    # output/input format 'application/json'" (bekreftet --probe
+    # 2026-08-30). Gaar rett paa GML, ingen formatsondering.
+    feats = list(fetch_features_gml(base_url, version, type_name, bbox, dump_dir))
 
     log(f"  hentet {len(feats)} raa features")
     if not feats:
         raise RuntimeError(f"Fikk 0 features for {type_name} - se advarslene over")
+
+    validate_bounds(feats, layer_key)
 
     feats, depth_key = normalize_depth_properties(feats) if layer_key == "dybdekurve" else (feats, None)
 
     n_coords_before = sum(_count_coords(g) for g, _ in feats)
     feats = simplify_all(feats, tolerance_m)
     n_coords_after = sum(_count_coords(g) for g, _ in feats)
+
+    bounds = _union_bounds(g for g, _ in feats)
+    log(f"  {len(feats)} features, bounding box (lon,lat) FOR skriving: {bounds}")
 
     out_path.parent.mkdir(exist_ok=True)
     G.write_geojson(out_path, feats)
@@ -631,10 +919,10 @@ def run_layer(layer_key, keywords, base_url, version, feature_types, bbox,
     log(f"  koordinater: {n_coords_before} -> {n_coords_after} etter simplify({tolerance_m} m)")
     log(f"  skrev {out_path} ({size_kb:.0f} kB)")
     return {
-        "layer": type_name, "format": "json" if use_json else "gml",
+        "layer": type_name, "format": "gml",
         "n_features": len(feats), "n_coords_before": n_coords_before,
         "n_coords_after": n_coords_after, "size_kb": size_kb,
-        "depth_key": depth_key,
+        "depth_key": depth_key, "bounds": bounds,
     }
 
 
@@ -651,21 +939,187 @@ def _count_coords(geom):
 
 
 def list_layers(args, dump_dir):
-    log(f"Soeker WFS-endepunkt for --list-layers (kandidater: "
-        f"{([args.wfs_url] if args.wfs_url else []) + WFS_URL_CANDIDATES}) ...")
-    base_url, version, feature_types = discover_service(
-        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
-    )
+    candidates = build_candidates(args, dump_dir)
+    log(f"Soeker WFS-endepunkt for --list-layers (kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
     log(f"\n{base_url} (WFS {version}) - {len(feature_types)} lag:")
     for name in sorted(feature_types):
         print(name)
 
 
+# --------------------------------------------------------------- --probe
+
+
+def _geom_sample_coords(geom, n=3):
+    """
+    Ren funksjon: de forste n koordinatparene i en shapely-geometri, uansett
+    type - brukt til aa vise raadata for CRS/akserekkefolge-diagnose.
+
+    OBS: hasattr(geom, "coords") er SANN for alle shapely-geometrier (feltet
+    finnes paa baseklassen) - men aa faktisk LESE .coords kaster
+    NotImplementedError for Polygon/Multi*/GeometryCollection, siden de ikke
+    er "koordinatsekvenser". Maa derfor proeve/fange, ikke bare hasattr().
+    """
+    if geom is None:
+        return None
+    try:
+        coords = list(geom.coords)
+        if coords:
+            return coords[:n]
+    except NotImplementedError:
+        pass
+    if hasattr(geom, "exterior") and geom.exterior is not None:
+        return list(geom.exterior.coords)[:n]
+    if hasattr(geom, "geoms") and len(geom.geoms):
+        return _geom_sample_coords(geom.geoms[0], n)
+    return None
+
+
+def _guess_crs_hint(bounds):
+    """Ren funksjon: svakt, uautoritativt hint om hva slags CRS et sett
+    bounds sannsynligvis er i, ut fra rene stoerrelsesordener. Kun til hjelp
+    i loggen - ikke brukt til noen beslutning i koden."""
+    if not bounds:
+        return ""
+    minx, miny, maxx, maxy = bounds
+    if 4 <= minx <= 32 and 4 <= maxx <= 32 and 55 <= miny <= 72 and 55 <= maxy <= 72:
+        return "  <- ser ut som WGS84 lon,lat over Norge (riktig!)"
+    if 55 <= minx <= 72 and 55 <= maxx <= 72 and 4 <= miny <= 32 and 4 <= maxy <= 32:
+        return "  <- ser ut som WGS84 MEN med lat/lon byttet om (x=breddegrad her)"
+    if abs(minx) > 1000 or abs(miny) > 1000:
+        return "  <- ser ut som prosjiserte meterkoordinater (UTM e.l.)"
+    return "  <- usikker, ikke i noen av de forventede omraadene"
+
+
+def _probe_call(base_url, version, type_name, use_json, dump_dir, label, params_extra, count=10):
+    """
+    Ett enkelt, ikke-paginert GetFeature-kall for --probe: bygg params,
+    hent, tell features, og vis geometrien til den forste - saa en kan se
+    med egne oyne hvilket koordinatsystem/akserekkefolge svaret faktisk
+    kommer i, i stedet for aa gjette videre.
+    """
+    params = {
+        "service": "WFS", "request": "GetFeature", "version": version,
+        ("typeNames" if version == "2.0.0" else "typeName"): type_name,
+        ("count" if version == "2.0.0" else "maxFeatures"): count,
+    }
+    if use_json:
+        params["outputFormat"] = "application/json"
+    params.update(params_extra)
+
+    tag = f"probe_{type_name}_{_slug(label)}"
+    try:
+        r = _get(base_url, params, dump_dir=dump_dir, tag=tag)
+    except requests.RequestException as exc:
+        log(f"  [{label}] FEIL: {exc}")
+        return 0
+
+    geoms = []
+    if use_json:
+        try:
+            data = r.json()
+        except ValueError:
+            log(f"  [{label}] status {r.status_code}, ugyldig JSON")
+            return 0
+        for f in data.get("features", []):
+            g = f.get("geometry")
+            if g is not None:
+                geoms.append(shape(g))
+    else:
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError as exc:
+            log(f"  [{label}] status {r.status_code}, ugyldig XML: {exc}")
+            return 0
+        requested_srs = params_extra.get("srsName")
+        for member in _iter_members(root):
+            g, _props = _parse_gml_member(member, requested_srs_name=requested_srs)
+            if g is not None:
+                geoms.append(g)
+
+    n = len(geoms)
+    if n == 0:
+        log(f"  [{label}] 0 features")
+        return 0
+
+    sample = _geom_sample_coords(geoms[0])
+    hint = _guess_crs_hint(geoms[0].bounds)
+    log(f"  [{label}] {n} features. Forste geometri: type={geoms[0].geom_type}, "
+        f"koordinater={sample}, bounds={geoms[0].bounds}{hint}")
+    return n
+
+
+def probe(args, dump_dir):
+    """
+    --probe: diagnostiser bbox/akserekkefolge/projeksjon UTEN aa laste ned
+    og skrive noe. Rekkefolge (etter brukerens instruks - gjor "uten bbox"
+    forst, det halverer soekerommet raskest):
+      A. count=10, INGEN bbox i det hele tatt - er tjenesten frisk?
+      B. bbox lon,lat med srsName=EPSG:4326 (kortform, vanlig lon/lat-akse)
+      C. bbox lat,lon med srsName=urn:ogc:def:crs:EPSG::4326 (WFS2.0-regelen
+         for geografiske EPSG-koder: lat/lon-akse)
+      D. bbox i UTM33 (EPSG:25833), siden norske geodata ofte er native der
+    """
+    candidates = build_candidates(args, dump_dir)
+    log(f"--probe: soeker WFS-endepunkt (kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
+    log(f"Bruker {base_url} (WFS {version})\n")
+
+    lat_min, lon_min, lat_max, lon_max = args.bbox
+    bbox_lonlat = f"{lon_min},{lat_min},{lon_max},{lat_max}"
+    bbox_latlon = f"{lat_min},{lon_min},{lat_max},{lon_max}"
+
+    e1, n1 = G.transform_point(lon_min, lat_min, "EPSG:25833")
+    e2, n2 = G.transform_point(lon_min, lat_max, "EPSG:25833")
+    e3, n3 = G.transform_point(lon_max, lat_min, "EPSG:25833")
+    e4, n4 = G.transform_point(lon_max, lat_max, "EPSG:25833")
+    e_min, e_max = min(e1, e2, e3, e4), max(e1, e2, e3, e4)
+    n_min, n_max = min(n1, n2, n3, n4), max(n1, n2, n3, n4)
+    bbox_utm33 = f"{e_min:.1f},{n_min:.1f},{e_max:.1f},{n_max:.1f}"
+    log(f"bbox (lat/lon) {args.bbox} -> UTM33 {bbox_utm33}\n")
+
+    any_hit = False
+    for key, keywords in LAYERS.items():
+        type_name = match_layer(feature_types.keys(), keywords)
+        if type_name is None:
+            log(f"=== {key}: FEIL - fant ikke noe lag som matcher {keywords} blant "
+                f"{sorted(feature_types.keys())} ===\n")
+            continue
+
+        log(f"=== {key} ({type_name}) ===")
+        use_json = supports_json(base_url, version, type_name, dump_dir=dump_dir)
+        log(f"  format: {'GeoJSON' if use_json else 'GML'}")
+
+        n_a = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "A: uten bbox", {})
+        n_b = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "B: bbox lon,lat EPSG:4326",
+                           {"bbox": bbox_lonlat, "srsName": "EPSG:4326"})
+        n_c = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "C: bbox lat,lon urn:...:EPSG::4326",
+                           {"bbox": bbox_latlon, "srsName": "urn:ogc:def:crs:EPSG::4326"})
+        n_d = _probe_call(base_url, version, type_name, use_json, dump_dir,
+                           "D: bbox UTM33 EPSG:25833",
+                           {"bbox": bbox_utm33, "srsName": "EPSG:25833"})
+        log("")
+        any_hit = any_hit or any([n_a, n_b, n_c, n_d])
+
+    log("=" * 70)
+    if not any_hit:
+        log("KONKLUSJON: 0 features i ALLE varianter, ogsaa uten bbox (A). "
+            "Problemet er ikke bbox-en - det er lagnavnet, tjenesten, eller "
+            "noe annet. Sjekk --list-layers og data/_raw/ for de raa svarene.")
+    else:
+        log("KONKLUSJON: se hvilken(e) variant(er) over som faktisk ga treff, "
+            "og hvilket omraade 'bounds' pekte paa - det forteller hvilken "
+            "bbox-rekkefolge/CRS tjenesten faktisk vil ha.")
+    log("=" * 70)
+
+
 def run_pipeline(args, out_dir, dump_dir):
-    log(f"Soeker WFS-endepunkt (bbox={args.bbox}) ...")
-    base_url, version, feature_types = discover_service(
-        WFS_URL_CANDIDATES, extra_url=args.wfs_url, dump_dir=dump_dir,
-    )
+    candidates = build_candidates(args, dump_dir)
+    log(f"Soeker WFS-endepunkt (bbox={args.bbox}, kandidater: {candidates}) ...")
+    base_url, version, feature_types = discover_service(candidates, dump_dir=dump_dir)
     log(f"Bruker {base_url} (WFS {version})")
     log(f"Tilgjengelige lag: {sorted(feature_types.keys())}")
 
@@ -701,10 +1155,15 @@ def main():
     ap.add_argument("--bbox", nargs=4, type=float, metavar=("LAT_MIN", "LON_MIN", "LAT_MAX", "LON_MAX"),
                      default=DEFAULT_BBOX)
     ap.add_argument("--tolerance-m", type=float, default=DEFAULT_TOLERANCE_M)
-    ap.add_argument("--wfs-url", default=None, help="Override/legg til kandidat-URL foerst i lista")
+    ap.add_argument("--wfs-url", default=None,
+                     help="Overstyr WFS-base-URL helt (hopper over kartkatalog-oppslaget). "
+                          "Bruk denne hvis oppslaget mot kartkatalog.geonorge.no selv gir feil URL.")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     ap.add_argument("--list-layers", action="store_true",
                      help="Bare kjor GetCapabilities og skriv ut alle tilgjengelige lagnavn, ikke hent features")
+    ap.add_argument("--probe", action="store_true",
+                     help="Diagnostiser bbox-rekkefolge/akse/projeksjon mot layerne (uten bbox, "
+                          "lon/lat, lat/lon, UTM33) - ikke last ned eller skriv noe")
     ap.add_argument("--dump-raw", action="store_true",
                      help="Ingen effekt lenger - raadata dumpes na alltid til <out-dir>/_raw/. "
                           "Beholdt for bakoverkompatibilitet med eksisterende kall.")
@@ -722,6 +1181,8 @@ def main():
     try:
         if args.list_layers:
             list_layers(args, dump_dir)
+        elif args.probe:
+            probe(args, dump_dir)
         else:
             run_pipeline(args, out_dir, dump_dir)
     except Exception as exc:  # noqa: BLE001

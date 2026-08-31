@@ -67,6 +67,45 @@ def test_cast_ray_tomt_tre_gir_tak():
     assert d == 123.0
 
 
+def test_nearest_distance_km():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    coast = LineString([(ox - 50000, oy + 10000), (ox + 50000, oy + 10000)])
+    tree = G.build_strtree([coast])
+    d = G.nearest_distance_km(lon0, lat0, tree, [coast])
+    assert math.isclose(d, 10.0, abs_tol=0.05)
+
+
+def test_nearest_distance_km_finner_naermeste_av_flere():
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    far = LineString([(ox - 50000, oy + 50000), (ox + 50000, oy + 50000)])
+    near = LineString([(ox - 50000, oy + 2000), (ox + 50000, oy + 2000)])
+    tree = G.build_strtree([far, near])
+    d = G.nearest_distance_km(lon0, lat0, tree, [far, near])
+    assert math.isclose(d, 2.0, abs_tol=0.05)
+
+
+def test_nearest_distance_km_tomt_tre_gir_none():
+    assert G.nearest_distance_km(10.0, 59.0, None, []) is None
+
+
+def test_bbox_edge_tree_finner_kant_i_alle_retninger():
+    bbox = (58.0, 9.0, 59.0, 10.0)  # lat_min, lon_min, lat_max, lon_max
+    tree, lines = G.bbox_edge_tree(bbox)
+    lon0, lat0 = 9.5, 58.5  # midt i boksen
+    for bearing in (0, 90, 180, 270):
+        d = G.cast_ray_km(lon0, lat0, bearing, 1000.0, tree, lines)
+        assert 0 < d < 200  # boksen er ~111x60 km, straalen MAA treffe en kant lenge for 1000 km
+
+
+def test_bbox_edge_tree_punkt_naer_kant_gir_kort_avstand():
+    bbox = (58.0, 9.0, 59.0, 10.0)
+    tree, lines = G.bbox_edge_tree(bbox)
+    d = G.cast_ray_km(9.99, 58.5, 90, 1000.0, tree, lines)  # naer ostkanten
+    assert d < 2.0
+
+
 def test_to_boundary_lines_polygon_gir_yttergrense():
     poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
     lines = G.to_boundary_lines([poly])
