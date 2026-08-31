@@ -90,6 +90,30 @@ For hvert spot i spots.yaml:
     ensemble.py/agent.py) vs (dybdeprofil her: hvilken vei swellen faktisk
     kommer fra) - IKKE endret her, kun rapportert.
 
+    VIKTIG ved etterkontroll av fiksen: 9 av 14 spots endret seg da dette
+    ble kjort paa nytt, ikke bare de 4 som saa aapenbart feil ut (jf.
+    "ikke-monotone" over). For de andre 5 (rakke, portoer, hvasser_sando,
+    slagen, larkollen) var bug (b) til stede paa ALLE TRE maaldybder samtidig
+    - straalen krysset substansiell kyst foer den naadde NOEN av dem, saa
+    tallene som kom ut var fortsatt innbyrdes monotone (20 < 30 < 50) og sa
+    dermed plausible ut ved et blikk paa tallene alene. Bugen var med andre
+    ord konsistent nok per spot til aa vaere usynlig uten aa sjekke hver
+    verdi mot en uavhengig kystkryssing-beregning (som her). Monotoni er
+    IKKE et tilstrekkelig sunnhetstegn for disse verdiene.
+
+    Kjent, IKKE fikset (rapportert 2026-09-01, se samtalen): oerekroken
+    hadde d50 (0.34 km) naermere enn d20 (1.84 km) med IKKE noen kystlinje
+    i veien - undersoekt og forklart, men bevisst ikke rettet (utenfor de
+    to bugene over). Den naermeste 50 m-treffet er en liten, kompakt
+    (~700 m diameter, delvis lukkede ringer paa 27-180 m) isolert
+    dybdeanomali (en skuret grop/hull naer neset), IKKE et fragment av en
+    ANNEN maaldybdes kote (den hypotesen ble avkreftet - depth_m=50.0 er
+    korrekt paa featuren), men et fragment av en annen KLASSE feature:
+    en lokal punktanomali, ikke den brede kystnaere isobaten swell-
+    fysikken faktisk bryr seg om. Single-straale-soek kan ikke skille
+    disse to uten en egen "er dette en liten lukket ring"-sjekk, som
+    verken bug (a) eller (b) sin fiks daekker.
+
 Eksisterende 16-punkts fetch-tabeller (`fetch_km` / `local_fetch_km`)
 BEHOLDES uendret - agent.py/physics.py bruker dem fortsatt. En kopi
 legges ved siden av som `fetch_km_manuell` slik at de to kan sammenlignes.
@@ -463,6 +487,15 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
     Kappingen er den samme for alle tre maaldybder (avhenger bare av
     posisjon/retning, ikke av hvilken dybde), saa kyst-/kant-oppslaget
     gjoeres ÉN gang her, ikke per maaldybde.
+
+    IKKE daekket av "maalt": naermeste treff kan vaere en liten, LUKKET
+    depth-ring (en isolert grop/pinnacle, typisk under noen hundre meter i
+    utstrekning) i stedet for den brede kystnaere isobaten - straalen ser
+    ingen forskjell paa de to, kun at begge har riktig depth_m. Ingen
+    kystkryssing i veien til aa kappe mot i det tilfellet. Sett oerekroken
+    (rapportert til bruker 2026-09-01, bevisst IKKE fikset her): d50 paa
+    0.34 km var en ~700 m stor lokal anomali, ikke den generelle 50 m-
+    fronten (som laa 3.9+ km unna langs samme straale).
     """
     edge_km = G.cast_ray_km(lon, lat, facing, DEPTH_MAX_KM, edge_tree, edge_lines)
     land_km = substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
