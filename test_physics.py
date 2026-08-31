@@ -123,3 +123,26 @@ def test_energibudsjett_slagen_reproduserer_dokumentet():
     assert 2.2 < hs < 3.2, (hs, prop_hs, local_hs, frac)
     assert 5.0 < tp < 8.0, tp
     assert 1.0 < delay < 2.0
+
+
+def test_wave_power_2_4m_7_5s_gir_cirka_22_kw_per_meter():
+    assert approx(P.wave_power(2.4, 7.5), 22, tol=0.1)
+
+
+def test_wave_power_1_2m_6_0s_gir_cirka_4_kw_per_meter():
+    assert approx(P.wave_power(1.2, 6.0), 4, tol=0.1)
+
+
+def test_wave_power_bruker_faktor_64_ikke_32():
+    """
+    Laas ned selve formelen (rho, g, 64*pi), ikke bare de to
+    referanseverdiene over - en feil paa 64 -> 32 dobler alle tallene uten
+    aa vaere aapenbar bare fra "cirka riktig stoerrelsesorden"-sjekker.
+    """
+    hs, tp = 2.0, 8.0
+    expected_w_per_m = 1025.0 * 9.81 ** 2 * hs ** 2 * tp / (64 * math.pi)
+    assert math.isclose(P.wave_power(hs, tp), expected_w_per_m / 1000.0, rel_tol=1e-9)
+
+
+def test_wave_power_null_ved_flatt_vann():
+    assert P.wave_power(0.0, 8.0) == 0.0

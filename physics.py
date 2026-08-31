@@ -241,6 +241,29 @@ def combine(hs_a, tp_a, hs_b, tp_b):
     return hs, tp
 
 
+# --------------------------------------------------------------- boelgeeffekt
+
+RHO_SEAWATER = 1025.0  # kg/m^3
+
+
+def wave_power(hs, tp):
+    """
+    Boelgeeffekt i kW per meter boelgefront, dypvann.
+    P = rho * g^2 * Hs^2 * Tp / (64 * pi), i watt per meter.
+    Deles paa 1000 for kW.
+
+    Merk faktoren 64, ikke 32: 32-varianten gjelder boelgehoyde H,
+    mens vi bruker signifikant boelgehoyde Hs. For en Rayleigh-fordelt
+    sjoe er Hs = sqrt(2) * H_rms, og det gir en faktor 2 i nevneren.
+    Feil faktor dobler alle tallene.
+
+    Beskrivende tall, IKKE en scorekomponent - se agent.py. Effekt sier
+    ingenting om kvalitet: en stor rotete dag med paalandsvind gir hoy
+    effekt og elendig surf.
+    """
+    return RHO_SEAWATER * G ** 2 * hs ** 2 * tp / (64 * math.pi) / 1000.0
+
+
 # ------------------------------------------------------------- vindkvalitet
 
 

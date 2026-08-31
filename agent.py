@@ -112,6 +112,8 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
         "hs_eff": round(hs, 2),
         "tp_eff": round(tp, 1),
         "dir_eff": round(wdir, 0) if wdir is not None else None,
+        # beskrivende, ikke en scorekomponent - se physics.wave_power()
+        "power_kw": round(P.wave_power(hs, tp)),
         # delscorer - dette er knappene du skrur pa
         "q_size": round(q_size, 3),
         "q_period": round(q_period, 3),
@@ -271,16 +273,20 @@ def daily_summary(hours, days=7):
     buckets = {}
     for h in hours:
         local_date = dt.datetime.fromisoformat(h["time"]).astimezone(OSLO).date()
-        b = buckets.setdefault(local_date, {"max_p_surf": 0.0, "max_stars": 0.0, "max_hs": 0.0})
+        b = buckets.setdefault(local_date, {
+            "max_p_surf": 0.0, "max_stars": 0.0, "max_hs": 0.0, "max_power_kw": 0.0,
+        })
         b["max_p_surf"] = max(b["max_p_surf"], h.get("p_surf") or 0.0)
         b["max_stars"] = max(b["max_stars"], h.get("stars") or 0.0)
         b["max_hs"] = max(b["max_hs"], h.get("hs_eff") or 0.0)
+        b["max_power_kw"] = max(b["max_power_kw"], h.get("power_kw") or 0.0)
     return [
         {
             "date": d.isoformat(),
             "max_p_surf": buckets[d]["max_p_surf"],
             "max_stars": buckets[d]["max_stars"],
             "max_hs": round(buckets[d]["max_hs"], 1),
+            "max_power_kw": round(buckets[d]["max_power_kw"]),
         }
         for d in sorted(buckets)[:days]
     ]
@@ -344,6 +350,7 @@ def find_windows(hours, spot):
             "peak_time": best["time"],
             "peak_hs": best["hs_eff"],
             "peak_tp": best["tp_eff"],
+            "max_power_kw": max(h.get("power_kw") or 0 for h in w),
             "peak_wind": f"{best['wind_speed']:.0f} m/s {best['wind_from']:.0f}deg ({best['wind_label']})"
             if best["wind_from"] is not None else "?",
             "why": explain(best),
