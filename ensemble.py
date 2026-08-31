@@ -142,6 +142,12 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
       stars      1-10, forventet kvalitet GITT at det blir surf (median)
       stars_p10 / stars_p90   spennet i ensemblet
       confidence "hoy" / "middels" / "lav"
+
+    p_surf og stars kan bevege seg i motsatt retning ved parameterendringer.
+    Det er forventet - stars er betinget paa at surf inntreffer (medianen av
+    KUN medlemmene med score > 0), saa flere marginale medlemmer over
+    terskelen senker medianen samtidig som sannsynligheten stiger.
+    Aritmetikk, ikke usikkerhet.
     """
     spread = model_spread(wave_rec or {})
     sig = sigmas(lead_h, spot, spread)
