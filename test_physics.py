@@ -123,3 +123,64 @@ def test_energibudsjett_slagen_reproduserer_dokumentet():
     assert 2.2 < hs < 3.2, (hs, prop_hs, local_hs, frac)
     assert 5.0 < tp < 8.0, tp
     assert 1.0 < delay < 2.0
+
+
+def test_wave_power_2_4m_7_5s_gir_cirka_22_kw_per_meter():
+    assert approx(P.wave_power(2.4, 7.5), 22, tol=0.1)
+
+
+def test_wave_power_1_2m_6_0s_gir_cirka_4_kw_per_meter():
+    assert approx(P.wave_power(1.2, 6.0), 4, tol=0.1)
+
+
+def test_wave_power_bruker_faktor_64_ikke_32():
+    """
+    Laas ned selve formelen (rho, g, 64*pi), ikke bare de to
+    referanseverdiene over - en feil paa 64 -> 32 dobler alle tallene uten
+    aa vaere aapenbar bare fra "cirka riktig stoerrelsesorden"-sjekker.
+    """
+    hs, tp = 2.0, 8.0
+    expected_w_per_m = 1025.0 * 9.81 ** 2 * hs ** 2 * tp / (64 * math.pi)
+    assert math.isclose(P.wave_power(hs, tp), expected_w_per_m / 1000.0, rel_tol=1e-9)
+
+
+def test_wave_power_null_ved_flatt_vann():
+    assert P.wave_power(0.0, 8.0) == 0.0
+
+
+def test_swell_fraction_ren_swell():
+    assert P.swell_fraction(2.0, 0.0) == 1.0
+
+
+def test_swell_fraction_ren_vindsjo():
+    assert P.swell_fraction(0.0, 2.0) == 0.0
+
+
+def test_swell_fraction_likt_bidrag_gir_halvparten():
+    assert P.swell_fraction(1.0, 1.0) == 0.5
+
+
+def test_swell_fraction_kvadrert_ikke_lineaer():
+    # 2x swell-hoyde mot lik vindsjo skal gi mer enn dobbel andel
+    # (energien gaar som hoyde i annen) - 4/(4+1) = 0.8, ikke 2/3
+    assert P.swell_fraction(2.0, 1.0) == 0.8
+
+
+def test_swell_fraction_begge_none_gir_null_ikke_nan():
+    """Open-Meteo kan levere null/mangle begge partisjonene paa flate
+    dager - skal gi 0.0, ikke NaN eller ZeroDivisionError."""
+    assert P.swell_fraction(None, None) == 0.0
+
+
+def test_swell_fraction_begge_null_gir_null_ikke_nan():
+    assert P.swell_fraction(0.0, 0.0) == 0.0
+
+
+def test_swell_fraction_en_none_en_verdi():
+    assert P.swell_fraction(None, 2.0) == 0.0
+    assert P.swell_fraction(2.0, None) == 1.0
+
+
+def test_swell_fraction_rundes_til_to_desimaler():
+    val = P.swell_fraction(1.0, 3.0)
+    assert val == round(val, 2)

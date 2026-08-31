@@ -241,6 +241,55 @@ def combine(hs_a, tp_a, hs_b, tp_b):
     return hs, tp
 
 
+# --------------------------------------------------------------- boelgeeffekt
+
+RHO_SEAWATER = 1025.0  # kg/m^3
+
+
+def wave_power(hs, tp):
+    """
+    Boelgeeffekt i kW per meter boelgefront, dypvann.
+    P = rho * g^2 * Hs^2 * Tp / (64 * pi), i watt per meter.
+    Deles paa 1000 for kW.
+
+    Merk faktoren 64, ikke 32: 32-varianten gjelder boelgehoyde H,
+    mens vi bruker signifikant boelgehoyde Hs. For en Rayleigh-fordelt
+    sjoe er Hs = sqrt(2) * H_rms, og det gir en faktor 2 i nevneren.
+    Feil faktor dobler alle tallene.
+
+    Beskrivende tall, IKKE en scorekomponent - se agent.py. Effekt sier
+    ingenting om kvalitet: en stor rotete dag med paalandsvind gir hoy
+    effekt og elendig surf.
+    """
+    return RHO_SEAWATER * G ** 2 * hs ** 2 * tp / (64 * math.pi) / 1000.0
+
+
+# ------------------------------------------------------- swell/vindsjo-andel
+
+
+def swell_fraction(swell_hs, windsea_hs):
+    """
+    Swellens andel av boelgeenergien, 0-1: swell_hs^2 / (swell_hs^2 +
+    windsea_hs^2) - de to Open-Meteo-partisjonene (se sources.py sin
+    openmeteo_waves() og agent.py sin gather()).
+
+    Rent beskrivende, IKKE en scorekomponent (se agent.py) - vi trenger
+    kalibreringsdata foerst for aa se om hoy swell-andel faktisk
+    korrelerer med gode okter.
+
+    Begge partisjonene kan vaere None eller 0 paa flate dager (Open-Meteo
+    leverer ikke alltid tall, eller begge er reelt null) - da er det
+    ingen energi aa fordele. Returnerer 0.0 i det tilfellet i stedet for
+    aa dele paa null (NaN).
+    """
+    s = swell_hs or 0.0
+    w = windsea_hs or 0.0
+    total = s * s + w * w
+    if total <= 0:
+        return 0.0
+    return round(s * s / total, 2)
+
+
 # ------------------------------------------------------------- vindkvalitet
 
 
