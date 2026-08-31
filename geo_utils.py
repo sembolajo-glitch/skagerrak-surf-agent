@@ -145,12 +145,14 @@ def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     max_m = max_km * 1000.0
     ray = LineString([(ox, oy), (ox + dx * max_m, oy + dy * max_m)])
 
-    idx = tree.query(ray)
+    # predicate="intersects" pushes the precise (not just bbox) filtering
+    # into GEOS/C, instead of a Python-level ray.intersects() per candidate -
+    # matters a lot here: a query bbox for a long ray through a dense skerry
+    # cluster can otherwise pull in thousands of candidates per ray.
+    idx = tree.query(ray, predicate="intersects")
     best_m = None
     for i in idx:
         cand = line_geoms[i]
-        if not ray.intersects(cand):
-            continue
         inter = ray.intersection(cand)
         for pt in _iter_points(inter):
             d = math.hypot(pt[0] - ox, pt[1] - oy)
@@ -160,6 +162,44 @@ def cast_ray_km(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
     if best_m is None:
         return float(max_km)
     return best_m / 1000.0
+
+
+def ray_crossing_count(origin_lon, origin_lat, bearing_deg, max_km, tree, line_geoms):
+    """
+    Tell antall kryssinger mellom en straale fra (origin_lon, origin_lat) i
+    retning bearing_deg og linjene i `tree`/`line_geoms`, opptil max_km.
+
+    Brukt til en paritetstest ("hvilken side av kystlinja ligger punktet
+    paa" - se build_spotgrid.py sin in_sea()): kystkontur-laget er kun
+    linjestykker, ikke lukkede polygoner, saa et vanlig point-in-polygon-
+    oppslag er ikke mulig. Et ODDETALL kryssinger langs en fast straale mot
+    et punkt med kjent klassifisering betyr punktet ligger paa MOTSATT side
+    av det punktet; et PARTALL (inkludert null) betyr SAMME side.
+
+    `tree` maa vaere bygget over `line_geoms` i UTM32 (meter). Origin gis i
+    WGS84 og projiseres internt.
+    """
+    if tree is None:
+        return 0
+
+    ox, oy = to_utm(origin_lon, origin_lat)
+    dx, dy = bearing_vector(bearing_deg)
+    max_m = max_km * 1000.0
+    ray = LineString([(ox, oy), (ox + dx * max_m, oy + dy * max_m)])
+
+    idx = tree.query(ray, predicate="intersects")
+    count = 0
+    for i in idx:
+        inter = ray.intersection(line_geoms[i])
+        gt = inter.geom_type
+        if gt == "MultiPoint":
+            count += len(inter.geoms)
+        else:
+            # "Point" (vanlige tilfellet), eller et sjeldent kollineaert
+            # linjeoverlapp - telles som en kryssing, godt nok for en
+            # paritetstest.
+            count += 1
+    return count
 
 
 def nearest_distance_km(lon, lat, tree, line_geoms):
