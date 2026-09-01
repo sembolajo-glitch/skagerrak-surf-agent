@@ -11,14 +11,28 @@ oppløsning (ca. 1.1 km) - se BBOX/RES_DEG.
 
 For hvert rutepunkt som ligger i SJOEN og er naermere enn NEAR_LAND_MAX_KM
 (2 km) fra land, skrives:
-  d20, d30, d50   avstand (km) til hhv. 20-, 30- og 50-meterskoten langs
-                  `ar` (apen_retning under) - samme metode som
-                  build_fetch.py sin compute_depth_profile(), gjenbrukt
-                  direkte herfra.
-  d20s, d30s, d50s  status ved siden av hver verdi - "maalt", "ingen_kote"
-                  eller "data_slutt", se compute_depth_profile() sin
-                  docstring. null naar d20/d30/d50 ogsaa er null (ingen
-                  apen_retning aa maale langs).
+  d20, d30, d50   AVSTANDSLISTER (8 verdier hver, km eller null) til hhv.
+                  20-, 30- og 50-meterskoten i DEPTH_BEARINGS_DEG sine
+                  8 faste retninger (0, 45, 90, ..., 315 - N med klokka),
+                  IKKE bare langs `ar` - se compute_depth_profile() i
+                  build_fetch.py, gjenbrukt direkte herfra per retning.
+
+                  (ordre 2026-09-02): tidligere ble d20/d30/d50 kun
+                  regnet ut for ÉN retning (`ar`), bakt inn i rutenettet
+                  ved bygging - spot-testeren i frontenden viste derfor
+                  samme dybdemelding uansett hvilken retning brukeren
+                  valgte, siden tallet aldri kunne oppdateres uten aa
+                  bygge rutenettet paa nytt. Med 8 faste retninger kan
+                  testeren slaa opp naermeste av dem til brukerens
+                  valgte retning (avrund til naermeste 45 grader) i
+                  stedet for aa vise et fastlaast tall.
+
+                  IKKE status per retning (droppet med vilje for
+                  filstoerrelse - se rapport til bruker 2026-09-02).
+                  Alle 8 er derfor implisitt "maalt eller null", uten aa
+                  skille "ingen_kote" fra "data_slutt" slik spots.yaml
+                  sine dybde_Xm_status-felt gjoer - se build_fetch.py
+                  hvis den skillelinja trengs.
   as (apen_sektor)  bredden i grader paa den aapne sektoren mellom
                   SECTOR_LO_DEG og SECTOR_HI_DEG (135-250, SO til VSV -
                   den generelle retningen mot aapent Skagerrak for denne
@@ -94,6 +108,12 @@ SECTOR_OPEN_KM = 20.0
 # billigere aa skyte.
 SECTOR_RAY_MAX_KM = 25.0
 
+# 8 faste retninger (45 graders mellomrom, N med klokka) for d20/d30/d50 -
+# se modulens docstring for hvorfor (ordre 2026-09-02: spot-testeren
+# trenger et tall per retning brukeren faktisk velger, ikke bare langs
+# den foreslaatte `ar`).
+DEPTH_BEARINGS_DEG = list(range(0, 360, 45))
+
 
 def log(*a):
     print(*a, file=sys.stderr)
@@ -133,6 +153,22 @@ def open_sector(lon, lat, kyst_tree, kyst_lines):
     return width_deg, round(center_deg, 1)
 
 
+def depth_profiles_8dir(lon, lat, depth_trees, edge_tree, edge_lines, kyst_tree, kyst_lines):
+    """
+    {20: [8 verdier], 30: [...], 50: [...]} - avstand (km, eller None) til
+    hver maaldybde i DEPTH_BEARINGS_DEG sine 8 faste retninger. Status
+    (maalt/ingen_kote/data_slutt) droppes med vilje her - se modulens
+    docstring.
+    """
+    out = {t: [] for t in DEPTH_TARGETS_M}
+    for bearing in DEPTH_BEARINGS_DEG:
+        profile = compute_depth_profile(lon, lat, bearing, depth_trees,
+                                         edge_tree, edge_lines, kyst_tree, kyst_lines)
+        for t in DEPTH_TARGETS_M:
+            out[t].append(profile[t][0])
+    return out
+
+
 def build_points(kyst_tree, kyst_lines, depth_trees, edge_tree, edge_lines,
                   bbox=BBOX, res_deg=RES_DEG):
     lats, lons = grid_coords(bbox, res_deg)
@@ -151,21 +187,15 @@ def build_points(kyst_tree, kyst_lines, depth_trees, edge_tree, edge_lines,
                 continue
 
             sektor, retning = open_sector(lon, lat, kyst_tree, kyst_lines)
-            if retning is None:
-                profile = {t: (None, None) for t in DEPTH_TARGETS_M}
-            else:
-                profile = compute_depth_profile(lon, lat, retning, depth_trees,
-                                                 edge_tree, edge_lines, kyst_tree, kyst_lines)
+            profiles = depth_profiles_8dir(lon, lat, depth_trees, edge_tree, edge_lines,
+                                            kyst_tree, kyst_lines)
 
             points.append({
                 "lo": lon,
                 "la": lat,
-                "d20": profile[20][0],
-                "d20s": profile[20][1],
-                "d30": profile[30][0],
-                "d30s": profile[30][1],
-                "d50": profile[50][0],
-                "d50s": profile[50][1],
+                "d20": profiles[20],
+                "d30": profiles[30],
+                "d50": profiles[50],
                 "as": sektor,
                 "ar": retning,
             })
@@ -218,6 +248,7 @@ def main():
             "sector_step_deg": SECTOR_STEP_DEG,
             "fetch_open_km": SECTOR_OPEN_KM,
             "depth_max_km": DEPTH_MAX_KM,
+            "depth_bearings_deg": DEPTH_BEARINGS_DEG,
             "n": len(points),
         },
         "pts": points,

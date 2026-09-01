@@ -13,11 +13,26 @@ Du trenger to filer:
                     bomtur. Bomturene er de mest verdifulle radene.
 
 sessions.csv-format (se sessions.example.csv):
-  time,spot,rating,hs_observed_m,tp_observed_s,notes
-  2026-11-14T09:00Z,slagen,4,1.8,6,"rein NV, dode etter 3 t"
-  2026-11-14T09:00Z,sletteroyene,0,0.3,,"flatt - agenten sa 62"
+  time,spot,rating,hs_observed_m,tp_observed_s,ekstern_wp,notes
+  2026-11-14T09:00Z,slagen,4,1.8,6,,"rein NV, dode etter 3 t"
+  2026-11-14T09:00Z,sletteroyene,0,0.3,,,"flatt - agenten sa 62"
 
 rating: 0 = flatt/usurfbart, 1 = sowbart, 2 = ok, 3 = bra, 4 = veldig bra, 5 = beste i sesongen
+
+ekstern_wp: valgfritt. Boelgeeffekt-/energitall slik surf-forecast (eller
+  tilsvarende ekstern tjeneste) viser det for samme tid/spot, HVIS du har
+  det for haanden naar du fyller ut okten. IKKE det samme som var egen
+  wave_power() (physics.py) - enheten/skalaen er ukjent og faktoren
+  mellom dem er IKKE konstant (varierer med spot/forhold), saa det finnes
+  ingen fast omregning. Loggingen finnes for aa etablere sammenhengen
+  EMPIRISK over tid - se report() sin "ekstern vs. egen wp"-blokk.
+
+Rapporten er gruppert paa (spot, model_rev) - ordre 2026-09-02, se
+shadow_schema.py sitt model_rev-felt. En scoring-endring (som
+regional_wp-porten i PR #16) faar da sin egen seksjon, i stedet for aa
+drukne i statistikk fra rader skrevet med den gamle scoringen. Rader fra
+FOR feltet fantes havner samlet i "pre-instrumentering", ikke gjettet
+bakover til en bestemt revisjon.
 """
 
 import argparse
@@ -25,6 +40,8 @@ import csv
 import datetime as dt
 import pathlib
 import statistics as st
+
+import physics as P
 
 ROOT = pathlib.Path(__file__).parent
 SHADOW = ROOT / "out" / "shadow.csv"
@@ -81,19 +98,27 @@ def fnum(v):
 
 
 def report(pairs, spot_filter=None):
-    by_spot = {}
+    # gruppert paa (spot, model_rev) - ordre 2026-09-02. Rader skrevet FOR
+    # model_rev fantes (shadow_schema.py) har ikke feltet i det hele tatt,
+    # og row.get() gir da None for dem - samlet i EN epoke,
+    # "pre-instrumentering", i stedet for aa gjette en versjon bakover.
+    # Uten dette skillet drukner effekten av en scoring-endring (som
+    # regional_wp-porten i PR #16) i rader skrevet med den GAMLE scoringen
+    # naar de blandes sammen i samme statistikk.
+    by_spot_epoch = {}
     for s, r in pairs:
         if spot_filter and s["spot"] not in spot_filter:
             continue
-        by_spot.setdefault(s["spot"], []).append((s, r))
+        epoch = r.get("model_rev") or "pre-instrumentering"
+        by_spot_epoch.setdefault((s["spot"], epoch), []).append((s, r))
 
-    if not by_spot:
+    if not by_spot_epoch:
         print("Ingen treff mellom sessions.csv og out/shadow.csv enna.")
         print("Kjor agenten daglig og logg okter (og bomturer) i sessions.csv.")
         return
 
-    for spot, items in sorted(by_spot.items()):
-        print(f"\n{'='*72}\n{spot}   ({len(items)} okter)\n{'='*72}")
+    for (spot, epoch), items in sorted(by_spot_epoch.items()):
+        print(f"\n{'='*72}\n{spot}  [{epoch}]   ({len(items)} okter)\n{'='*72}")
 
         rated = [(int(s["rating"]), fnum(r["score"]), s, r) for s, r in items
                  if s.get("rating") not in (None, "")]
@@ -126,6 +151,35 @@ def report(pairs, spot_filter=None):
                       f"eller gate.sector_half_width.")
             else:
                 print("             -> innenfor stoyen. La transmission staa.")
+
+        # ekstern_wp (surf-forecast e.l.) vs. vaar egen wave_power(hs_eff,
+        # tp_eff) paa samme tidspunkt. IKKE en omregningsfaktor som skrives
+        # tilbake noe sted - bare et rapportert forhold, siden faktoren
+        # ikke er konstant (den varierer med spot/forhold - se
+        # modulens docstring). Hensikten er aa la deg SE sammenhengen
+        # etter hvert som flere okter samler seg opp, ikke aa late som om
+        # den er kjent fra n=faa observasjoner.
+        wp_pairs = [(fnum(s.get("ekstern_wp")), P.wave_power(fnum(r["hs_eff"]), fnum(r["tp_eff"])))
+                    for _, _, s, r in rated
+                    if fnum(s.get("ekstern_wp")) is not None
+                    and fnum(r.get("hs_eff")) is not None and fnum(r.get("tp_eff")) is not None]
+        if wp_pairs:
+            ratios = [ekstern / egen for ekstern, egen in wp_pairs if egen > 0]
+            print(f"\n  Ekstern wp vs. egen wp (wave_power(hs_eff, tp_eff)):  n={len(wp_pairs)}")
+            for ekstern, egen in wp_pairs:
+                if egen > 0:
+                    print(f"    ekstern={ekstern:>7.1f}   egen={egen:>7.1f} kW/m   "
+                          f"forhold={ekstern/egen:.2f}")
+                else:
+                    print(f"    ekstern={ekstern:>7.1f}   egen=0 (udefinert forhold)")
+            if len(ratios) >= 3:
+                print(f"    median forhold (ekstern/egen) = {st.median(ratios):.2f}  "
+                      f"spredning {min(ratios):.2f}-{max(ratios):.2f}")
+                print("    -> IKKE en fast omregningsfaktor - bruk kun som "
+                      "sanity-sjekk, se docstring.")
+            else:
+                print("    for fa parvise observasjoner til aa si noe om forholdet enna "
+                      "(trenger minst 3).")
 
         # foreslatt min_hs: hoyeste hs_eff som ga rating <= 1
         flat_hs = [fnum(r["hs_eff"]) for x, _, s, r in rated
