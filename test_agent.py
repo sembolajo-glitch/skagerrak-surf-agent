@@ -232,3 +232,102 @@ def test_append_shadow_log_tom_eksisterende_fil_regnes_som_ny(tmp_path, monkeypa
     lines = path.read_text().splitlines()
     assert lines[0].startswith("run_at,")
     assert len(lines) == 2
+
+
+# --------------------------------------------------------------- model_rev
+
+
+def test_model_rev_bruker_github_sha_hvis_satt(monkeypatch):
+    A._model_rev.cache_clear()
+    monkeypatch.setenv("GITHUB_SHA", "abcdef0123456789fulllength")
+    try:
+        assert A._model_rev() == "abcdef012345"  # forste 12 tegn
+    finally:
+        A._model_rev.cache_clear()
+
+
+def test_model_rev_faller_tilbake_til_git_rev_parse_uten_github_sha(monkeypatch):
+    A._model_rev.cache_clear()
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+
+    class _FakeCompleted:
+        returncode = 0
+        stdout = "deadbeef1234\n"
+
+    def fake_run(cmd, **kw):
+        assert cmd[:2] == ["git", "rev-parse"]
+        return _FakeCompleted()
+
+    monkeypatch.setattr(A.subprocess, "run", fake_run)
+    try:
+        assert A._model_rev() == "deadbeef1234"
+    finally:
+        A._model_rev.cache_clear()
+
+
+def test_model_rev_unknown_naar_baade_github_sha_og_git_mangler(monkeypatch):
+    A._model_rev.cache_clear()
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+
+    def fake_run(cmd, **kw):
+        raise FileNotFoundError("git ikke installert")
+
+    monkeypatch.setattr(A.subprocess, "run", fake_run)
+    try:
+        assert A._model_rev() == "unknown"
+    finally:
+        A._model_rev.cache_clear()
+
+
+def test_model_rev_unknown_naar_git_rev_parse_feiler(monkeypatch):
+    """Git finnes, men kommandoen feiler (f.eks. ikke i et git-repo) -
+    ogsaa da "unknown", ikke en krasjende exception."""
+    A._model_rev.cache_clear()
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+
+    class _FakeFailed:
+        returncode = 128
+        stdout = ""
+
+    def fake_run(cmd, **kw):
+        return _FakeFailed()
+
+    monkeypatch.setattr(A.subprocess, "run", fake_run)
+    try:
+        assert A._model_rev() == "unknown"
+    finally:
+        A._model_rev.cache_clear()
+
+
+def test_model_rev_caches_shelles_ikke_ut_flere_ganger(monkeypatch):
+    A._model_rev.cache_clear()
+    monkeypatch.setenv("GITHUB_SHA", "cachetest0123456789")
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        raise AssertionError("skal ikke kalles - GITHUB_SHA er satt")
+
+    monkeypatch.setattr(A.subprocess, "run", fake_run)
+    try:
+        first = A._model_rev()
+        second = A._model_rev()
+        assert first == second == "cachetest012"
+        assert calls == []  # subprocess aldri kalt, GITHUB_SHA vant
+    finally:
+        A._model_rev.cache_clear()
+
+
+def test_append_shadow_log_skriver_model_rev_per_rad(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    A._model_rev.cache_clear()
+    monkeypatch.setenv("GITHUB_SHA", "rowtest0123456789")
+    try:
+        A.append_shadow_log(_payload())
+    finally:
+        A._model_rev.cache_clear()
+
+    import csv as _csv
+    with (tmp_path / "shadow.csv").open() as f:
+        rows = list(_csv.DictReader(f))
+    assert rows[0]["model_rev"] == "rowtest01234"

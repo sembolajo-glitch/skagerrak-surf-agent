@@ -29,6 +29,13 @@ FIELDS = [
     # disse kan porten aldri etterproeves mot faktiske utfall, se
     # agent.py sin score_hour()
     "regional_wp", "regional_gate_closed", "regional_gate_bypassed",
+    # versjonsmerking (ordre 2026-09-02) - se agent.py sin _model_rev().
+    # Uten denne drukner effekten av en scoring-endring (som porten over)
+    # i rader skrevet med den GAMLE scoringen naar calibrate.py rapporterer
+    # paa tvers av begge. calibrate.py grupperer paa
+    # row.get("model_rev") or "pre-instrumentering", saa alle rader fra
+    # FOR dette feltet fantes havner i EN epoke, ikke gjettes bakover.
+    "model_rev",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra

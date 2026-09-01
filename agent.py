@@ -22,11 +22,13 @@ import argparse
 import concurrent.futures
 import csv
 import datetime as dt
+import functools
 import io
 import json
 import math
 import os
 import pathlib
+import subprocess
 import sys
 import zoneinfo
 
@@ -840,6 +842,33 @@ def print_explain(spot, hours):
         print("  ".join(row))
 
 
+@functools.lru_cache(maxsize=1)
+def _model_rev():
+    """
+    Versjonsmerke for scoring-koden som produserte denne kjoringens
+    rader (ordre 2026-09-02 - se shadow_schema.py sitt model_rev-felt
+    for hvorfor). GITHUB_SHA[:12] i CI (satt av GitHub Actions
+    automatisk), ellers `git rev-parse` lokalt, ellers "unknown" hvis
+    begge feiler (f.eks. ikke i et git-repo i det hele tatt).
+
+    lru_cache: denne shelles ut EN gang per prosess, ikke per rad - en
+    kjoring skriver typisk hundrevis av rader i samme sekund.
+    """
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha[:12]
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=ROOT, capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "unknown"
+
+
 def append_shadow_log(payload):
     """En rad per spot per time. Dette er benchmarkgrunnlaget ditt.
 
@@ -874,10 +903,11 @@ def append_shadow_log(payload):
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if not existing:
             w.writeheader()
+        rev = _model_rev()
         for spot in payload["spots"]:
             for h in spot.get("hours", []):
                 w.writerow({"run_at": payload["generated_at"],
-                            "spot": spot["id"], **h})
+                            "spot": spot["id"], "model_rev": rev, **h})
 
 
 # --------------------------------------------------------------- mockdata
