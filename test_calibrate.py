@@ -105,3 +105,63 @@ def test_bomtur_rate_regnes_av_kalte_god_ikke_av_alle():
     out = buf.getvalue()
     # 1 bomtur av (3 treff + 1 bomtur) = 25 %, ikke 1/14
     assert "bomtur-rate av 'agenten sa god'=25 %" in out
+
+
+# ------------------------------------------------------- ekstern_wp-rapport
+
+
+def _wp_pair(rating, hs_eff, tp_eff, ekstern_wp=None):
+    """Samme (sesjon, shadow-rad)-par som _pair(), men med hs_eff/tp_eff/
+    ekstern_wp satt eksplisitt - trengs for wave_power()-sammenligningen,
+    som _pair() ikke setter opp (den bruker faste "1.5"/ingen tp_eff)."""
+    s = {"spot": "saltstein", "rating": str(rating), "time": "2026-08-31T12:00Z"}
+    if ekstern_wp is not None:
+        s["ekstern_wp"] = str(ekstern_wp)
+    r = _row(70, hs_eff=str(hs_eff), tp_eff=str(tp_eff))
+    return s, r
+
+
+def test_ekstern_wp_rapporteres_med_forhold_til_egen_wp(capsys):
+    """Tre par med ekstern_wp satt: seksjonen skal vise n=3, hvert
+    forhold, og en median - IKKE en fast omregningsfaktor (se docstring)."""
+    import physics as P
+    pairs = [
+        _wp_pair(3, 2.0, 8.0, ekstern_wp=P.wave_power(2.0, 8.0) * 1.5),
+        _wp_pair(3, 1.5, 7.0, ekstern_wp=P.wave_power(1.5, 7.0) * 1.5),
+        _wp_pair(2, 1.0, 6.0, ekstern_wp=P.wave_power(1.0, 6.0) * 1.5),
+    ]
+    C.report(pairs)
+    out = capsys.readouterr().out
+
+    assert "Ekstern wp vs. egen wp" in out
+    assert "n=3" in out
+    assert "median forhold (ekstern/egen) = 1.50" in out
+    assert "IKKE en fast omregningsfaktor" in out
+
+
+def test_ekstern_wp_mangler_hopper_over_seksjonen(capsys):
+    """Ingen sesjoner har ekstern_wp - seksjonen skal ikke printes."""
+    pairs = [_wp_pair(r, 1.5, 7.0) for r in (4, 4, 4, 0, 0, 0)]
+    C.report(pairs)
+    out = capsys.readouterr().out
+
+    assert "Ekstern wp vs. egen wp" not in out
+
+
+def test_ekstern_wp_for_faa_par_gir_melding_ikke_median(capsys):
+    """Under tre PARVISE observasjoner (ekstern_wp+egen begge kjent) - ikke
+    nok til aa regne median, skal si det rett ut i stedet for aa late som
+    om et tall betyr noe. Tredje sesjon (uten ekstern_wp) er bare med for
+    aa passere det generelle "minst 3 okter"-kravet i report()."""
+    import physics as P
+    pairs = [
+        _wp_pair(3, 2.0, 8.0, ekstern_wp=P.wave_power(2.0, 8.0) * 1.5),
+        _wp_pair(3, 1.5, 7.0, ekstern_wp=P.wave_power(1.5, 7.0) * 1.3),
+        _wp_pair(2, 1.0, 6.0),
+    ]
+    C.report(pairs)
+    out = capsys.readouterr().out
+
+    assert "Ekstern wp vs. egen wp" in out
+    assert "for fa parvise observasjoner" in out
+    assert "median forhold" not in out

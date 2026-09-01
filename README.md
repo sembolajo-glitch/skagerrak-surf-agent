@@ -122,6 +122,8 @@ Alle ligger i `spots.yaml`.
 
 `calibrate.py` rapporterer treff/bom/miss, median Hs-bias med forslag til ny `transmission`, og hvilket ledd som faktisk skiller gode fra flate dager.
 
+Har du et bølgeeffekt-/energitall fra en ekstern tjeneste (f.eks. surf-forecast) for samme økt, kan du logge det i `ekstern_wp`-kolonnen i `sessions.csv`. Det finnes ingen fast omregning til vår egen `wave_power()` — faktoren varierer med spot og forhold — så `calibrate.py` rapporterer bare forholdet mellom dem etter hvert som observasjoner samler seg opp, som en sanity-sjekk.
+
 Sannsynligheten trenger en egen sjekk: grupper alle varsler i 10 %-bøtter og se om 70 %-varslene traff omtrent 70 % av gangene. Det er en reliabilitetskurve, og den krever minst 50 varsler før den betyr noe.
 
 ---

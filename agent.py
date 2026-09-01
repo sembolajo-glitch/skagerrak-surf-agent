@@ -9,7 +9,11 @@ Skagerrak surf agent.
   python agent.py --explain slagen    full parameterutskrift for ett spot
 
 Output:
-  out/forecast.json   oversikt til frontend - alt utenom hours (Lovable henter denne)
+  out/forecast.json   oversikt til frontend - alt utenom hours (Lovable henter denne).
+                      Inkluderer regional_wp: bolgeeffekt (kW/m, wave_power())
+                      ved Saltsteins offshore_point per time - ETT tall for
+                      hele regionen, ikke per spot (se run()). Tom liste
+                      hvis --spot filtrerer bort saltstein.
   out/spots/<id>.json  fullt hours-array per spot - hentes bare naar detaljer slaas ut
   out/shadow.csv      en rad per spot per time per kjoring - benchmarkgrunnlag
 """
@@ -628,6 +632,13 @@ def run(args):
     state = load_state()
     now = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
     results = []
+    # ETT tall for hele regionen (ikke per spot) - bolgeeffekt ved Saltsteins
+    # offshore_point, samme referanse brukerne allerede kjenner fra
+    # surf-forecast sitt Saltstein-tall. Fylles fra Saltstein sin egen
+    # (upropagerte, rene modell-) hs_eff/tp_eff naar det spottet behandles
+    # under - se loekka under. Tom liste hvis --spot filtrerer bort
+    # saltstein (ingen data aa hente den fra da).
+    regional_wp = []
 
     # gather() er nettverksbundet og uavhengig per spot - hent parallelt.
     # ThreadPoolExecutor.map beholder rekkefolgen paa resultatene uansett
@@ -661,6 +672,18 @@ def run(args):
                 (water.get(ts) or {}).get("level_cm"), c, lead_h=lead))
         windows = find_windows(hours, spot)
         daily = daily_summary(hours)
+
+        if spot["id"] == "saltstein":
+            # rene modell-hs/tp ved offshore_point (Saltstein er klasse A -
+            # hs_eff == model_hs alltid, se evaluate_class_ab()), IKKE
+            # per-spot power_kw fra hours (den er avrundet til naermeste
+            # kW og regnet med spottets EGEN hs_eff/tp_eff - her vil vi ha
+            # samme tall, bare med egen avrunding, som en eksplisitt
+            # regional serie uavhengig av hvordan Saltstein selv scores).
+            regional_wp = [
+                {"time": h["time"], "wp": round(P.wave_power(h["hs_eff"], h["tp_eff"]), 1)}
+                for h in hours
+            ]
 
         results.append({
             "id": spot["id"],
@@ -704,6 +727,10 @@ def run(args):
     payload = {
         "generated_at": now.isoformat(),
         "mode": "mock" if args.mock else ("shadow" if args.shadow else "live"),
+        # regional bolgeeffekt (kW/m) ved Saltsteins offshore_point, ETT
+        # tall for hele regionen - ikke en per-spot verdi. Se merknaden ved
+        # regional_wp lenger opp i denne funksjonen.
+        "regional_wp": regional_wp,
         "spots": sorted(results, key=lambda r: -(
             (r.get("best_stars") or 0) * (r.get("best_p_surf") or 0))),
     }
