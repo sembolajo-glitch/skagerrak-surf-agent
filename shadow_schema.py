@@ -36,6 +36,13 @@ FIELDS = [
     # row.get("model_rev") or "pre-instrumentering", saa alle rader fra
     # FOR dette feltet fantes havner i EN epoke, ikke gjettes bakover.
     "model_rev",
+    # myk regional-energi-port (ordre 2026-09-02) - se
+    # ensemble.bypass_weight()/log_energy_margin() og score_hour() i
+    # agent.py. bypass_weight er selve vekten (0-1) gate-beregningen
+    # brukte; log_energy_margin er r = log(E_lokal/E_prop) den ble regnet
+    # fra, None naar en side manglet energi helt eller for klasse A/B
+    # uten local_fetch.
+    "bypass_weight", "log_energy_margin",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra
