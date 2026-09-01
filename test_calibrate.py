@@ -165,3 +165,51 @@ def test_ekstern_wp_for_faa_par_gir_melding_ikke_median(capsys):
     assert "Ekstern wp vs. egen wp" in out
     assert "for fa parvise observasjoner" in out
     assert "median forhold" not in out
+
+
+# --------------------------------------------------------------- model_rev
+
+
+def _pair_rev(spot, rating, score, model_rev=None):
+    s = {"spot": spot, "rating": str(rating), "time": "2026-08-31T12:00Z"}
+    r = _row(score, model_rev=model_rev or "")
+    return s, r
+
+
+def test_ulike_model_rev_gir_egne_seksjoner_i_rapporten(capsys):
+    """Samme spot, to ulike model_rev - skal IKKE blandes i en pott
+    (se calibrate.py sin report() for hvorfor: en scoring-endring ville
+    druknet i eldre rader)."""
+    pairs = (
+        [_pair_rev("saltstein", 4, 70, "revA111111") for _ in range(3)]
+        + [_pair_rev("saltstein", 4, 70, "revB222222") for _ in range(3)]
+    )
+    C.report(pairs)
+    out = capsys.readouterr().out
+
+    assert "saltstein  [revA111111]" in out
+    assert "saltstein  [revB222222]" in out
+    # begge seksjonene skal ha statistikk (3 okter er nok til aa passere
+    # "for fa okter"-terskelen), ikke slaas sammen til 6 i en seksjon
+    assert out.count("Treff:") == 2
+
+
+def test_rader_uten_model_rev_havner_i_pre_instrumentering(capsys):
+    """Rader skrevet FOR model_rev-feltet fantes (shadow_schema.py) - her
+    simulert som fravaerende felt, akkurat som eldre rader paa
+    data-grenen faktisk er - skal samles i EN "pre-instrumentering"-
+    epoke, ikke gjettes bakover til noe spesifikt."""
+    pairs = [_pair_rev("hvasser_sando", r, 70) for r in (4, 4, 4, 0, 0, 0)]
+    C.report(pairs)
+    out = capsys.readouterr().out
+
+    assert "hvasser_sando  [pre-instrumentering]" in out
+
+
+def test_blank_model_rev_regnes_som_pre_instrumentering():
+    """Tom streng (slik en gammel rad uten feltet ville lest via
+    csv.DictReader hvis feltet FANTES men var tomt) skal ogsaa telle som
+    "pre-instrumentering" - `or`-fallbacken i report() dekker baade
+    None og tom streng."""
+    r = _row(70, model_rev="")
+    assert (r.get("model_rev") or "pre-instrumentering") == "pre-instrumentering"

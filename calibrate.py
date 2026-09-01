@@ -26,6 +26,13 @@ ekstern_wp: valgfritt. Boelgeeffekt-/energitall slik surf-forecast (eller
   mellom dem er IKKE konstant (varierer med spot/forhold), saa det finnes
   ingen fast omregning. Loggingen finnes for aa etablere sammenhengen
   EMPIRISK over tid - se report() sin "ekstern vs. egen wp"-blokk.
+
+Rapporten er gruppert paa (spot, model_rev) - ordre 2026-09-02, se
+shadow_schema.py sitt model_rev-felt. En scoring-endring (som
+regional_wp-porten i PR #16) faar da sin egen seksjon, i stedet for aa
+drukne i statistikk fra rader skrevet med den gamle scoringen. Rader fra
+FOR feltet fantes havner samlet i "pre-instrumentering", ikke gjettet
+bakover til en bestemt revisjon.
 """
 
 import argparse
@@ -91,19 +98,27 @@ def fnum(v):
 
 
 def report(pairs, spot_filter=None):
-    by_spot = {}
+    # gruppert paa (spot, model_rev) - ordre 2026-09-02. Rader skrevet FOR
+    # model_rev fantes (shadow_schema.py) har ikke feltet i det hele tatt,
+    # og row.get() gir da None for dem - samlet i EN epoke,
+    # "pre-instrumentering", i stedet for aa gjette en versjon bakover.
+    # Uten dette skillet drukner effekten av en scoring-endring (som
+    # regional_wp-porten i PR #16) i rader skrevet med den GAMLE scoringen
+    # naar de blandes sammen i samme statistikk.
+    by_spot_epoch = {}
     for s, r in pairs:
         if spot_filter and s["spot"] not in spot_filter:
             continue
-        by_spot.setdefault(s["spot"], []).append((s, r))
+        epoch = r.get("model_rev") or "pre-instrumentering"
+        by_spot_epoch.setdefault((s["spot"], epoch), []).append((s, r))
 
-    if not by_spot:
+    if not by_spot_epoch:
         print("Ingen treff mellom sessions.csv og out/shadow.csv enna.")
         print("Kjor agenten daglig og logg okter (og bomturer) i sessions.csv.")
         return
 
-    for spot, items in sorted(by_spot.items()):
-        print(f"\n{'='*72}\n{spot}   ({len(items)} okter)\n{'='*72}")
+    for (spot, epoch), items in sorted(by_spot_epoch.items()):
+        print(f"\n{'='*72}\n{spot}  [{epoch}]   ({len(items)} okter)\n{'='*72}")
 
         rated = [(int(s["rating"]), fnum(r["score"]), s, r) for s, r in items
                  if s.get("rating") not in (None, "")]
