@@ -85,6 +85,16 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     valgfrie) - EN EGEN, UAVHENGIG port paa toppen av min_hs/ideal_hs/
     max_hs over, ikke en erstatning. Ukjent regional_wp porter ALDRI
     igjen (portes ikke), samme forsiktige default som window_ok under.
+
+    Unntak (ordre 2026-09-02, etter backtest mot ekte historikk - se
+    rapport til bruker): porten skal IKKE stenge naar spottens EGEN
+    lokale sjo dominerer over det regional_wp faktisk maaler (Saltsteins
+    offshore-swell). Hvasser sin egen SO-fetch mot Koster/Skagen bygger
+    en lokal sjo uavhengig av Skagerrak-swellen - fem historiske timer
+    med regional_wp=13.4 (godt under Hvassers egen 38.7) hadde likevel
+    6.8 stjerner lokalt derfra. Bypasses naar `source` (klasse A/B) er
+    "local_fetch", ELLER (klasse C) local_hs > prop_hs - se
+    evaluate_class_ab()/evaluate_class_c() for feltene.
     """
     hs = computed["hs_eff"]
     tp = computed["tp_eff"]
@@ -117,10 +127,17 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
 
     wp_min = spot.get("regional_wp_min")
     wp_max = spot.get("regional_wp_max")
-    regional_gate_closed = regional_wp is not None and (
+    regional_gate_would_close = regional_wp is not None and (
         (wp_min is not None and regional_wp < wp_min)
         or (wp_max is not None and regional_wp > wp_max)
     )
+    local_hs, prop_hs = computed.get("local_hs"), computed.get("prop_hs")
+    local_dominant = (
+        computed.get("source") == "local_fetch"
+        or (local_hs is not None and prop_hs is not None and local_hs > prop_hs)
+    )
+    regional_gate_bypassed = regional_gate_would_close and local_dominant
+    regional_gate_closed = regional_gate_would_close and not local_dominant
     if regional_gate_closed:
         q_size = 0.0
 
@@ -174,6 +191,9 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         # ikke er kjent for denne timen (porter da aldri igjen)
         "regional_wp": regional_wp,
         "regional_gate_closed": regional_gate_closed,
+        # porten VILLE stengt, men lokal sjo dominerer (se docstringen) -
+        # egen telling for aa se hvor ofte unntaket faktisk brukes
+        "regional_gate_bypassed": regional_gate_bypassed,
         # inngangsdata
         "wind_speed": ws,
         "wind_from": wfrom,
@@ -835,7 +855,7 @@ def append_shadow_log(payload):
               "partisjon_kilde",
               # kalibreringsgrunnlag for regional_wp_min/max (spots.yaml) -
               # uten disse kan porten aldri etterproeves mot faktiske utfall
-              "regional_wp", "regional_gate_closed"]
+              "regional_wp", "regional_gate_closed", "regional_gate_bypassed"]
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:

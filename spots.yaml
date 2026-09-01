@@ -126,6 +126,13 @@
 #                 scoren til 0 UANSETT hva den lokale fysikken sier -
 #                 to uavhengige kriterier, begge maa klaffe. null/utelatt
 #                 felt = ingen grense den veien.
+#                 Unntak (ordre 2026-09-02, backtest mot ekte historikk):
+#                 porten stenger ALDRI naar spottens EGEN lokale sjo
+#                 dominerer over det regional_wp maaler (source er
+#                 "local_fetch", eller local_hs > prop_hs for klasse C) -
+#                 Hvasser sin SO-fetch mot Koster/Skagen bygger en lokal
+#                 sjo helt uavhengig av Skagerrak-swellen 38.7-tallet over
+#                 er kalibrert mot. Se score_hour() sin docstring.
 # =====================================================================
 
 defaults:
