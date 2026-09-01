@@ -35,6 +35,7 @@ import yaml
 import describe as D
 import ensemble as E
 import physics as P
+import shadow_schema
 
 ROOT = pathlib.Path(__file__).parent
 OUT = ROOT / "out"
@@ -853,22 +854,13 @@ def append_shadow_log(payload):
     forlenget den samme headerlose fila. Sjekker na FORSTE LINJE i
     stedet for bare om filen finnes - fanger baade "helt tom fil" og
     "fil med data, men uten header" (reparerer sistnevnte ved aa sette
-    inn header forrest, i stedet for aa hoppe over den for alltid)."""
+    inn header forrest, i stedet for aa hoppe over den for alltid).
+
+    Feltlista er FIELDS i shadow_schema.py, ikke lokal her lenger - se
+    den modulens docstring for append-only-kontrakten
+    (test_shadow_schema.py haandhever den)."""
     path = OUT / "shadow.csv"
-    fields = ["run_at", "spot", "time", "score", "hs_eff", "tp_eff", "dir_eff",
-              "wind_speed", "wind_from", "wind_label", "q_size", "q_period",
-              "q_wind", "q_water", "local_hs", "prop_hs", "gate_hs", "gate_tp",
-              "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
-              # kalibreringsgrunnlag for swell/vindsjo-andel (se
-              # physics.swell_fraction() - ikke i scoringen ennaa)
-              "swell_hs", "windsea_hs", "swell_andel",
-              # kalibreringsgrunnlag for ensemble.GLOBAL_MODEL_HS_REL_PENALTY -
-              # uten denne kan paaslaget aldri etterproeves mot faktiske
-              # utfall, se calibrate.py
-              "partisjon_kilde",
-              # kalibreringsgrunnlag for regional_wp_min/max (spots.yaml) -
-              # uten disse kan porten aldri etterproeves mot faktiske utfall
-              "regional_wp", "regional_gate_closed", "regional_gate_bypassed"]
+    fields = shadow_schema.FIELDS
 
     existing = path.read_bytes() if path.exists() else b""
     has_header = existing[:7] == b"run_at,"
