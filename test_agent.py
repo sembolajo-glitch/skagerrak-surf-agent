@@ -172,3 +172,63 @@ def test_regional_gate_ikke_bypass_naar_modell_dominerer_klasse_c():
     assert h["regional_gate_bypassed"] is False
     assert h["regional_gate_closed"] is True
     assert h["score"] == 0.0
+
+
+# ------------------------------------------------- append_shadow_log()
+
+
+def _payload(spot_id="saltstein", **hour_overrides):
+    hour = {"time": "2026-11-14T09:00:00+00:00", "score": 70.0, "hs_eff": 2.0}
+    hour.update(hour_overrides)
+    return {"generated_at": "2026-11-14T09:00:00+00:00",
+            "spots": [{"id": spot_id, "hours": [hour]}]}
+
+
+def test_append_shadow_log_skriver_header_paa_ny_fil(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    A.append_shadow_log(_payload())
+    lines = (tmp_path / "shadow.csv").read_text().splitlines()
+    assert lines[0].startswith("run_at,")
+    assert len(lines) == 2
+
+
+def test_append_shadow_log_dupliserer_ikke_header_paa_eksisterende_fil(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    A.append_shadow_log(_payload())
+    A.append_shadow_log(_payload())
+    lines = (tmp_path / "shadow.csv").read_text().splitlines()
+    assert lines.count([l for l in lines if l.startswith("run_at,")][0]) == 1
+    assert len(lines) == 3  # 1 header + 2 datarader
+
+
+def test_append_shadow_log_reparerer_eksisterende_fil_uten_header(tmp_path, monkeypatch):
+    """Simulerer funnet paa data-grenen: en fil med ekte data, men uten
+    header (se docstringen i append_shadow_log() for rotaarsaken -
+    git show-omdirigeringen i forecast.yml sitt hente-steg). Headeren
+    skal settes INN FORREST, de eksisterende radene skal overleve."""
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    path = tmp_path / "shadow.csv"
+    path.write_text("2026-08-28T10:00:00+00:00,saltstein,2026-08-28T10:00:00+00:00,0.0,1.2\r\n")
+
+    A.append_shadow_log(_payload(spot_id="hvasser_sando"))
+
+    lines = path.read_text().splitlines()
+    assert lines[0].startswith("run_at,")
+    assert "saltstein" in lines[1]  # den gamle, headerlose raden overlevde
+    assert "hvasser_sando" in lines[2]  # den nye raden kom etter
+    assert len(lines) == 3
+
+
+def test_append_shadow_log_tom_eksisterende_fil_regnes_som_ny(tmp_path, monkeypatch):
+    """0-byte fil (nettopp det git show-omdirigeringen produserer naar
+    kilden mangler) skal oppfore seg som om filen ikke fantes - IKKE
+    hoppe over headeren slik den gamle `not path.exists()`-sjekken gjorde."""
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    path = tmp_path / "shadow.csv"
+    path.write_text("")
+
+    A.append_shadow_log(_payload())
+
+    lines = path.read_text().splitlines()
+    assert lines[0].startswith("run_at,")
+    assert len(lines) == 2

@@ -22,6 +22,7 @@ import argparse
 import concurrent.futures
 import csv
 import datetime as dt
+import io
 import json
 import math
 import os
@@ -839,9 +840,21 @@ def print_explain(spot, hours):
 
 
 def append_shadow_log(payload):
-    """En rad per spot per time. Dette er benchmarkgrunnlaget ditt."""
+    """En rad per spot per time. Dette er benchmarkgrunnlaget ditt.
+
+    Header-deteksjon (ordre 2026-09-02 - funn: 28 532 rader paa
+    data-grenen manglet header helt). Rotaarsak: forecast.yml sitt
+    "Hent tilstand fra data-grenen"-steg gjor
+    `git show data:out/shadow.csv > out/shadow.csv 2>/dev/null || true` -
+    `>`-omdirigeringen OPPRETTER/TOMMER out/shadow.csv FOR kommandoen
+    kjorer, selv naar git show feiler (f.eks. forste kjoring noensinne,
+    for data-grenen fantes). Path.exists() var derfor True paa en tom,
+    headerlos fil helt fra dag 1, og hver kjoring siden har arvet og
+    forlenget den samme headerlose fila. Sjekker na FORSTE LINJE i
+    stedet for bare om filen finnes - fanger baade "helt tom fil" og
+    "fil med data, men uten header" (reparerer sistnevnte ved aa sette
+    inn header forrest, i stedet for aa hoppe over den for alltid)."""
     path = OUT / "shadow.csv"
-    new = not path.exists()
     fields = ["run_at", "spot", "time", "score", "hs_eff", "tp_eff", "dir_eff",
               "wind_speed", "wind_from", "wind_label", "q_size", "q_period",
               "q_wind", "q_water", "local_hs", "prop_hs", "gate_hs", "gate_tp",
@@ -856,9 +869,18 @@ def append_shadow_log(payload):
               # kalibreringsgrunnlag for regional_wp_min/max (spots.yaml) -
               # uten disse kan porten aldri etterproeves mot faktiske utfall
               "regional_wp", "regional_gate_closed", "regional_gate_bypassed"]
+
+    existing = path.read_bytes() if path.exists() else b""
+    has_header = existing[:7] == b"run_at,"
+    if existing and not has_header:
+        # data uten header - sett headeren FORREST, ikke bakerst
+        header_buf = io.StringIO()
+        csv.DictWriter(header_buf, fieldnames=fields).writeheader()
+        path.write_bytes(header_buf.getvalue().encode("utf-8") + existing)
+
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        if new:
+        if not existing:
             w.writeheader()
         for spot in payload["spots"]:
             for h in spot.get("hours", []):
