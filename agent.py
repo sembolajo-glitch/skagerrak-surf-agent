@@ -73,11 +73,18 @@ def load_spots(path=None):
 # --------------------------------------------------------------- scoring
 
 
-def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
+def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_wp=None):
     """
     Regn score for ett spot i en time. Returnerer en dict med ALLE
     mellomregninger, ikke bare totalen - det er hele poenget med
     skyggemodus. Du skal kunne se hvorfor den bommet.
+
+    regional_wp: bolgeeffekt (kW/m) ved Saltsteins offshore_point for
+    DENNE timen, eller None hvis ukjent (se run() sin regional_wp_by_time).
+    Sjekkes mot spot["regional_wp_min"/"regional_wp_max"] (spots.yaml,
+    valgfrie) - EN EGEN, UAVHENGIG port paa toppen av min_hs/ideal_hs/
+    max_hs over, ikke en erstatning. Ukjent regional_wp porter ALDRI
+    igjen (portes ikke), samme forsiktige default som window_ok under.
     """
     hs = computed["hs_eff"]
     tp = computed["tp_eff"]
@@ -106,6 +113,15 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
     )
 
     if not window_ok:
+        q_size = 0.0
+
+    wp_min = spot.get("regional_wp_min")
+    wp_max = spot.get("regional_wp_max")
+    regional_gate_closed = regional_wp is not None and (
+        (wp_min is not None and regional_wp < wp_min)
+        or (wp_max is not None and regional_wp > wp_max)
+    )
+    if regional_gate_closed:
         q_size = 0.0
 
     score = 100.0 * q_size * q_period * q_wind * q_water
@@ -153,6 +169,11 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0):
         "wind_weight": spot.get("wind_weight", 1.0),
         "q_water": round(q_water, 3),
         "window_ok": window_ok,
+        # regional energi-port (se spot["regional_wp_min"/"regional_wp_max"]
+        # i spots.yaml og docstringen over) - regional_wp er None naar den
+        # ikke er kjent for denne timen (porter da aldri igjen)
+        "regional_wp": regional_wp,
+        "regional_gate_closed": regional_gate_closed,
         # inngangsdata
         "wind_speed": ws,
         "wind_from": wfrom,
@@ -632,13 +653,6 @@ def run(args):
     state = load_state()
     now = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
     results = []
-    # ETT tall for hele regionen (ikke per spot) - bolgeeffekt ved Saltsteins
-    # offshore_point, samme referanse brukerne allerede kjenner fra
-    # surf-forecast sitt Saltstein-tall. Fylles fra Saltstein sin egen
-    # (upropagerte, rene modell-) hs_eff/tp_eff naar det spottet behandles
-    # under - se loekka under. Tom liste hvis --spot filtrerer bort
-    # saltstein (ingen data aa hente den fra da).
-    regional_wp = []
 
     # gather() er nettverksbundet og uavhengig per spot - hent parallelt.
     # ThreadPoolExecutor.map beholder rekkefolgen paa resultatene uansett
@@ -647,6 +661,29 @@ def run(args):
     # kallene skytes av.
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         gathered = list(pool.map(lambda spot: gather(spot, mock), spots))
+
+    # ETT tall for hele regionen (ikke per spot) - bolgeeffekt ved Saltsteins
+    # offshore_point, samme referanse brukerne allerede kjenner fra
+    # surf-forecast sitt Saltstein-tall (se regional_wp i forecast.json og
+    # regional_wp_min/max i spots.yaml). Bygges i en EGEN forhaands-passering,
+    # UAVHENGIG av rekkefolgen spots kommer i under - skulle den regnes ut
+    # inne i hovedloekka naar Saltstein sitt spot behandles der, ville
+    # spots FOR Saltstein i lista aldri faa noen regional_wp aa porte mot.
+    # Tom dict (og dermed apen port for alle) hvis --spot filtrerer bort
+    # saltstein - ingen data aa hente den fra da.
+    regional_wp_by_time = {}
+    for spot, (wind, waves, water, errors) in zip(spots, gathered):
+        if spot["id"] != "saltstein":
+            continue
+        for ts, w in waves.items():
+            hs, tp = w.get("hs"), w.get("tp")
+            if hs is not None and tp is not None:
+                regional_wp_by_time[ts] = round(P.wave_power(hs, tp), 1)
+        break
+
+    # payload-feltet - forblir tom liste hvis saltstein ikke er blant spots
+    # (se merknaden over regional_wp_by_time)
+    regional_wp = []
 
     for spot, (wind, waves, water, errors) in zip(spots, gathered):
         if not wind:
@@ -669,20 +706,20 @@ def run(args):
             lead = (dt.datetime.fromisoformat(ts) - now).total_seconds() / 3600.0
             hours.append(score_hour(
                 spot, ts, wind.get(ts, {}), waves.get(ts, {}),
-                (water.get(ts) or {}).get("level_cm"), c, lead_h=lead))
+                (water.get(ts) or {}).get("level_cm"), c, lead_h=lead,
+                regional_wp=regional_wp_by_time.get(ts)))
         windows = find_windows(hours, spot)
         daily = daily_summary(hours)
 
         if spot["id"] == "saltstein":
-            # rene modell-hs/tp ved offshore_point (Saltstein er klasse A -
-            # hs_eff == model_hs alltid, se evaluate_class_ab()), IKKE
-            # per-spot power_kw fra hours (den er avrundet til naermeste
-            # kW og regnet med spottets EGEN hs_eff/tp_eff - her vil vi ha
-            # samme tall, bare med egen avrunding, som en eksplisitt
-            # regional serie uavhengig av hvordan Saltstein selv scores).
+            # samme tall som regional_wp_by_time - bygd som en egen liste
+            # (ikke bare dict.items()) fordi forecast.json trenger den
+            # begrenset til OG i samme rekkefolge som Saltstein sine egne
+            # (now-filtrerte, MAX_HOURS-kappede) times, ikke ALT som matte
+            # ligge i waves-dataen.
             regional_wp = [
-                {"time": h["time"], "wp": round(P.wave_power(h["hs_eff"], h["tp_eff"]), 1)}
-                for h in hours
+                {"time": ts, "wp": regional_wp_by_time[ts]}
+                for ts in times if ts in regional_wp_by_time
             ]
 
         results.append({
@@ -795,7 +832,10 @@ def append_shadow_log(payload):
               # kalibreringsgrunnlag for ensemble.GLOBAL_MODEL_HS_REL_PENALTY -
               # uten denne kan paaslaget aldri etterproeves mot faktiske
               # utfall, se calibrate.py
-              "partisjon_kilde"]
+              "partisjon_kilde",
+              # kalibreringsgrunnlag for regional_wp_min/max (spots.yaml) -
+              # uten disse kan porten aldri etterproeves mot faktiske utfall
+              "regional_wp", "regional_gate_closed"]
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:

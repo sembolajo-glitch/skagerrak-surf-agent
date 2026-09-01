@@ -101,6 +101,31 @@
 #    transmission:      samleknapp for alt vi ikke modellerer (skjaergard,
 #                       refraksjonstap). Start pa 1.0, juster ned hvis
 #                       agenten overvurderer.
+#
+#  regional_wp_min,
+#  regional_wp_max:  valgfritt, kW/m. EN EGEN, UAVHENGIG port paa toppen av
+#                 min_hs/ideal_hs/max_hs - IKKE en erstatning for dem og
+#                 IKKE samme stedsreferanse. min_hs maaler boelgehoyde VED
+#                 SPOTTEN (etter propagering/lokal fetch der det gjelder).
+#                 regional_wp_min/max maaler agent.py sin regional_wp -
+#                 wave_power() av raa modell-hs/tp ved Saltsteins
+#                 offshore_point, se agent.py sin run(). Samme tall for
+#                 alle spots, uansett hvor de selv ligger.
+#                 Kalibrert 2026-09-02 mot observerte terskler (surf-
+#                 forecast sitt Saltstein-referansetall), ankeret i
+#                 wave_power(2.5, tp_est(2.5)) = 20.35 kW/m = ratio 1.0:
+#                   saltstein lukker seg  ratio 1.6 -> 32.6 kW/m (max)
+#                   hvasser starter       ratio 1.9 -> 38.7 kW/m (min)
+#                   slagen starter        ratio 3.2 -> 65.1 kW/m (min)
+#                   slagen taaler opptil  ratio 12.0 -> 244.2 kW/m (max)
+#                 IKKE regnet om til min_hs/max_hs direkte - de tallene
+#                 forsokt forst, men bommer stygt (Slagen min_hs=4.06 m
+#                 hadde slaatt spotten av helt; modellen regner selv ut
+#                 2.2-2.8 m der pa en god dag). Se score_hour() i agent.py:
+#                 er regional_wp under _min eller over _max, tvinges
+#                 scoren til 0 UANSETT hva den lokale fysikken sier -
+#                 to uavhengige kriterier, begge maa klaffe. null/utelatt
+#                 felt = ingen grense den veien.
 # =====================================================================
 
 defaults:
@@ -140,6 +165,7 @@ spots:
     water_sensitivity_cm: 60
     drive_min: 110
     kalibrert: true               # kjent spot - bruk som referanse
+    regional_wp_max: 32.6         # lukker seg - se merknad ved regional_wp_min/max over
     notes: >
       Referansespotten. SV-vendt steinrev, jekker fra dypt vann.
       Fralandsvind er NØ, som sjelden følger en S-kuling.
@@ -337,6 +363,7 @@ spots:
     min_tp: 5.0
     drive_min: 95
     kalibrert: true
+    regional_wp_min: 38.7         # starter - se merknad ved regional_wp_min/max lenger opp
     local_fetch_km: [1, 2, 6, 12, 22, 35, 80, 120, 90, 40, 20, 3, 0.5, 0.3, 0.3, 0.5]
     notes: >
       Har egen SØ-fetch mot Koster/Skagen på 100+ km. Ved ren SØ-kuling
@@ -398,6 +425,8 @@ spots:
     water_sensitivity_cm: 80
     drive_min: 80
     kalibrert: true
+    regional_wp_min: 65.1         # starter - se merknad ved regional_wp_min/max lenger opp
+    regional_wp_max: 244.2        # taaler opptil - samme merknad
     #          N   NNO  NO  ONO   O  OSO   SO  SSO    S  SSV   SV  VSV   V  VNV  NV  NNV
     fetch_km: [0.5, 1.0, 3, 10, 14, 16, 22, 48, 33, 20, 8, 0.2, 0.1, 0.1, 0.1, 0.2]
     gate:
