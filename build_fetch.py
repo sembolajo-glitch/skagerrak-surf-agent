@@ -649,6 +649,16 @@ def main():
         log(f"  {spot['id']:<16} facing={facing:<4} "
             + "  ".join(f"{t}m={profile[t][0]}({profile[t][1]})" for t in DEPTH_TARGETS_M))
 
+        # fetch_km_72*/dybde_*-feltene over er nettopp regnet fra spotens
+        # GJELDENDE (lat, lon) - se compute_fetch_72()/compute_depth_profile()
+        # over, begge kalt med spot["lon"], spot["lat"] direkte. Et
+        # geodata_stale-flagg (se spots.yaml sin merknad ved feltet) betydde
+        # at de gamle verdiene var maalt fra et ANNET koordinat - det er
+        # ikke lenger sant naar vi kommer hit, saa flagget fjernes.
+        if spot.pop("geodata_stale", None) is not None:
+            log(f"    -> geodata_stale fjernet ({spot['id']} regnet paa nytt "
+                f"fra gjeldende koordinater)")
+
     if args.dry_run:
         log("\n--dry-run: spots.yaml IKKE endret")
         return

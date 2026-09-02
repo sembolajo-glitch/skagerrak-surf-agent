@@ -92,6 +92,18 @@
 #                     over. Ingen etterbehandling tilsvarende _effektiv/_endelig -
 #                     brukes som de maales.
 #
+#  geodata_stale: valgfritt, true/uteglemt. Satt naar fetch_km_72*/dybde_*-
+#                 feltene over IKKE er malt fra spottens GJELDENDE (lat, lon) -
+#                 enten fordi koordinatet er rettet siden siste build_fetch.py-
+#                 kjoring (feltene henger igjen fra det gamle punktet), eller
+#                 fordi spotten er ny og aldri har hatt dem malt i det hele
+#                 tatt. Se kommentaren ved feltet paa hver spot for hvilket
+#                 koordinat de gjeldende verdiene faktisk stammer fra (om
+#                 noen). IKKE lest av physics.py/agent.py/ensemble.py -
+#                 rent en markor for hva som maa regnes paa nytt naar
+#                 build_fetch.py kan kjores. build_fetch.py fjerner flagget
+#                 selv naar den har skrevet ferske verdier for spotten.
+#
 #  gate:          kun klasse C. Punktet i fjordmunningen der vi leser
 #                 WW3-output og propagerer innover.
 #    sector_half_width: hvor bred vinkelsektor fjorden slipper opp.
@@ -160,6 +172,11 @@ spots:
     klasse: A
     lat: 58.965643      # rettet (ordre 2026-09-02): malt i Norgeskart, var 58.955/9.855 (1,24 km feil)
     lon: 9.848614
+    geodata_stale: true     # fetch_km_72*/dybde_*-feltene under er malt (build_fetch.py)
+                             # fra det GAMLE koordinatet 58.955/9.855, ikke dagens
+                             # 58.965643/9.848614 (1,24 km unna) - se merknad ved
+                             # koordinatrettingen over. Fjernes automatisk av
+                             # build_fetch.py naar spotten regnes paa nytt.
     offshore_point: [58.930, 9.830]
     wind_weight: 0.55          # kraftig dyptvannsrev - surfes rutinemessig i onshore chop
     facing: 225
@@ -236,6 +253,11 @@ spots:
     klasse: A
     lat: 58.840144      # rettet (ordre 2026-09-02): malt i Norgeskart, var 58.865/9.620 (5,3 km feil)
     lon: 9.565695
+    geodata_stale: true     # fetch_km_72*/dybde_*-feltene under er malt (build_fetch.py)
+                             # fra det GAMLE koordinatet 58.865/9.620, ikke dagens
+                             # 58.840144/9.565695 (5,3 km unna) - se merknad ved
+                             # koordinatrettingen over. Fjernes automatisk av
+                             # build_fetch.py naar spotten regnes paa nytt.
     offshore_point: [58.845, 9.650]
     wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
     facing: 135
@@ -293,6 +315,10 @@ spots:
     klasse: A
     lat: 58.975217       # malt (ordre 2026-09-02) - se notes for sammenslaaingen med molen
     lon: 9.812139
+    geodata_stale: true     # INGEN fetch_km_72*/dybde_*-felt malt for dette punktet
+                             # ennaa (se notes under - erstatter molen, 284 m unna,
+                             # men gjenbruker ikke dets geodata). Fjernes automatisk
+                             # av build_fetch.py naar spotten regnes for forste gang.
     facing: 175
     swell_window: [140, 240]
     min_hs: 1.5
@@ -317,8 +343,9 @@ spots:
     # fetch_km_72*/dybde_*-feltene fra det gamle molen-punktet er IKKE
     # tatt med her - de var maalt (build_fetch.py) mot de gamle
     # koordinatene 58.968/9.805, 284 m unna, og ville vaert feil for
-    # dette punktet. Ma males paa nytt naar build_fetch.py kan kjores
-    # (blokkert i dette miljoet - se rapport til bruker, ordre 2026-09-02).
+    # dette punktet. Se geodata_stale over. Ma males paa nytt naar
+    # build_fetch.py kan kjores (blokkert i dette miljoet - se rapport
+    # til bruker, ordre 2026-09-02).
   - id: portor
     name: Portør
     klasse: A
