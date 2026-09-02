@@ -1,0 +1,239 @@
+name: ab-test-offshore-point
+
+# Engangs-/gjenbrukbar diagnostikk: kjor "python agent.py --shadow --spot
+# <id>" TO ganger for samme spot, med to ulike offshore_point-koordinater
+# (variant A / B), og sammenlign best_stars/best_p_surf/hs_eff-paa-peak-
+# timen mellom dem. Se rapporten til bruker (samtalen 2026-09-02) om
+# Hvasser sitt offshore_point for bakgrunnen - feltet driver BAADE
+# agent.py sin modell-henting (S.met_waves()) OG build_fetch.py sin
+# dybdeprofil-retning (se spots.yaml sin merknad ved feltet), saa en
+# flytting endrer selve prognosen. Denne workflowen kjorer i GitHub
+# Actions fordi noen miljoer (deriblant der denne ble bestilt fra) ikke
+# har utgaaende nettverkstilgang til MET/Open-Meteo/DMI/Kartverket i det
+# hele tatt - agent.py --mock kan IKKE brukes til dette, siden mock-
+# scenariet er syntetisk og fullstendig uavhengig av koordinater (samme
+# tallrekke uansett offshore_point - en mock-basert sammenligning ville
+# stille vist "ingen forskjell", uansett).
+#
+# KUN manuell trigger. Skriver ALDRI noe tilbake til repoet: spots.yaml
+# patches kun i arbeidskopien paa CI-runneren (aldri committet, aldri
+# pushet - runneren kastes naar jobben er ferdig), og "permissions" under
+# gir kun lesetilgang.
+#
+# Generell: tar spot-id og BEGGE koordinatparene som input, ikke bare
+# Hvasser-saken den ble laget for - standardverdiene er likevel satt til
+# akkurat den saken (variant A = gjeldende offshore_point etter ordre
+# 2026-09-02, variant B = det opprinnelige, NO-vendte punktet).
+on:
+  workflow_dispatch:
+    inputs:
+      spot_id:
+        description: "Spot-id i spots.yaml"
+        type: string
+        default: hvasser_sando
+      variant_a_lat:
+        description: "Variant A - offshore_point breddegrad (lat)"
+        type: string
+        default: "59.0650"
+      variant_a_lon:
+        description: "Variant A - offshore_point lengdegrad (lon)"
+        type: string
+        default: "10.4900"
+      variant_b_lat:
+        description: "Variant B - offshore_point breddegrad (lat)"
+        type: string
+        default: "59.095"
+      variant_b_lon:
+        description: "Variant B - offshore_point lengdegrad (lon)"
+        type: string
+        default: "10.510"
+
+permissions:
+  contents: read
+
+jobs:
+  ab-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements.txt
+
+      # Setter offshore_point for det gitte spotet direkte i den
+      # utsjekkede spots.yaml (ROOT/spots.yaml er hardkodet relativt til
+      # agent.py sin egen fil, ikke CWD - agent.py stotter ingen
+      # --spots-yaml-flagg - saa dette ER den midlertidige kopien: en
+      # arbeidskopi som aldri committes, se "permissions" over).
+      - name: Variant A - sett offshore_point, kjor agent.py --shadow
+        env:
+          SURF_AGENT_UA: ${{ secrets.SURF_AGENT_UA }}
+          DMI_API_KEY: ${{ secrets.DMI_API_KEY }}
+          SPOT_ID: ${{ inputs.spot_id }}
+          OFFSHORE_LAT: ${{ inputs.variant_a_lat }}
+          OFFSHORE_LON: ${{ inputs.variant_a_lon }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          import yaml
+
+          spot_id = os.environ["SPOT_ID"]
+          lat = float(os.environ["OFFSHORE_LAT"])
+          lon = float(os.environ["OFFSHORE_LON"])
+
+          with open("spots.yaml", encoding="utf-8") as f:
+              doc = yaml.safe_load(f)
+          spot = next((s for s in doc["spots"] if s["id"] == spot_id), None)
+          if spot is None:
+              raise SystemExit(f"Fant ingen spot med id '{spot_id}' i spots.yaml")
+          spot["offshore_point"] = [lat, lon]
+          with open("spots.yaml", "w", encoding="utf-8") as f:
+              yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
+          print(f"{spot_id}: offshore_point satt til [{lat}, {lon}] (variant A)")
+          PYEOF
+
+          rm -rf out
+          python agent.py --shadow --spot "$SPOT_ID"
+
+          mkdir -p /tmp/ab
+          cp out/forecast.json /tmp/ab/forecast_a.json
+          if [ -f "out/spots/${SPOT_ID}.json" ]; then
+            cp "out/spots/${SPOT_ID}.json" /tmp/ab/spot_a.json
+          fi
+
+      # git checkout -- spots.yaml gjenoppretter filen slik den var ved
+      # innsjekk, saa variant A sin endring over ikke lekker inn i B.
+      - name: Variant B - sett offshore_point, kjor agent.py --shadow
+        env:
+          SURF_AGENT_UA: ${{ secrets.SURF_AGENT_UA }}
+          DMI_API_KEY: ${{ secrets.DMI_API_KEY }}
+          SPOT_ID: ${{ inputs.spot_id }}
+          OFFSHORE_LAT: ${{ inputs.variant_b_lat }}
+          OFFSHORE_LON: ${{ inputs.variant_b_lon }}
+        run: |
+          git checkout -- spots.yaml
+
+          python - <<'PYEOF'
+          import os
+          import yaml
+
+          spot_id = os.environ["SPOT_ID"]
+          lat = float(os.environ["OFFSHORE_LAT"])
+          lon = float(os.environ["OFFSHORE_LON"])
+
+          with open("spots.yaml", encoding="utf-8") as f:
+              doc = yaml.safe_load(f)
+          spot = next((s for s in doc["spots"] if s["id"] == spot_id), None)
+          if spot is None:
+              raise SystemExit(f"Fant ingen spot med id '{spot_id}' i spots.yaml")
+          spot["offshore_point"] = [lat, lon]
+          with open("spots.yaml", "w", encoding="utf-8") as f:
+              yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False)
+          print(f"{spot_id}: offshore_point satt til [{lat}, {lon}] (variant B)")
+          PYEOF
+
+          rm -rf out
+          python agent.py --shadow --spot "$SPOT_ID"
+
+          mkdir -p /tmp/ab
+          cp out/forecast.json /tmp/ab/forecast_b.json
+          if [ -f "out/spots/${SPOT_ID}.json" ]; then
+            cp "out/spots/${SPOT_ID}.json" /tmp/ab/spot_b.json
+          fi
+
+      # git checkout -- spots.yaml her ogsaa, rent for hygiene (ingenting
+      # committes uansett - se "permissions" ovenfor), saa en eventuell
+      # etterfolgende steg/artifact aldri kan plukke opp variant B sin
+      # endring ved en feil.
+      - name: Gjenopprett spots.yaml
+        run: git checkout -- spots.yaml
+
+      - name: Sammenlign variant A og B
+        env:
+          SPOT_ID: ${{ inputs.spot_id }}
+          VARIANT_A_LAT: ${{ inputs.variant_a_lat }}
+          VARIANT_A_LON: ${{ inputs.variant_a_lon }}
+          VARIANT_B_LAT: ${{ inputs.variant_b_lat }}
+          VARIANT_B_LON: ${{ inputs.variant_b_lon }}
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+
+          spot_id = os.environ["SPOT_ID"]
+
+
+          def load(path):
+              if not os.path.exists(path):
+                  return None
+              with open(path, encoding="utf-8") as f:
+                  return json.load(f)
+
+
+          def peak_hs_eff(spot_json):
+              """hs_eff paa timen med hoyest score - (None, None) hvis
+              spotten ikke rakk fram til scoring i det hele tatt (se
+              agent.py sin run(): en spot med "error" faar aldri et
+              hours-array, og dermed aldri en egen spots/<id>.json)."""
+              if spot_json is None:
+                  return None, None
+              hours = spot_json.get("hours") or []
+              if not hours:
+                  return None, None
+              best = max(hours, key=lambda h: h.get("score") or 0)
+              return best.get("hs_eff"), best.get("time")
+
+
+          def row(label, coords, forecast_path, spot_path):
+              fc = load(forecast_path)
+              sp = load(spot_path)
+              if fc is None:
+                  return {"label": label, "coords": coords, "feil": "agent.py-kjoringen etterlot ingen forecast.json"}
+              match = next((r for r in fc.get("spots", []) if r["id"] == spot_id), None)
+              if match is None:
+                  return {"label": label, "coords": coords, "feil": f"'{spot_id}' finnes ikke i forecast.json sin spots-liste"}
+              if "error" in match:
+                  return {"label": label, "coords": coords, "feil": f"{match['error']} ({'; '.join(match.get('sources', []))})"}
+              hs_eff, peak_time = peak_hs_eff(sp)
+              return {
+                  "label": label, "coords": coords,
+                  "best_stars": match.get("best_stars"),
+                  "best_p_surf": match.get("best_p_surf"),
+                  "hs_eff_peak": hs_eff,
+                  "peak_time": peak_time,
+              }
+
+
+          a = row("Variant A", f"{os.environ['VARIANT_A_LAT']}, {os.environ['VARIANT_A_LON']}",
+                  "/tmp/ab/forecast_a.json", "/tmp/ab/spot_a.json")
+          b = row("Variant B", f"{os.environ['VARIANT_B_LAT']}, {os.environ['VARIANT_B_LON']}",
+                  "/tmp/ab/forecast_b.json", "/tmp/ab/spot_b.json")
+
+          print(f"\n{'='*70}\nA/B: offshore_point for '{spot_id}'\n{'='*70}")
+          for r in (a, b):
+              print(f"\n{r['label']}  (offshore_point = {r['coords']})")
+              if "feil" in r:
+                  print(f"  FEIL: {r['feil']}")
+              else:
+                  print(f"  best_stars   = {r['best_stars']}")
+                  print(f"  best_p_surf  = {r['best_p_surf']}")
+                  print(f"  hs_eff (peak-time, {r['peak_time']}) = {r['hs_eff_peak']}")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(f"# A/B: offshore_point for `{spot_id}`\n\n")
+                  f.write("| variant | offshore_point | best_stars | best_p_surf | hs_eff (peak) | peak-time |\n")
+                  f.write("|---|---|---|---|---|---|\n")
+                  for r in (a, b):
+                      if "feil" in r:
+                          f.write(f"| {r['label']} | {r['coords']} | FEIL: {r['feil']} | | | |\n")
+                      else:
+                          f.write(f"| {r['label']} | {r['coords']} | {r['best_stars']} | "
+                                  f"{r['best_p_surf']} | {r['hs_eff_peak']} | {r['peak_time']} |\n")
+          PYEOF
