@@ -377,8 +377,11 @@ spots:
     notes: >
       Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet
       på stranda - de nye koordinatene ville ligget 284 m fra hverandre,
-      altså samme bølge. Norskerennas kant kommer usedvanlig nær:
-      50-meterskoten under 1 km, 100-meterskoten under 400 m.
+      altså samme bølge. Norskerennas kant kommer nær VESTOVER (Norgeskart
+      viser 100-meterskoten under 400 m der) - MEN det er ikke retningen
+      swellen ankommer fra. Målt langs swellretningen (peiling 214,6° mot
+      offshore_point, ordre 2026-09-02): 20 m på 10,21 km, 30 m på 8,05 km,
+      50 m på 6,35 km - grunt i seks kilometer, ikke dypt rett utenfor.
       MEN den brytbare sonen mellom tørrfallet og 15-meterskoten er smal,
       kanskje 50-100 m. Tørrfall (+4.7, +1.8, +6.2) ligger rett innenfor.
       Uverifisert - rekognoser fra land på en 2 m-dag før du regner
@@ -464,6 +467,20 @@ spots:
                                          # dypest - derfor valgt etter SO-swellretningen. ~1,5 km
                                          # SO for spotten, peiling dit er 143.1 grader (innenfor
                                          # vinduet). Fortsatt ANSLAATT, ikke maalt.
+                                         #
+                                         # A/B-testet (ordre 2026-09-02, .github/workflows/
+                                         # ab-test.yml, aapent nettverk i Actions): nytt punkt
+                                         # [59.0650, 10.4900] ga best_stars 6,2 / best_p_surf 60 /
+                                         # hs_eff 2,2 (topp 7. sept). Gammelt punkt
+                                         # [59.095, 10.510] ga 6,4 / 80 / 1,8 (topp 5. sept).
+                                         # Tolkning: det gamle punktet laa inne i Sandosundet der
+                                         # boelgemodellens ~4 km oppslag ikke opploeser geometrien
+                                         # - det leverer en glattet, kunstig STABIL verdi (hoyere
+                                         # p_surf), ikke en mer paalitelig en. Beholdt det NYE
+                                         # punktet. Feltet paavirker selve prognosen direkte
+                                         # (agent.py sin gather() -> S.met_waves()), IKKE bare
+                                         # dybdeprofilen - se offshore_point-oppfoeringen i
+                                         # filens header for det generelle poenget.
     wind_weight: 1.0
     facing: 100
     swell_window: [110, 200]
@@ -630,12 +647,22 @@ spots:
       sector_half_width: 20
       spread_s: 5
       transmission: 0.85         # justert ned fra 1.05 (ordre 2026-08-31):
-                                  # dybdemaaling motsier "dypt vann rett
-                                  # utenfor" - 50-meterskoten (dybde_50m_km)
-                                  # ligger maalt 11,88 km ute langs facing
-                                  # 200 grader, ikke rett utenfor som antatt.
-                                  # Grunt vann over den strekningen koster
-                                  # energi.
+                                  # opprinnelig begrunnet med at dybdemaaling
+                                  # motsa "dypt vann rett utenfor" -
+                                  # 50-meterskoten (dybde_50m_km) laa den
+                                  # gang maalt 11,88 km ute langs facing 200
+                                  # grader. DEN BEGRUNNELSEN GJELDER IKKE
+                                  # LENGER SLIK (ordre 2026-09-02):
+                                  # build_fetch.py maaler na langs gate-
+                                  # peilingen i stedet for facing (se
+                                  # depth_bearing_for_spot() i build_fetch.py),
+                                  # og med den retningen falt d50 til 5,21 km
+                                  # - fortsatt grunt, men under halvparten av
+                                  # tallet begrunnelsen over siterer. Verdien
+                                  # 0.85 er IKKE endret her (ingen funksjonell
+                                  # endring denne runden) - trenger en ny
+                                  # begrunnelse mot det oppdaterte tallet naar
+                                  # noen tar tak i det.
     notes: >
       Beste uprøvde indre-fjord-kandidat. Samme fetch som Slagen, bedre bunn.
       Rekognoser fra Larkollen med kikkert før du tar båten.
