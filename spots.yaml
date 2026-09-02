@@ -7,6 +7,28 @@
 #  facing:        retningen brytningen SER MOT = retningen palandsvind
 #                 kommer fra. Slagen facing=120 -> vika apner mot OSO.
 #  swell_window:  [lo, hi] meteorologiske grader, sektoren som gir bolger
+#  offshore_point: [lat, lon], kun klasse A/B. TO FORMAAL PAA SAMME FELT
+#                 (ordre 2026-09-02, se rapport til bruker om Hvasser) -
+#                 IKKE flytt uten aa vite at begge endres:
+#                   1. Modell-lesepunkt: agent.py sin gather() henter
+#                      Hs/Tp/dir herfra (S.met_waves()) - dette ER
+#                      spottens raa boelgedata (model_hs/model_tp i
+#                      evaluate_class_ab()). Flytting endrer prognosen,
+#                      ikke bare en diagnostikk-detalj.
+#                   2. Retningsreferanse for dybdeprofilen: build_fetch.py
+#                      sin depth_bearing_for_spot() skyter dybdesoeket
+#                      langs peilingen fra spotens (lat, lon) til dette
+#                      punktet (fallback: gate, saa facing - se der).
+#                 Punktet skal derfor velges etter hvor SWELLEN FAKTISK
+#                 KOMMER FRA (innenfor swell_window), IKKE etter hvor det
+#                 er dypest eller naermest. Et spot med to energikilder
+#                 (som Hvasser: lokalt NO-dypvann i Sandosundet OG
+#                 SO-swell mot Koster/Skagen) maa velge PAA SWELLEN sin
+#                 side av det valget - offshore_point kan bare peke ett
+#                 sted. build_fetch.py sin STEG 1 (offshore_point_bearing_check())
+#                 advarer automatisk hvis peilingen faller utenfor
+#                 spottens eget swell_window - kjor den etter enhver
+#                 flytting.
 #  klasse:
 #     A = apen Skagerrak-kyst. Les Hs/Tp/dir rett fra WW3/WAM.
 #     B = fjordmunning. Som A, men sjekk ogsa lokal fetch.
