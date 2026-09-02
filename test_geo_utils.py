@@ -26,6 +26,23 @@ def test_bearing_vector_kompassretninger():
     assert math.isclose(dx, 0, abs_tol=1e-9) and math.isclose(dy, -1, abs_tol=1e-9)
 
 
+def test_bearing_between_kompassretninger():
+    """bearing_between() er inversen av bearing_vector() - rundt tur ved
+    N/O/S/V paa et punkt naer 59N, avstander store nok (10 km) til at
+    UTM32-avrunding ikke forstyrrer."""
+    lon0, lat0 = 10.0, 59.0
+    for bearing in (0, 45, 90, 135, 180, 225, 270, 315):
+        x0, y0 = G.to_utm(lon0, lat0)
+        dx, dy = G.bearing_vector(bearing)
+        lon1, lat1 = G.to_wgs84_xy(x0 + dx * 10000, y0 + dy * 10000)
+        got = G.bearing_between(lon0, lat0, lon1, lat1)
+        assert math.isclose(got, bearing, abs_tol=1e-6)
+
+
+def test_bearing_between_samme_punkt_gir_null():
+    assert G.bearing_between(10.0, 59.0, 10.0, 59.0) == 0.0
+
+
 def test_reproject_roundtrip():
     lon, lat = 10.0, 59.0
     x, y = G.to_utm(lon, lat)

@@ -84,11 +84,20 @@ For hvert spot i spots.yaml:
 
     Se ogsaa rapporten til brukeren (samtalen, 2026-09-01) for hvorfor
     "straalen tar feil kote"-hypotesen ble avvist (hver maaldybde soekes
-    mot sitt EGET tre, ingen kryss-kontaminering), og for funnet at
-    `facing` brukes til to formaal som kan kreve ulik retning i en bukt
-    (vindkvalitet: hvilken vei stedet vender: physics.wind_quality via
-    ensemble.py/agent.py) vs (dybdeprofil her: hvilken vei swellen faktisk
-    kommer fra) - IKKE endret her, kun rapportert.
+    mot sitt EGET tre, ingen kryss-kontaminering).
+
+    LOEST (ordre 2026-09-02, se rapporten om Moelen odden): `facing`
+    brukes til to formaal som kan kreve ulik retning paa en odde -
+    vindkvalitet (hvilken vei stedet vender: physics.wind_quality via
+    ensemble.py/agent.py) trenger `facing`, men dybdeprofilen her trenger
+    hvilken vei AAPENT HAV faktisk ligger. De to er IKKE alltid samme
+    retning (Moelen odden: 27 grader avvik mellom facing=175 og peilingen
+    mot spotens eget offshore_point - straalen langs facing gikk glipp av
+    en kote spotten selv antok laa under 1 km unna). Dybdeprofilen bruker
+    derfor peilingen fra spotens (lat, lon) til `offshore_point` naar
+    feltet finnes (geo_utils.bearing_between()), og faller tilbake til
+    `facing` naar det ikke gjor det - se depth_bearing_for_spot() under.
+    Hvilken retning som ble brukt logges per spot i STEG 3-utskriften.
 
     VIKTIG ved etterkontroll av fiksen: 9 av 14 spots endret seg da dette
     ble kjort paa nytt, ikke bare de 4 som saa aapenbart feil ut (jf.
@@ -425,13 +434,15 @@ def group_by_depth(dybde_features, target_depths, tolerance_m=DEPTH_TOLERANCE_M)
     return out
 
 
-def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+def substantial_land_crossing_km(lon, lat, bearing, kyst_tree, kyst_lines,
                                   max_km=DEPTH_MAX_KM,
                                   min_length_m=SUBSTANTIAL_LAND_MIN_LENGTH_M,
                                   label=None):
     """
-    Avstand til naermeste SUBSTANSIELLE kystkryssing langs facing, eller
-    None hvis det ikke finnes noen innen max_km.
+    Avstand til naermeste SUBSTANSIELLE kystkryssing langs `bearing`, eller
+    None hvis det ikke finnes noen innen max_km. `bearing` er IKKE
+    noedvendigvis spotens `facing`-felt lenger - se compute_depth_profile()
+    sin docstring (ordre 2026-09-02).
 
     Brukt til aa kappe dybdesoeket foer straalen kan passere over land og
     plukke opp en kote som hoerer til en helt annen, adskilt bukt -
@@ -445,7 +456,7 @@ def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
     ikke stopper soeket, akkurat som det ikke stopper en reell boelge.
     Kryssinger under grensa logges (ignorert), ikke bare hoppes stille over.
     """
-    hits = G.cast_ray_hits_km(lon, lat, facing, max_km, kyst_tree, kyst_lines)
+    hits = G.cast_ray_hits_km(lon, lat, bearing, max_km, kyst_tree, kyst_lines)
     ignored = []
     for d_km, length_m in hits:
         if length_m >= min_length_m:
@@ -463,11 +474,43 @@ def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
     return None
 
 
-def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
+def depth_bearing_for_spot(spot):
+    """
+    Hvilken peiling dybdeprofilen skal skytes langs for dette spotet
+    (ordre 2026-09-02, se compute_depth_profile() sin docstring for
+    hvorfor `facing` alene ikke duger paa en odde).
+
+    Bruker peilingen fra spotens (lat, lon) til dens eget `offshore_point`
+    naar feltet finnes - det er ment aa ligge i aapent vann, mot der
+    swellen faktisk kommer fra. Faller tilbake til `facing` (spottens
+    vendte retning, brukt til vindkvalitet - ikke noedvendigvis samme
+    retning) naar offshore_point mangler.
+
+    Returnerer (bearing_deg, kilde), der kilde er "offshore_point" eller
+    "facing" - main() logger denne per spot i STEG 3-utskriften, se
+    rapporten til brukeren for hvorfor det er verdt aa se.
+    """
+    offshore = spot.get("offshore_point")
+    if offshore:
+        off_lat, off_lon = offshore[0], offshore[1]
+        bearing = G.bearing_between(spot["lon"], spot["lat"], off_lon, off_lat)
+        return bearing, "offshore_point"
+    return spot["facing"], "facing"
+
+
+def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
                            kyst_tree, kyst_lines, label=None):
     """
-    For hver maaldybde: avstand langs facing til koten, med en status ved
-    siden av som forteller hvor mye aa stole paa verdien:
+    For hver maaldybde: avstand langs `bearing` til koten, med en status
+    ved siden av som forteller hvor mye aa stole paa verdien.
+
+    `bearing` er IKKE noedvendigvis spotens `facing`-felt (ordre
+    2026-09-02, se depth_bearing_for_spot()): `facing` beskriver hvilken
+    vei spotten VENDER (brukt til vindkvalitet, physics.wind_quality),
+    mens dybdeprofilen trenger hvilken vei AAPENT HAV faktisk ligger - de
+    to kan avvike paa en odde (Moelen odden: 27 grader avvik mot spotens
+    eget offshore_point). Kalleren (main()) sender inn peilingen mot
+    offshore_point naar den finnes, ellers facing som foer.
 
       "maalt"       reell treff innenfor den gyldige rekkevidden - stol paa den.
       "ingen_kote"  soekt hele den gyldige rekkevidden (DEPTH_MAX_KM,
@@ -497,8 +540,8 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
     0.34 km var en ~700 m stor lokal anomali, ikke den generelle 50 m-
     fronten (som laa 3.9+ km unna langs samme straale).
     """
-    edge_km = G.cast_ray_km(lon, lat, facing, DEPTH_MAX_KM, edge_tree, edge_lines)
-    land_km = substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+    edge_km = G.cast_ray_km(lon, lat, bearing, DEPTH_MAX_KM, edge_tree, edge_lines)
+    land_km = substantial_land_crossing_km(lon, lat, bearing, kyst_tree, kyst_lines,
                                             max_km=DEPTH_MAX_KM, label=label)
     effective_cap = min(DEPTH_MAX_KM, edge_km, land_km if land_km is not None else DEPTH_MAX_KM)
 
@@ -508,7 +551,7 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
             out[target] = (None, "ingen_kote")
             continue
         tree, lines = depth_trees[target]
-        d = G.cast_ray_km(lon, lat, facing, effective_cap, tree, lines)
+        d = G.cast_ray_km(lon, lat, bearing, effective_cap, tree, lines)
         if d < effective_cap:
             out[target] = (round(d, 2), "maalt")
         elif land_km is not None and land_km <= edge_km and land_km <= DEPTH_MAX_KM:
@@ -635,18 +678,22 @@ def main():
             f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
 
     log("\n" + "=" * 70)
-    log("STEG 3 - dybdeprofil langs facing")
+    log("STEG 3 - dybdeprofil langs offshore_point-peiling (fallback: facing)")
     log("=" * 70)
     for spot in doc["spots"]:
         lon, lat, facing = spot["lon"], spot["lat"], spot["facing"]
-        profile = compute_depth_profile(lon, lat, facing, depth_trees,
+        bearing, bearing_source = depth_bearing_for_spot(spot)
+        profile = compute_depth_profile(lon, lat, bearing, depth_trees,
                                          edge_tree, edge_lines, kyst_tree, kyst_lines,
                                          label=spot["id"])
         for target in DEPTH_TARGETS_M:
             value, status = profile[target]
             spot[f"dybde_{target}m_km"] = value
             spot[f"dybde_{target}m_status"] = status
-        log(f"  {spot['id']:<16} facing={facing:<4} "
+        bearing_note = (f"bearing={bearing:.1f} ({bearing_source})"
+                         if bearing_source == "offshore_point"
+                         else f"bearing={bearing:.1f} (facing, ingen offshore_point)")
+        log(f"  {spot['id']:<16} facing={facing:<4} {bearing_note:<38} "
             + "  ".join(f"{t}m={profile[t][0]}({profile[t][1]})" for t in DEPTH_TARGETS_M))
 
         # fetch_km_72*/dybde_*-feltene over er nettopp regnet fra spotens

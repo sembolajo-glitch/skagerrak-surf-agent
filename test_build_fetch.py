@@ -248,6 +248,28 @@ def test_group_by_depth_ingen_treff_utelates():
     assert groups == {}
 
 
+def test_depth_bearing_for_spot_bruker_offshore_point():
+    """Peiling mot offshore_point, IKKE facing, naar feltet finnes -
+    se rapporten om Moelen odden (27 grader avvik mellom de to)."""
+    spot = {"lat": 58.975217, "lon": 9.812139, "facing": 175,
+            "offshore_point": [58.970, 9.808]}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "offshore_point"
+    assert 195 < bearing < 210          # ~202 grader, IKKE 175 (facing)
+
+
+def test_depth_bearing_for_spot_faller_tilbake_til_facing():
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert (bearing, source) == (190, "facing")
+
+
+def test_depth_bearing_for_spot_ingen_offshore_point_naar_null():
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190, "offshore_point": None}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert (bearing, source) == (190, "facing")
+
+
 def test_compute_depth_profile_manglende_dybde_gir_none():
     profile = B.compute_depth_profile(10.0, 59.0, 180, depth_trees={},
                                        edge_tree=None, edge_lines=[],
