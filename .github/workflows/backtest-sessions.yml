@@ -1,0 +1,155 @@
+name: backtest-sessions
+
+# Kjor backtest_sessions.py (reanalyse mot sessions_historisk.csv) i
+# GitHub Actions - samme grunn som ab-test.yml/probe-marine-archive.yml:
+# verken denne oekten eller brukerens eget miljo naar Open-Meteo, saa
+# dette er den eneste plassen skriptet faktisk kan kjores og gi ekte
+# tall. Se backtest_sessions.py sin docstring for hele bakgrunnen
+# (reanalyse vs. prognose, modellskjevheten mellom era5_ocean og
+# standardmodellen, hvorfor ERA5 brukes for alle elleve oktene).
+#
+# KUN manuell trigger. Committer ingenting - "permissions: contents:
+# read" haandhever det. Resultatet havner baade i loggen (skriptet
+# printer selv) og som en markdown-tabell i GITHUB_STEP_SUMMARY (eget
+# steg, leser out/backtest_report.json), pluss selve JSON-en som
+# artifact for etterkontroll av raadataene.
+on:
+  workflow_dispatch:
+    inputs:
+      sessions_csv:
+        description: "Sti til okt-CSV-en"
+        type: string
+        default: sessions_historisk.csv
+      bias_sample_n:
+        description: "Antall tilfeldige doegn (i tillegg til okt-datoene fra 2023-) for skjevhetsmaalingen"
+        type: string
+        default: "30"
+      seed:
+        description: "Fast seed for det tilfeldige skjevhetsutvalget"
+        type: string
+        default: "20260902"
+      skip_bias_quantification:
+        description: "Hopp over maalingen og bruk oppgitt skjevhet i stedet (bias_hs/bias_tp under)"
+        type: boolean
+        default: false
+      bias_hs:
+        description: "Manuell Hs-skjevhetsfaktor (kun brukt hvis skip_bias_quantification er paa)"
+        type: string
+        default: ""
+      bias_tp:
+        description: "Manuell Tp-skjevhetsfaktor (kun brukt hvis skip_bias_quantification er paa)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements.txt
+
+      - name: Kjor backtest_sessions.py
+        env:
+          SESSIONS_CSV: ${{ inputs.sessions_csv }}
+          BIAS_SAMPLE_N: ${{ inputs.bias_sample_n }}
+          SEED: ${{ inputs.seed }}
+          SKIP_BIAS: ${{ inputs.skip_bias_quantification }}
+          BIAS_HS: ${{ inputs.bias_hs }}
+          BIAS_TP: ${{ inputs.bias_tp }}
+        run: |
+          args=(--sessions-csv "$SESSIONS_CSV" --bias-sample-n "$BIAS_SAMPLE_N" --seed "$SEED")
+          if [ "$SKIP_BIAS" = "true" ]; then
+            args+=(--skip-bias-quantification --bias-hs "$BIAS_HS" --bias-tp "$BIAS_TP")
+          fi
+          python backtest_sessions.py "${args[@]}"
+
+      - name: Skriv resultatet til step summary
+        if: always()
+        run: |
+          python - <<'PYEOF'
+          import json
+          import os
+
+          report_path = "out/backtest_report.json"
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not os.path.exists(report_path):
+              if summary_path:
+                  with open(summary_path, "a", encoding="utf-8") as f:
+                      f.write("# Backtest: elleve historiske okter\n\n"
+                              "**FEIL**: out/backtest_report.json ble ikke skrevet - "
+                              "se loggen fra forrige steg for hva som feilet.\n")
+              raise SystemExit(0)
+
+          import backtest_sessions as B
+
+          report = json.load(open(report_path, encoding="utf-8"))
+          bias = report["bias"]
+          lines = ["# Backtest: elleve historiske okter\n\n",
+                    "## Modellskjevhet (ERA5-Ocean / standardmodell)\n\n",
+                    "| variabel | median | kvartiler | spenn | n |\n",
+                    "|---|---|---|---|---|\n"]
+          for var in ("hs", "tp"):
+              b = bias.get(var, {})
+              if "p25" in b:
+                  lines.append(f"| {var.upper()} | {b.get('median')} | {b.get('p25')}-{b.get('p75')} | "
+                                f"{b.get('min')}-{b.get('max')} | {b.get('n')} |\n")
+              else:
+                  lines.append(f"| {var.upper()} | {b.get('median')} | (oppgitt manuelt, ikke maalt) | | |\n")
+
+          def render_table(rows, title):
+              lines.append(f"\n## {title}\n\n")
+              lines.append("| dato | spot | kvalitet | stars | p_surf | regional_wp | port | svakeste ledd | score |\n")
+              lines.append("|---|---|---|---|---|---|---|---|---|\n")
+              n_zero = 0
+              for r in rows:
+                  if "feil" in r:
+                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | | |\n")
+                      continue
+                  h = r["hour"]
+                  score = h["score"]
+                  if score == 0.0:
+                      n_zero += 1
+                  port = ("bypasset" if h.get("regional_gate_bypassed") else
+                          "STENGT" if h.get("regional_gate_closed") else "aapen")
+                  led, led_v = B._weakest_led(h)
+                  lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {h.get('stars')} | "
+                                f"{h.get('p_surf')} | {h.get('regional_wp')} | {port} | "
+                                f"{led} ({led_v:.2f}) | {score} |\n")
+              n_total = sum(1 for r in rows if "feil" not in r)
+              lines.append(f"\n**{n_zero}/{n_total} okter fikk score 0.0.**\n")
+              return n_zero, n_total
+
+          n_zero_raw, n_total = render_table(report["raw"], "Raa ERA5 (ukorrigert)")
+          n_zero_corr, _ = render_table(report["corrected"], "Skjevhetskorrigert")
+
+          lines.append("\n## Oppsummering\n\n")
+          lines.append(f"- Raa ERA5: **{n_zero_raw}/{n_total}** okter fikk score 0.0\n")
+          lines.append(f"- Skjevhetskorrigert: **{n_zero_corr}/{n_total}** okter fikk score 0.0\n\n")
+          lines.append("Reanalyse, ikke prognose (se backtest_sessions.py sin docstring). "
+                        "Kan KUN avsloere for hoye terskler - alle elleve oktene var positive, "
+                        "ingen bomturer i datasettet. Ingen terskler er justert av denne kjoringen.\n")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.writelines(lines)
+          print("".join(lines))
+          PYEOF
+
+      - name: Last opp backtest_report.json som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-report
+          path: out/backtest_report.json
+          if-no-files-found: warn
+          retention-days: 30
