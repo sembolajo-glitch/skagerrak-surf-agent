@@ -308,6 +308,11 @@ hovedretningen som åpent hav og samme analytiske utfylling som
 | larkollen | 0.52 km | +8.79 km (345°) |
 | svenner, portor | ≤0.03 km | ≤0.4 km – praktisk talt null |
 
+`molen`-raden gjelder det GAMLE `molen`-punktet (58.968/9.805), som ble
+slått sammen inn i `molen_odden` (58.975217/9.812139, 284 m unna –
+ordre 2026-09-02). Ikke kjørt på nytt for det nye punktet ennå – se
+`molen_odden` sin `notes` i spots.yaml.
+
 To grupper: for `svenner` og `portor` gjør skjærene nesten ingen forskjell
 (kysten der er enten sammenhengende eller reelt åpen langs hele kjeglen).
 For `verdens_ende`, `orekroken` og `jomfruland_ost` er avviket stort nok

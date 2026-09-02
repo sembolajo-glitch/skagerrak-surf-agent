@@ -43,6 +43,12 @@ FIELDS = [
     # fra, None naar en side manglet energi helt eller for klasse A/B
     # uten local_fetch.
     "bypass_weight", "log_energy_margin",
+    # brattheit-justering av regional_wp_min (ordre 2026-09-02) - se
+    # physics.wave_steepness()/gate_threshold_factor() og score_hour() i
+    # agent.py. steepness er Hs/L0 ved Saltsteins offshore_point (samme
+    # tidspunkt regional_wp er regnet fra); gate_factor er faktoren
+    # regional_wp_min ble ganget med FOR porten ble sjekket denne timen.
+    "steepness", "gate_factor",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra
