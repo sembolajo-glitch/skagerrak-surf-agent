@@ -1,0 +1,171 @@
+name: probe-marine-archive
+
+# Engangsdiagnostikk (samme "probe"-konsept som geodata.yml sin
+# fetch_geodata.py --probe): avgjor OM Open-Meteo Marine API faktisk
+# leverer boelgedata langt tilbake i tid, FOER noen bygger et
+# backtest-skript som antar det. Se rapport til bruker (samtalen
+# 2026-09-02): Open-Meteos egen open-data-repo paa GitHub merker
+# EWAM/GWAM/ERA5-Ocean "active since December 2023" - tvetydig om det
+# betyr "arkiveringen startet da, men daekker tilbake til 1940" eller
+# "det er faktisk ingen data foer det". De fire probedatoene under (to
+# foer, en paa, en etter grensa) og models=era5_ocean vs. standard-
+# modellen avgjor hvilket. IKKE bygg backtest_sessions.py foer dette er
+# kjort og svaret er lest.
+#
+# KUN manuell trigger. Rorer ingen repo-filer, committer ingenting -
+# rent utgaaende API-kall og utskrift.
+on:
+  workflow_dispatch:
+    inputs:
+      lat:
+        description: "Breddegrad (default: Saltsteins offshore_point)"
+        type: string
+        default: "58.930"
+      lon:
+        description: "Lengdegrad (default: Saltsteins offshore_point)"
+        type: string
+        default: "9.830"
+      dates:
+        description: "Kommaseparerte datoer (YYYY-MM-DD) aa probe"
+        type: string
+        default: "2018-08-18,2019-09-07,2023-06-01,2025-08-05"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer avhengigheter
+        run: pip install requests
+
+      - name: Probe Open-Meteo Marine API mot historiske datoer
+        env:
+          PROBE_LAT: ${{ inputs.lat }}
+          PROBE_LON: ${{ inputs.lon }}
+          PROBE_DATES: ${{ inputs.dates }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          import requests
+
+          lat = os.environ["PROBE_LAT"]
+          lon = os.environ["PROBE_LON"]
+          dates = [d.strip() for d in os.environ["PROBE_DATES"].split(",") if d.strip()]
+
+          URL = "https://marine-api.open-meteo.com/v1/marine"
+          # Samme boelgevariabler som sources.py sin _openmeteo_marine_single()
+          # spor i produksjon (agent.py) - probe under samme forutsetninger.
+          HOURLY = "wave_height,wave_direction,wave_period"
+
+          VARIANTS = [
+              ("standardmodell (ingen models-param)", {}),
+              ("models=era5_ocean", {"models": "era5_ocean"}),
+          ]
+
+
+          def probe_one(date, label, extra_params):
+              params = {
+                  "latitude": lat,
+                  "longitude": lon,
+                  "start_date": date,
+                  "end_date": date,
+                  "hourly": HOURLY,
+                  "timezone": "UTC",
+              }
+              params.update(extra_params)
+              try:
+                  r = requests.get(URL, params=params, timeout=30)
+              except requests.RequestException as exc:
+                  return {"date": date, "variant": label, "status": None,
+                          "feil": f"{type(exc).__name__}: {exc}"}
+
+              row = {"date": date, "variant": label, "status": r.status_code, "url": r.url}
+              if r.status_code != 200:
+                  row["feil"] = r.text[:300]
+                  return row
+
+              try:
+                  body = r.json()
+              except ValueError:
+                  row["feil"] = f"ikke gyldig JSON: {r.text[:300]}"
+                  return row
+
+              hourly = body.get("hourly") or {}
+              wave_height = hourly.get("wave_height")
+              row["har_wave_height_felt"] = wave_height is not None
+              if wave_height is None:
+                  row["reason"] = body.get("reason")  # Open-Meteo sin egen feilmelding, hvis noen
+                  return row
+
+              n_total = len(wave_height)
+              n_real = sum(1 for v in wave_height if v is not None)
+              row["n_timer"] = n_total
+              row["n_ekte_tall"] = n_real
+              row["sample"] = wave_height[:3]
+              return row
+
+
+          all_rows = []
+          print(f"\n{'='*78}\nProbe: Open-Meteo Marine API mot {lat},{lon}\n{'='*78}")
+          for date in dates:
+              for label, extra in VARIANTS:
+                  row = probe_one(date, label, extra)
+                  all_rows.append(row)
+                  print(f"\n{date}  [{label}]")
+                  print(f"  URL:    {row.get('url', '(ingen - forespoersel feilet foer den ble sendt)')}")
+                  print(f"  status: {row.get('status')}")
+                  if "feil" in row:
+                      print(f"  FEIL:   {row['feil']}")
+                      continue
+                  print(f"  wave_height-felt finnes: {row['har_wave_height_felt']}")
+                  if not row["har_wave_height_felt"]:
+                      print(f"  (Open-Meteo sin egen 'reason', hvis noen: {row.get('reason')})")
+                      continue
+                  print(f"  timer totalt: {row['n_timer']}, derav ekte tall (ikke null): {row['n_ekte_tall']}")
+                  print(f"  eksempelverdier (forste 3): {row['sample']}")
+
+          print(f"\n{'='*78}\nOPPSUMMERING\n{'='*78}")
+          by_date = {}
+          for row in all_rows:
+              by_date.setdefault(row["date"], []).append(row)
+          for date in dates:
+              rows = by_date.get(date, [])
+              verdicts = []
+              for row in rows:
+                  if "feil" in row:
+                      verdicts.append(f"{row['variant']}: FEIL/{row.get('status')}")
+                  elif not row.get("har_wave_height_felt"):
+                      verdicts.append(f"{row['variant']}: felt mangler")
+                  elif row["n_ekte_tall"] == 0:
+                      verdicts.append(f"{row['variant']}: kun null-verdier")
+                  else:
+                      verdicts.append(f"{row['variant']}: {row['n_ekte_tall']}/{row['n_timer']} ekte tall")
+              print(f"  {date}: " + "  |  ".join(verdicts))
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(f"# Probe: Open-Meteo Marine API historisk daekning\n\n")
+                  f.write(f"Punkt: {lat}, {lon}\n\n")
+                  f.write("| dato | variant | HTTP | wave_height-felt | ekte tall | eksempel |\n")
+                  f.write("|---|---|---|---|---|---|\n")
+                  for row in all_rows:
+                      if "feil" in row:
+                          f.write(f"| {row['date']} | {row['variant']} | {row.get('status')} | FEIL | | {row['feil'][:80]} |\n")
+                      else:
+                          har_felt = row.get("har_wave_height_felt")
+                          ekte = f"{row.get('n_ekte_tall')}/{row.get('n_timer')}" if har_felt else "-"
+                          f.write(f"| {row['date']} | {row['variant']} | {row['status']} | {har_felt} | "
+                                  f"{ekte} | {row.get('sample')} |\n")
+                  f.write("\n**Avgjorende spoersmaal**: gir 2018-08-18 og 2019-09-07 ekte tall? "
+                          "Ja -> desember 2023 var kun arkiveringsstart, hele historikken finnes. "
+                          "Nei (kun null/manglende felt) -> 8 av 11 oekter i sessions_historisk.csv "
+                          "mangler boelgedata fra denne kilden, og backtest_sessions.py maa "
+                          "haandtere det eksplisitt (ikke bygges som om data finnes).\n")
+          PYEOF
