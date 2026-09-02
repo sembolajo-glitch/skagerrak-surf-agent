@@ -147,6 +147,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 
 import geo_utils as G
+import physics as P
 
 ROOT = Path(__file__).resolve().parent
 SPOTS_YAML = ROOT / "spots.yaml"
@@ -596,6 +597,68 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
     return out
 
 
+# ---------------------------------------- konsistenssjekk: offshore_point
+
+
+def offshore_point_bearing_check(spots):
+    """
+    For hvert spot med `offshore_point`: regn den GEOMETRISKE peilingen
+    dit (geo_utils.bearing_between()) og sjekk om den faller innenfor
+    spotens eget `swell_window` (physics.in_window() - haandterer wrap
+    over 0 paa samme maate scoringen selv gjor).
+
+    Ren geometri paa spots.yaml sine egne tall - trenger INGEN nedlastet
+    geodata (kystkontur/dybdekurve), saa den kan kjores og rapporteres
+    UAVHENGIG av resten av denne pipelinen (se main() sin STEG 1, kjort
+    FOR datamappe-sjekken).
+
+    Fanger en stille inkonsistens som IKKE ble oppdaget da Jomfruland
+    fikk rettet koordinat (ordre 2026-09-02): offshore_point ble staaende
+    uendret, og pekte dermed fortsatt mot det FORKASTEDE punktet - 83
+    grader, utenfor swell_window [100,230] i det hele tatt. Denne sjekken
+    ville flagget det med en gang.
+
+    Returnerer en liste av (spot_id, bearing_deg, swell_window, ok) for
+    hvert spot MED offshore_point (spots uten feltet er ikke med i det
+    hele tatt - klasse C bruker gate i stedet, se
+    depth_bearing_for_spot()). `ok` er False naar peilingen faller
+    utenfor swell_window - IKKE en garanti for at koordinatet er riktig
+    (kun en NOEDVENDIG betingelse: kan ikke vaere "rett vei ut" hvis det
+    ikke engang peker mot en retning spotten sier den tar imot swell fra),
+    og heller ikke en garanti for at et "OK"-spot faktisk ligger i aapent
+    vann - det trengs kystkontur-data for aa bekrefte.
+    """
+    rows = []
+    for spot in spots:
+        offshore = spot.get("offshore_point")
+        if not offshore:
+            continue
+        off_lat, off_lon = offshore[0], offshore[1]
+        bearing = G.bearing_between(spot["lon"], spot["lat"], off_lon, off_lat)
+        window = tuple(spot["swell_window"])
+        ok = P.in_window(bearing, window)
+        rows.append((spot["id"], round(bearing, 1), window, ok))
+    return rows
+
+
+def log_offshore_point_bearing_check(spots):
+    rows = offshore_point_bearing_check(spots)
+    if not rows:
+        log("  ingen spots har offshore_point")
+        return rows
+    for spot_id, bearing, window, ok in rows:
+        status = "OK" if ok else "ADVARSEL"
+        log(f"  [{status}] {spot_id:<16} peiling={bearing:>6.1f}  swell_window={list(window)}")
+    n_fail = sum(1 for r in rows if not r[3])
+    if n_fail:
+        log(f"\n  {n_fail} av {len(rows)} offshore_point-felt peker UTENFOR eget "
+            f"swell_window - sjekk om koordinatet er stale eller feil (se merknaden "
+            f"ved feltet i spots.yaml).")
+    else:
+        log(f"\n  Alle {len(rows)} offshore_point-felt peker innenfor eget swell_window.")
+    return rows
+
+
 # ------------------------------------------------------------------ main
 
 
@@ -612,12 +675,28 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Ikke skriv til spots.yaml, bare rapporter")
     args = ap.parse_args()
 
+    # spots.yaml lastes FOER geodata-sjekken under - se STEG 1: den sjekken
+    # er ren geometri (ingen kystkontur/dybdekurve involvert) og skal
+    # rapportere selv om resten av pipelinen ikke kan kjore her.
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.width = 100000
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.allow_unicode = True
+    with open(args.spots_yaml, encoding="utf-8") as f:
+        doc = yaml.load(f)
+
+    log("\n" + "=" * 70)
+    log("STEG 1 - konsistenssjekk: offshore_point mot swell_window")
+    log("=" * 70)
+    log_offshore_point_bearing_check(doc["spots"])
+
     data_dir = Path(args.data_dir)
     kyst_path = data_dir / "kystkontur.geojson"
     dybde_path = data_dir / "dybdekurve.geojson"
     for p in (kyst_path, dybde_path):
         if not p.exists():
-            log(f"FEIL: {p} finnes ikke. Kjor fetch_geodata.py foerst.")
+            log(f"\nFEIL: {p} finnes ikke. Kjor fetch_geodata.py foerst.")
             sys.exit(1)
 
     log(f"Laster {kyst_path} ...")
@@ -641,14 +720,6 @@ def main():
     dybde_raw = G.load_geojson(dybde_path)
     dybde_utm = [(G.reproject_geom(g, G.WGS84, G.UTM32), p) for g, p in dybde_raw]
     depth_trees = group_by_depth(dybde_utm, DEPTH_TARGETS_M)
-
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    yaml.width = 100000
-    yaml.indent(mapping=2, sequence=4, offset=2)
-    yaml.allow_unicode = True
-    with open(args.spots_yaml, encoding="utf-8") as f:
-        doc = yaml.load(f)
 
     log("\n" + "=" * 70)
     log("STEG 2 - fetch, 72 retninger")

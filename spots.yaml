@@ -266,7 +266,16 @@ spots:
                              # 58.840144/9.565695 (5,3 km unna) - se merknad ved
                              # koordinatrettingen over. Fjernes automatisk av
                              # build_fetch.py naar spotten regnes paa nytt.
-    offshore_point: [58.845, 9.650]
+    offshore_point: [58.8330, 9.5760]  # ANSLAATT (flyttet ordre 2026-09-02): det gamle
+                                        # [58.845, 9.650] var aldri oppdatert da spotens
+                                        # eget koordinat ble rettet 5,3 km over - peilingen
+                                        # dit landet paa 83 grader, UTENFOR swell_window
+                                        # [100,230], og stemte kun med det forkastede
+                                        # 58.865/9.620. Nytt punkt ligger ~1 km SO for
+                                        # spotten, ute i Skagerrak paa riktig side av oya;
+                                        # peilingen dit er 142.7 grader - innenfor vinduet,
+                                        # 7.7 grader fra facing 135. Fortsatt ANSLAATT,
+                                        # ikke maalt.
     wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
     facing: 135
     swell_window: [100, 230]

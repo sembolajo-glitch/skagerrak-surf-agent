@@ -294,6 +294,35 @@ def test_depth_bearing_for_spot_ingen_offshore_point_eller_gate_naar_null():
     assert (bearing, source) == (190, "facing")
 
 
+def test_offshore_point_bearing_check_flagger_utenfor_vindu():
+    """Jomfruland-saken, gjenskapt: det GAMLE offshore_point-et stemte kun
+    med det forkastede koordinatet - peiling utenfor swell_window derfra."""
+    spots = [
+        {"id": "old_style", "lat": 58.840144, "lon": 9.565695,
+         "swell_window": [100, 230], "offshore_point": [58.845, 9.650]},
+    ]
+    rows = B.offshore_point_bearing_check(spots)
+    assert len(rows) == 1
+    spot_id, bearing, window, ok = rows[0]
+    assert spot_id == "old_style"
+    assert ok is False
+    assert not (100 <= bearing <= 230)
+
+
+def test_offshore_point_bearing_check_ok_innenfor_vindu():
+    spots = [
+        {"id": "fixed", "lat": 58.840144, "lon": 9.565695,
+         "swell_window": [100, 230], "offshore_point": [58.8330, 9.5760]},
+    ]
+    rows = B.offshore_point_bearing_check(spots)
+    assert rows[0][3] is True
+
+
+def test_offshore_point_bearing_check_hopper_over_spot_uten_feltet():
+    spots = [{"id": "class_c", "lat": 59.0, "lon": 10.0, "swell_window": [160, 200]}]
+    assert B.offshore_point_bearing_check(spots) == []
+
+
 def test_compute_depth_profile_manglende_dybde_gir_none():
     profile = B.compute_depth_profile(10.0, 59.0, 180, depth_trees={},
                                        edge_tree=None, edge_lines=[],
