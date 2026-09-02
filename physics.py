@@ -389,6 +389,68 @@ def water_level_quality(level_cm, optimal_cm, sensitivity_cm):
     return max(0.4, math.exp(-0.5 * z * z))
 
 
+# --------------------------------------------------------- brattheit/gate-port
+
+# Startpunkter, IKKE malte konstanter - se gate_threshold_factor() sin
+# docstring for kalibreringsstatus.
+STEEPNESS_FRESH = 0.035   # fersk vindsjo
+STEEPNESS_CLEAN = 0.015   # fullt avtagende donning
+GATE_CLEAN_FLOOR = 0.40   # ren donning trenger 40 % av energien
+
+
+def wave_steepness(hs, tp):
+    """
+    Hs / L0, der L0 = 1.56 * tp**2 (dypvanns boelgelengde, m, med
+    g/(2*pi) ~ 1.56). Hoy verdi = krapp vindsjo, lav = ren avtagende
+    donning - se gate_threshold_factor() for hvorfor dette skiller
+    "stor rotete dag" fra "lav lang donning dagen etter".
+
+    Returnerer None naar hs/tp mangler eller tp <= 0 (boelgelengde
+    udefinert) - ALDRI 0.0, av samme grunn som swell_fraction(): en
+    krapphet paa 0.0 ville paastaatt "helt flat sjo", ikke "vet ikke".
+    """
+    if hs is None or tp is None or tp <= 0:
+        return None
+    l0 = 1.56 * tp ** 2
+    return hs / l0
+
+
+def gate_threshold_factor(steepness):
+    """
+    Skalerer regional_wp_min etter hvor ren sjoen er (se score_hour() i
+    agent.py: regional_wp_min ganges med denne FOR porten sjekkes).
+
+    Bakgrunn: boelgeeffekt (wave_power(), Hs^2 * Tp) overvekter hoyde.
+    Etter en stor dag faller effekten mye mer enn surfbarheten, fordi
+    den gjenvaerende donningen er lav og lang (empirisk: Saltstein
+    starter normalt paa surf-forecast 150, men gaar paa 50-70 dagen
+    etter en stor dag - 35-45 % av normalterskelen). En ren, avtagende
+    donning trenger derfor MINDRE maalt effekt for aa telle som "aapen
+    port" enn en fersk, kort vindsjo med samme effekttall gjor.
+
+    Lineaer rampe mellom STEEPNESS_CLEAN (returnerer GATE_CLEAN_FLOOR)
+    og STEEPNESS_FRESH (returnerer 1.0), klippet utenfor:
+      steepness <= STEEPNESS_CLEAN  -> GATE_CLEAN_FLOOR
+      steepness >= STEEPNESS_FRESH  -> 1.0
+      der imellom                   -> lineaer interpolasjon
+
+    GATE_CLEAN_FLOOR = 0.40 er en startverdi som skal kalibreres, ikke
+    et maalt tall - valgt til aa ligge midt i det empiriske 35-45 %-
+    spennet over. STEEPNESS_FRESH/STEEPNESS_CLEAN er ogsaa startpunkter.
+    Returnerer 1.0 (ingen endring - porten er like streng som foer) naar
+    steepness er None, samme forsiktige default som resten av porten:
+    ukjent tilstand skal aldri gjore porten STRENGERE enn den var.
+    """
+    if steepness is None:
+        return 1.0
+    if steepness >= STEEPNESS_FRESH:
+        return 1.0
+    if steepness <= STEEPNESS_CLEAN:
+        return GATE_CLEAN_FLOOR
+    frac = (steepness - STEEPNESS_CLEAN) / (STEEPNESS_FRESH - STEEPNESS_CLEAN)
+    return GATE_CLEAN_FLOOR + (1.0 - GATE_CLEAN_FLOOR) * frac
+
+
 # ------------------------------------------------------------------ stjerner
 
 

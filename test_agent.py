@@ -18,7 +18,7 @@ def _hvasser():
 
 
 def _saltstein():
-    """Klasse A, kun regional_wp_max satt (32.6)."""
+    """Klasse A, regional_wp_min (12.2) og regional_wp_max (32.6) satt."""
     spots, _ = A.load_spots()
     return next(s for s in spots if s["id"] == "saltstein")
 

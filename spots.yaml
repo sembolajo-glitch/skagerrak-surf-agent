@@ -158,8 +158,8 @@ spots:
   - id: saltstein
     name: Saltstein
     klasse: A
-    lat: 58.955
-    lon: 9.855
+    lat: 58.965643      # rettet (ordre 2026-09-02): malt i Norgeskart, var 58.955/9.855 (1,24 km feil)
+    lon: 9.848614
     offshore_point: [58.930, 9.830]
     wind_weight: 0.55          # kraftig dyptvannsrev - surfes rutinemessig i onshore chop
     facing: 225
@@ -172,7 +172,22 @@ spots:
     water_sensitivity_cm: 60
     drive_min: 110
     kalibrert: true               # kjent spot - bruk som referanse
-    regional_wp_max: 32.6         # lukker seg - se merknad ved regional_wp_min/max over
+    regional_wp_min: 12.2         # starter - se merknad ved regional_wp_min/max over.
+                                   # Observert paa surf-forecasts skala: starter 150,
+                                   # best 200-300, lukker seg over 400. Ankeret 250 =
+                                   # 20.35 kW/m (wave_power(2.5, tp_est(2.5))) gir, ved
+                                   # LINEAER ekstrapolering fra det ene ankerpunktet,
+                                   # 150 -> 12.2 kW/m.
+                                   # PROVISORISK: forholdet mellom surf-forecast sin
+                                   # skala og vaar kW/m er IKKE nodvendigvis konstant
+                                   # over hele spennet - 150 og 400 kan hver ha sin
+                                   # egen reelle omregningsfaktor som avviker fra denne
+                                   # ene lineaere ekstrapoleringen (samme forbehold
+                                   # gjelder regional_wp_max under). Provisorisk til
+                                   # ekstern_wp gir nok parvise observasjoner til aa
+                                   # kalibrere en ekte (mulig ikke-lineaer) kurve.
+    regional_wp_max: 32.6         # lukker seg over 400 (samme skala, samme forbehold
+                                   # over) - se merknad ved regional_wp_min/max over
     notes: >
       Referansespotten. SV-vendt steinrev, jekker fra dypt vann.
       Fralandsvind er NØ, som sjelden følger en S-kuling.
@@ -219,8 +234,8 @@ spots:
   - id: jomfruland_ost
     name: Jomfruland østside
     klasse: A
-    lat: 58.865
-    lon: 9.620
+    lat: 58.840144      # rettet (ordre 2026-09-02): malt i Norgeskart, var 58.865/9.620 (5,3 km feil)
+    lon: 9.565695
     offshore_point: [58.845, 9.650]
     wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
     facing: 135
@@ -273,33 +288,37 @@ spots:
     dybde_20m_status: ingen_kote
     dybde_30m_status: ingen_kote
     dybde_50m_status: ingen_kote
-  - id: molen
-    name: Mølen
+  - id: molen_odden
+    name: Mølen odden
     klasse: A
-    lat: 58.968
-    lon: 9.805
-    offshore_point: [58.945, 9.800]
-    wind_weight: 0.85
-    facing: 200
-    swell_window: [170, 240]
-    min_hs: 1.7
-    ideal_hs: 2.6
+    lat: 58.975217       # malt (ordre 2026-09-02) - se notes for sammenslaaingen med molen
+    lon: 9.812139
+    facing: 175
+    swell_window: [140, 240]
+    min_hs: 1.5
+    ideal_hs: 2.5
     max_hs: 4.0
-    min_tp: 6.5
+    min_tp: 6.0
+    wind_weight: 0.75
+    offshore_point: [58.970, 9.808]  # ANSLAATT - boer sjekkes: skal ligge i aapent
+                                      # vann sorvest for spotten, ikke paa torrfall
     drive_min: 120
-    notes: Rullestein på Raet. Kan gi tung dumper - trenger periode.
+    notes: >
+      Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet
+      på stranda - de nye koordinatene ville ligget 284 m fra hverandre,
+      altså samme bølge. Norskerennas kant kommer usedvanlig nær:
+      50-meterskoten under 1 km, 100-meterskoten under 400 m.
+      MEN den brytbare sonen mellom tørrfallet og 15-meterskoten er smal,
+      kanskje 50-100 m. Tørrfall (+4.7, +1.8, +6.2) ligger rett innenfor.
+      Uverifisert - rekognoser fra land på en 2 m-dag før du regner
+      med noe. Flyfoto viser lyst grunt vann mot Fugløyrogn i nord, men
+      det er en tørrfallende steinrygg, ikke et rev.
 
-    fetch_km_72: [1.2, 1.1, 3.2, 1.3, 1.3, 5.8, 4.6, 3.2, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.2, 1.3, 1.8, 1.8, 2.3, 2.7, 2.8, 2.9, 3.6, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 15.8, 8.3, 14.7, 13.1, 15.3, 11.3, 9.2, 7.2, 6.5, 5.5, 5.9, 5.9, 7.8, 6.1, 3.5, 6.3, 3.8, 4.0, 3.8, 4.3, 5.0, 3.2, 3.7, 5.4, 6.0, 2.8, 1.3]
-    fetch_km_72_effektiv: [1.3, 1.3, 1.3, 1.3, 3.2, 3.2, 3.2, 3.2, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.2, 1.3, 1.8, 1.8, 2.3, 2.7, 2.8, 2.9, 3.6, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 15.8, 14.7, 14.7, 13.1, 13.1, 11.3, 9.2, 7.2, 6.5, 5.9, 5.9, 5.9, 5.9, 6.1, 6.1, 4.0, 3.8, 4.0, 4.0, 4.0, 3.8, 4.3, 5.0, 3.7, 3.7, 2.8, 1.3]
-    dybde_20m_km:
-    dybde_30m_km:
-    dybde_50m_km:
-    fetch_km_72_endelig: [1.2, 1.1, 3.2, 1.3, 1.3, 5.8, 4.6, 3.2, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.2, 1.3, 1.8, 1.8, 2.3, 2.7, 2.8, 2.9, 3.6, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 15.8, 8.3, 14.7, 13.1, 15.3, 11.3, 9.2, 7.2, 6.5, 5.5, 5.9, 5.9, 7.8, 6.1, 3.5, 6.3, 3.8, 4.0, 3.8, 4.3, 5.0, 3.2, 3.7, 5.4, 6.0, 2.8, 1.3]
-    fetch_km_72_kjegle: [2.9, 3.1, 3.1, 3.1, 4.6, 4.8, 4.8, 4.8, 4.4, 1.1, 1.1, 1.1, 1.1, 1.1, 1.2, 1.4, 1.8, 1.9, 2.7, 2.8, 2.8, 3.5, 3.6, 3.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 15.2, 14.7, 14.7, 14.5, 14.5, 12.0, 11.3, 9.2, 8.3, 6.4, 6.1, 6.9, 6.9, 6.9, 7.0, 6.3, 6.3, 6.3, 4.4, 4.7, 4.7, 4.9, 5.4, 5.4, 5.4, 5.4, 3.0]
-    skjaergaard_indeks: 1.27
-    dybde_20m_status: data_slutt
-    dybde_30m_status: data_slutt
-    dybde_50m_status: data_slutt
+    # fetch_km_72*/dybde_*-feltene fra det gamle molen-punktet er IKKE
+    # tatt med her - de var maalt (build_fetch.py) mot de gamle
+    # koordinatene 58.968/9.805, 284 m unna, og ville vaert feil for
+    # dette punktet. Ma males paa nytt naar build_fetch.py kan kjores
+    # (blokkert i dette miljoet - se rapport til bruker, ordre 2026-09-02).
   - id: portor
     name: Portør
     klasse: A

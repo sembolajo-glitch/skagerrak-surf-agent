@@ -77,7 +77,8 @@ def load_spots(path=None):
 # --------------------------------------------------------------- scoring
 
 
-def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_wp=None):
+def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_wp=None,
+                regional_hs=None, regional_tp=None):
     """
     Regn score for ett spot i en time. Returnerer en dict med ALLE
     mellomregninger, ikke bare totalen - det er hele poenget med
@@ -89,6 +90,16 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     valgfrie) - EN EGEN, UAVHENGIG port paa toppen av min_hs/ideal_hs/
     max_hs over, ikke en erstatning. Ukjent regional_wp porter ALDRI
     igjen (portes ikke), samme forsiktige default som window_ok under.
+
+    regional_hs/regional_tp: raa Hs/Tp (m/s) samme sted og time som
+    regional_wp er regnet fra (run() sin regional_hs_by_time/
+    regional_tp_by_time) - brukes KUN til aa regne physics.wave_steepness()
+    under, ikke i selve wave_power()-tallet. Grunnen: brattheit-porten
+    (ordre 2026-09-02, se physics.gate_threshold_factor()) trenger Hs og
+    Tp hver for seg for aa skille en fersk vindsjo fra en avtagende,
+    lang donning med samme effekt - regional_wp (Hs^2 * Tp) alene kan
+    ikke skille de to. None hvis ukjent -> gate_factor blir 1.0 (ingen
+    endring), samme forsiktige default som regional_wp selv.
 
     Myk port (ordre 2026-09-02, etter backtest mot ekte historikk - se
     rapport til bruker): porten skal IKKE stenge naar spottens EGEN
@@ -142,12 +153,30 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     if not window_ok:
         q_size = 0.0
 
-    wp_min = spot.get("regional_wp_min")
+    # brattheit-justering (ordre 2026-09-02, se physics.gate_threshold_factor()):
+    # regional_wp_min skaleres ned naar den gjenvaerende sjoen er ren/lang
+    # donning i stedet for fersk vindsjo, FOR porten under sjekkes - samme
+    # effekttall (kW/m) betyr mer surfbarhet naar brattheten er lav. Beroerer
+    # KUN nedre grense - regional_wp_max (lukker seg pga. for MYE energi)
+    # er uendret av hvor ren sjoen er.
+    steepness = P.wave_steepness(regional_hs, regional_tp)
+    gate_factor = P.gate_threshold_factor(steepness)
+    wp_min_raw = spot.get("regional_wp_min")
     wp_max = spot.get("regional_wp_max")
+    wp_min = wp_min_raw * gate_factor if wp_min_raw is not None else None
     regional_gate_would_close = regional_wp is not None and (
         (wp_min is not None and regional_wp < wp_min)
         or (wp_max is not None and regional_wp > wp_max)
     )
+    # spot-kopi med det allerede skalerte wp_min - ensemble.evaluate() leser
+    # spot["regional_wp_min"] selv (egen per-medlem gate_raw, se der), saa
+    # den maa se samme justerte terskel som scoren over, ellers ville
+    # score_hour() sin egen "score" (ikke vist i UI) og stars/p_surf (som
+    # ER vist, se ens under) porte ved to ulike terskler.
+    ens_spot = spot
+    if wp_min_raw is not None and gate_factor != 1.0:
+        ens_spot = dict(spot)
+        ens_spot["regional_wp_min"] = wp_min
     local_hs, local_tp = computed.get("local_hs"), computed.get("local_tp")
     prop_hs, prop_tp = computed.get("prop_hs"), computed.get("prop_tp")
     if computed.get("source") == "local_fetch":
@@ -179,7 +208,7 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     # - bruk swell_hs_abs for aa faktisk skille stor swell fra rester.
     swell_andel = P.swell_fraction(computed.get("swell_hs"), computed.get("windsea_hs"), hs)
 
-    ens = E.evaluate(spot, computed, wind, lead_h, water_cm, waves, regional_wp=regional_wp)
+    ens = E.evaluate(ens_spot, computed, wind, lead_h, water_cm, waves, regional_wp=regional_wp)
 
     return {
         "time": ts,
@@ -230,6 +259,14 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         # sammenligne)
         "bypass_weight": round(bypass_w, 3),
         "log_energy_margin": round(log_energy_margin, 3) if log_energy_margin is not None else None,
+        # brattheit-justering av regional_wp_min (ordre 2026-09-02, se
+        # physics.wave_steepness()/gate_threshold_factor() og merknaden ved
+        # wp_min over) - APPEND-ONLY-plassering, bakerst etter
+        # log_energy_margin, se shadow_schema.py sin kontrakt. steepness er
+        # None naar regional_hs/regional_tp mangler; gate_factor er da 1.0
+        # (ingen endring av terskelen)
+        "steepness": round(steepness, 4) if steepness is not None else None,
+        "gate_factor": round(gate_factor, 3),
         # inngangsdata
         "wind_speed": ws,
         "wind_from": wfrom,
@@ -730,7 +767,15 @@ def run(args):
     # spots FOR Saltstein i lista aldri faa noen regional_wp aa porte mot.
     # Tom dict (og dermed apen port for alle) hvis --spot filtrerer bort
     # saltstein - ingen data aa hente den fra da.
+    # regional_hs_by_time/regional_tp_by_time: samme Saltstein-passering,
+    # brukt av score_hour() til aa regne wave_steepness() (se physics.py
+    # og score_hour() sin docstring om brattheit-porten, ordre 2026-09-02)
+    # - kW/m alene (regional_wp_by_time) kan ikke skille en fersk vindsjo
+    # fra en avtagende donning med samme effekt, siden Hs og Tp bidrar
+    # forskjellig til brattheit enn til Hs^2 * Tp.
     regional_wp_by_time = {}
+    regional_hs_by_time = {}
+    regional_tp_by_time = {}
     for spot, (wind, waves, water, errors) in zip(spots, gathered):
         if spot["id"] != "saltstein":
             continue
@@ -738,6 +783,8 @@ def run(args):
             hs, tp = w.get("hs"), w.get("tp")
             if hs is not None and tp is not None:
                 regional_wp_by_time[ts] = round(P.wave_power(hs, tp), 1)
+                regional_hs_by_time[ts] = hs
+                regional_tp_by_time[ts] = tp
         break
 
     # payload-feltet - forblir tom liste hvis saltstein ikke er blant spots
@@ -766,7 +813,9 @@ def run(args):
             hours.append(score_hour(
                 spot, ts, wind.get(ts, {}), waves.get(ts, {}),
                 (water.get(ts) or {}).get("level_cm"), c, lead_h=lead,
-                regional_wp=regional_wp_by_time.get(ts)))
+                regional_wp=regional_wp_by_time.get(ts),
+                regional_hs=regional_hs_by_time.get(ts),
+                regional_tp=regional_tp_by_time.get(ts)))
         windows = find_windows(hours, spot)
         daily = daily_summary(hours)
 
