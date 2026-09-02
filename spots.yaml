@@ -7,6 +7,28 @@
 #  facing:        retningen brytningen SER MOT = retningen palandsvind
 #                 kommer fra. Slagen facing=120 -> vika apner mot OSO.
 #  swell_window:  [lo, hi] meteorologiske grader, sektoren som gir bolger
+#  offshore_point: [lat, lon], kun klasse A/B. TO FORMAAL PAA SAMME FELT
+#                 (ordre 2026-09-02, se rapport til bruker om Hvasser) -
+#                 IKKE flytt uten aa vite at begge endres:
+#                   1. Modell-lesepunkt: agent.py sin gather() henter
+#                      Hs/Tp/dir herfra (S.met_waves()) - dette ER
+#                      spottens raa boelgedata (model_hs/model_tp i
+#                      evaluate_class_ab()). Flytting endrer prognosen,
+#                      ikke bare en diagnostikk-detalj.
+#                   2. Retningsreferanse for dybdeprofilen: build_fetch.py
+#                      sin depth_bearing_for_spot() skyter dybdesoeket
+#                      langs peilingen fra spotens (lat, lon) til dette
+#                      punktet (fallback: gate, saa facing - se der).
+#                 Punktet skal derfor velges etter hvor SWELLEN FAKTISK
+#                 KOMMER FRA (innenfor swell_window), IKKE etter hvor det
+#                 er dypest eller naermest. Et spot med to energikilder
+#                 (som Hvasser: lokalt NO-dypvann i Sandosundet OG
+#                 SO-swell mot Koster/Skagen) maa velge PAA SWELLEN sin
+#                 side av det valget - offshore_point kan bare peke ett
+#                 sted. build_fetch.py sin STEG 1 (offshore_point_bearing_check())
+#                 advarer automatisk hvis peilingen faller utenfor
+#                 spottens eget swell_window - kjor den etter enhver
+#                 flytting.
 #  klasse:
 #     A = apen Skagerrak-kyst. Les Hs/Tp/dir rett fra WW3/WAM.
 #     B = fjordmunning. Som A, men sjekk ogsa lokal fetch.
@@ -206,7 +228,15 @@ spots:
     regional_wp_max: 32.6         # lukker seg over 400 (samme skala, samme forbehold
                                    # over) - se merknad ved regional_wp_min/max over
     notes: >
-      Referansespotten. SV-vendt steinrev, jekker fra dypt vann.
+      Referansespotten. SV-vendt steinrev. "Jekker fra dypt vann" var en
+      antagelse - malt paa nytt (ordre 2026-09-02) etter koordinatrettingen
+      over viser 50-meterskoten 1,59 km ute langs facing, ikke 0,4 km som
+      de gamle (geodata_stale) tallene fra feilkoordinatet viste. Fire
+      ganger lengre. Boer sjekkes mot faktisk surfeerfaring foer "dypt
+      vann rett utenfor" gjentas som en etablert sannhet - se
+      geodata_stale-merknaden ved feltene under, dybde_50m_km er ikke
+      oppdatert til 1,59 km her ennaa (build_fetch.py maa kjores paa nytt
+      i et miljo med nettverkstilgang, se rapport til bruker).
       Fralandsvind er NØ, som sjelden følger en S-kuling.
 
     fetch_km_72: [0.6, 0.7, 0.6, 0.5, 0.5, 0.4, 0.4, 0.5, 1.4, 2.7, 2.5, 2.6, 0.6, 0.9, 0.5, 0.5, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.5, 1.6, 1.5, 1.2, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 17.8, 13.3, 18.7, 10.0, 13.2, 13.6, 10.3, 13.2, 9.4, 8.3, 9.1, 10.1, 6.7, 10.1, 6.9, 7.4, 2.4, 2.1, 1.7, 1.6, 0.5, 1.6, 0.4, 0.5, 0.6]
@@ -258,7 +288,16 @@ spots:
                              # 58.840144/9.565695 (5,3 km unna) - se merknad ved
                              # koordinatrettingen over. Fjernes automatisk av
                              # build_fetch.py naar spotten regnes paa nytt.
-    offshore_point: [58.845, 9.650]
+    offshore_point: [58.8330, 9.5760]  # ANSLAATT (flyttet ordre 2026-09-02): det gamle
+                                        # [58.845, 9.650] var aldri oppdatert da spotens
+                                        # eget koordinat ble rettet 5,3 km over - peilingen
+                                        # dit landet paa 83 grader, UTENFOR swell_window
+                                        # [100,230], og stemte kun med det forkastede
+                                        # 58.865/9.620. Nytt punkt ligger ~1 km SO for
+                                        # spotten, ute i Skagerrak paa riktig side av oya;
+                                        # peilingen dit er 142.7 grader - innenfor vinduet,
+                                        # 7.7 grader fra facing 135. Fortsatt ANSLAATT,
+                                        # ikke maalt.
     wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
     facing: 135
     swell_window: [100, 230]
@@ -326,8 +365,14 @@ spots:
     max_hs: 4.0
     min_tp: 6.0
     wind_weight: 0.75
-    offshore_point: [58.970, 9.808]  # ANSLAATT - boer sjekkes: skal ligge i aapent
-                                      # vann sorvest for spotten, ikke paa torrfall
+    offshore_point: [58.9700, 9.8050]  # ANSLAATT (flyttet ordre 2026-09-02): opprinnelig
+                                        # [58.970, 9.808] laa kun 628 m unna, 4-8x naermere
+                                        # enn de andre 8 klasse A/B-spottenes offshore_point
+                                        # (2,2-4,9 km) - trolig paa eller nesten paa torrfallet
+                                        # naevnt i notes under. Flyttet til klart utenfor
+                                        # 15-meterskoten, iflg. kartutsnitt - fortsatt ANSLAATT,
+                                        # ikke maalt. Boer sjekkes naar build_fetch.py kan kjores
+                                        # med ekte data.
     drive_min: 120
     notes: >
       Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet
@@ -406,7 +451,19 @@ spots:
     klasse: B
     lat: 59.0773
     lon: 10.4729
-    offshore_point: [59.095, 10.510]
+    offshore_point: [59.0650, 10.4900]  # ANSLAATT (flyttet ordre 2026-09-02): opprinnelig
+                                         # [59.095, 10.510] laa dypvann i Sandosundet, NO for
+                                         # spotten (peiling 45.9 grader) - UTENFOR eget
+                                         # swell_window [110,200] (se STEG 1-sjekken i
+                                         # build_fetch.py). Ikke en feil i seg selv: Hvasser
+                                         # har TO energikilder (notes under) - lokalt dypvann
+                                         # NO, og swellen som faktisk driver spotten kommer fra
+                                         # SO over fetchen mot Koster/Skagen. offshore_point kan
+                                         # bare peke ETT sted, og punktet skal beskrive boelgens
+                                         # vei inn (brukt til dybdeprofilen), ikke hvor det er
+                                         # dypest - derfor valgt etter SO-swellretningen. ~1,5 km
+                                         # SO for spotten, peiling dit er 143.1 grader (innenfor
+                                         # vinduet). Fortsatt ANSLAATT, ikke maalt.
     wind_weight: 1.0
     facing: 100
     swell_window: [110, 200]

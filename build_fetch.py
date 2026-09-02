@@ -84,11 +84,25 @@ For hvert spot i spots.yaml:
 
     Se ogsaa rapporten til brukeren (samtalen, 2026-09-01) for hvorfor
     "straalen tar feil kote"-hypotesen ble avvist (hver maaldybde soekes
-    mot sitt EGET tre, ingen kryss-kontaminering), og for funnet at
-    `facing` brukes til to formaal som kan kreve ulik retning i en bukt
-    (vindkvalitet: hvilken vei stedet vender: physics.wind_quality via
-    ensemble.py/agent.py) vs (dybdeprofil her: hvilken vei swellen faktisk
-    kommer fra) - IKKE endret her, kun rapportert.
+    mot sitt EGET tre, ingen kryss-kontaminering).
+
+    LOEST (ordre 2026-09-02, se rapporten om Moelen odden/Skallevold):
+    `facing` brukes til to formaal som kan kreve ulik retning paa en odde
+    eller i en bukt - vindkvalitet (hvilken vei stedet vender:
+    physics.wind_quality via ensemble.py/agent.py) trenger `facing`, men
+    dybdeprofilen her trenger hvilken vei AAPENT HAV faktisk ligger. De to
+    er IKKE alltid samme retning: Moelen odden hadde 27 grader avvik
+    mellom facing=175 og peilingen mot sitt eget offshore_point (straalen
+    langs facing gikk glipp av en kote spotten selv antok laa under 1 km
+    unna); Skallevold sitt facing=115 peker inn i BUKTA (klasse C, intet
+    offshore_point), mens gate.bearing_deg=185 (mot Faerder) er den
+    faktiske retningen ut mot aapent vann. Dybdeprofilen bruker derfor
+    peilingen fra spotens (lat, lon), i prioritert rekkefolge: til
+    `offshore_point` naar feltet finnes, ellers til `gate.lat`/`gate.lon`
+    naar SPOTTEN har en gate (klasse C), ellers `facing` som siste utvei -
+    se depth_bearing_for_spot() under (geo_utils.bearing_between() gjoer
+    selve peilingsberegningen). Hvilken retning som ble brukt logges per
+    spot i STEG 3-utskriften.
 
     VIKTIG ved etterkontroll av fiksen: 9 av 14 spots endret seg da dette
     ble kjort paa nytt, ikke bare de 4 som saa aapenbart feil ut (jf.
@@ -133,6 +147,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 
 import geo_utils as G
+import physics as P
 
 ROOT = Path(__file__).resolve().parent
 SPOTS_YAML = ROOT / "spots.yaml"
@@ -425,13 +440,15 @@ def group_by_depth(dybde_features, target_depths, tolerance_m=DEPTH_TOLERANCE_M)
     return out
 
 
-def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+def substantial_land_crossing_km(lon, lat, bearing, kyst_tree, kyst_lines,
                                   max_km=DEPTH_MAX_KM,
                                   min_length_m=SUBSTANTIAL_LAND_MIN_LENGTH_M,
                                   label=None):
     """
-    Avstand til naermeste SUBSTANSIELLE kystkryssing langs facing, eller
-    None hvis det ikke finnes noen innen max_km.
+    Avstand til naermeste SUBSTANSIELLE kystkryssing langs `bearing`, eller
+    None hvis det ikke finnes noen innen max_km. `bearing` er IKKE
+    noedvendigvis spotens `facing`-felt lenger - se compute_depth_profile()
+    sin docstring (ordre 2026-09-02).
 
     Brukt til aa kappe dybdesoeket foer straalen kan passere over land og
     plukke opp en kote som hoerer til en helt annen, adskilt bukt -
@@ -445,7 +462,7 @@ def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
     ikke stopper soeket, akkurat som det ikke stopper en reell boelge.
     Kryssinger under grensa logges (ignorert), ikke bare hoppes stille over.
     """
-    hits = G.cast_ray_hits_km(lon, lat, facing, max_km, kyst_tree, kyst_lines)
+    hits = G.cast_ray_hits_km(lon, lat, bearing, max_km, kyst_tree, kyst_lines)
     ignored = []
     for d_km, length_m in hits:
         if length_m >= min_length_m:
@@ -463,11 +480,67 @@ def substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
     return None
 
 
-def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
+def depth_bearing_for_spot(spot):
+    """
+    Hvilken peiling dybdeprofilen skal skytes langs for dette spotet
+    (ordre 2026-09-02, se compute_depth_profile() sin docstring for
+    hvorfor `facing` alene ikke duger paa en odde).
+
+    Prioritet:
+      1. `offshore_point` - peilingen fra spotens (lat, lon) til punktet.
+         Ment aa ligge i aapent vann, mot der swellen faktisk kommer fra -
+         klasse A/B sitt eget, spot-spesifikke anslag.
+      2. `gate` - GEOMETRISK peiling fra spotens (lat, lon) til
+         `gate.lat`/`gate.lon` (fjordmunningen, klasse C - se spots.yaml),
+         regnet paa nytt her - IKKE feltet `gate.bearing_deg` selv. De to
+         er ulike storrelser: `bearing_deg` er sektorsenteret
+         retningsfiltreringen VED gate-punktet bruker (physics.py sin
+         directional_energy_fraction(), fjordaksens retning "ovenfra"),
+         mens peilingen her er den lokale retningen FRA SPOTTEN til gate-
+         punktet - de trenger ikke vaere numerisk like (Skallevold: 173
+         grader geometrisk mot 185 lagret i bearing_deg), men peker begge
+         ut mot aapent vann. Ikke like praesist som et ekte offshore_point
+         (gate ligger ofte langt unna, og er valgt for boelgepropagering,
+         ikke lokal dybdegeometri), men bedre enn `facing` naar de to
+         peker ulikt: Skallevold sitt facing=115 peker inn i bukta, mens
+         gate-punktet (mot Faerder) ligger i den faktiske aapne-hav-
+         retningen - se rapporten til brukeren om Skallevold/Larkollen
+         (ordre 2026-09-02, som loeste den ANDRE saken om Moelen odden
+         paa samme maate for klasse A/B).
+      3. `facing` - siste utvei naar hverken offshore_point eller gate
+         finnes.
+
+    Returnerer (bearing_deg, kilde), der kilde er "offshore_point",
+    "gate" eller "facing" - main() logger denne per spot i STEG 3-
+    utskriften, se rapporten til brukeren for hvorfor det er verdt aa se.
+    """
+    offshore = spot.get("offshore_point")
+    if offshore:
+        off_lat, off_lon = offshore[0], offshore[1]
+        bearing = G.bearing_between(spot["lon"], spot["lat"], off_lon, off_lat)
+        return bearing, "offshore_point"
+    gate = spot.get("gate")
+    if gate:
+        bearing = G.bearing_between(spot["lon"], spot["lat"], gate["lon"], gate["lat"])
+        return bearing, "gate"
+    return spot["facing"], "facing"
+
+
+def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
                            kyst_tree, kyst_lines, label=None):
     """
-    For hver maaldybde: avstand langs facing til koten, med en status ved
-    siden av som forteller hvor mye aa stole paa verdien:
+    For hver maaldybde: avstand langs `bearing` til koten, med en status
+    ved siden av som forteller hvor mye aa stole paa verdien.
+
+    `bearing` er IKKE noedvendigvis spotens `facing`-felt (ordre
+    2026-09-02, se depth_bearing_for_spot()): `facing` beskriver hvilken
+    vei spotten VENDER (brukt til vindkvalitet, physics.wind_quality),
+    mens dybdeprofilen trenger hvilken vei AAPENT HAV faktisk ligger - de
+    to kan avvike paa en odde eller i en bukt (Moelen odden: 27 grader
+    avvik mot spotens eget offshore_point; Skallevold: facing peker inn i
+    bukta, gate.bearing_deg peker mot Faerder). Kalleren (main()) sender
+    inn peilingen mot offshore_point naar den finnes, ellers mot gate naar
+    SPOTTEN har en, ellers facing som siste utvei.
 
       "maalt"       reell treff innenfor den gyldige rekkevidden - stol paa den.
       "ingen_kote"  soekt hele den gyldige rekkevidden (DEPTH_MAX_KM,
@@ -497,8 +570,8 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
     0.34 km var en ~700 m stor lokal anomali, ikke den generelle 50 m-
     fronten (som laa 3.9+ km unna langs samme straale).
     """
-    edge_km = G.cast_ray_km(lon, lat, facing, DEPTH_MAX_KM, edge_tree, edge_lines)
-    land_km = substantial_land_crossing_km(lon, lat, facing, kyst_tree, kyst_lines,
+    edge_km = G.cast_ray_km(lon, lat, bearing, DEPTH_MAX_KM, edge_tree, edge_lines)
+    land_km = substantial_land_crossing_km(lon, lat, bearing, kyst_tree, kyst_lines,
                                             max_km=DEPTH_MAX_KM, label=label)
     effective_cap = min(DEPTH_MAX_KM, edge_km, land_km if land_km is not None else DEPTH_MAX_KM)
 
@@ -508,7 +581,7 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
             out[target] = (None, "ingen_kote")
             continue
         tree, lines = depth_trees[target]
-        d = G.cast_ray_km(lon, lat, facing, effective_cap, tree, lines)
+        d = G.cast_ray_km(lon, lat, bearing, effective_cap, tree, lines)
         if d < effective_cap:
             out[target] = (round(d, 2), "maalt")
         elif land_km is not None and land_km <= edge_km and land_km <= DEPTH_MAX_KM:
@@ -522,6 +595,68 @@ def compute_depth_profile(lon, lat, facing, depth_trees, edge_tree, edge_lines,
             # tiltenkte rekkevidden, reell null
             out[target] = (None, "ingen_kote")
     return out
+
+
+# ---------------------------------------- konsistenssjekk: offshore_point
+
+
+def offshore_point_bearing_check(spots):
+    """
+    For hvert spot med `offshore_point`: regn den GEOMETRISKE peilingen
+    dit (geo_utils.bearing_between()) og sjekk om den faller innenfor
+    spotens eget `swell_window` (physics.in_window() - haandterer wrap
+    over 0 paa samme maate scoringen selv gjor).
+
+    Ren geometri paa spots.yaml sine egne tall - trenger INGEN nedlastet
+    geodata (kystkontur/dybdekurve), saa den kan kjores og rapporteres
+    UAVHENGIG av resten av denne pipelinen (se main() sin STEG 1, kjort
+    FOR datamappe-sjekken).
+
+    Fanger en stille inkonsistens som IKKE ble oppdaget da Jomfruland
+    fikk rettet koordinat (ordre 2026-09-02): offshore_point ble staaende
+    uendret, og pekte dermed fortsatt mot det FORKASTEDE punktet - 83
+    grader, utenfor swell_window [100,230] i det hele tatt. Denne sjekken
+    ville flagget det med en gang.
+
+    Returnerer en liste av (spot_id, bearing_deg, swell_window, ok) for
+    hvert spot MED offshore_point (spots uten feltet er ikke med i det
+    hele tatt - klasse C bruker gate i stedet, se
+    depth_bearing_for_spot()). `ok` er False naar peilingen faller
+    utenfor swell_window - IKKE en garanti for at koordinatet er riktig
+    (kun en NOEDVENDIG betingelse: kan ikke vaere "rett vei ut" hvis det
+    ikke engang peker mot en retning spotten sier den tar imot swell fra),
+    og heller ikke en garanti for at et "OK"-spot faktisk ligger i aapent
+    vann - det trengs kystkontur-data for aa bekrefte.
+    """
+    rows = []
+    for spot in spots:
+        offshore = spot.get("offshore_point")
+        if not offshore:
+            continue
+        off_lat, off_lon = offshore[0], offshore[1]
+        bearing = G.bearing_between(spot["lon"], spot["lat"], off_lon, off_lat)
+        window = tuple(spot["swell_window"])
+        ok = P.in_window(bearing, window)
+        rows.append((spot["id"], round(bearing, 1), window, ok))
+    return rows
+
+
+def log_offshore_point_bearing_check(spots):
+    rows = offshore_point_bearing_check(spots)
+    if not rows:
+        log("  ingen spots har offshore_point")
+        return rows
+    for spot_id, bearing, window, ok in rows:
+        status = "OK" if ok else "ADVARSEL"
+        log(f"  [{status}] {spot_id:<16} peiling={bearing:>6.1f}  swell_window={list(window)}")
+    n_fail = sum(1 for r in rows if not r[3])
+    if n_fail:
+        log(f"\n  {n_fail} av {len(rows)} offshore_point-felt peker UTENFOR eget "
+            f"swell_window - sjekk om koordinatet er stale eller feil (se merknaden "
+            f"ved feltet i spots.yaml).")
+    else:
+        log(f"\n  Alle {len(rows)} offshore_point-felt peker innenfor eget swell_window.")
+    return rows
 
 
 # ------------------------------------------------------------------ main
@@ -540,12 +675,28 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Ikke skriv til spots.yaml, bare rapporter")
     args = ap.parse_args()
 
+    # spots.yaml lastes FOER geodata-sjekken under - se STEG 1: den sjekken
+    # er ren geometri (ingen kystkontur/dybdekurve involvert) og skal
+    # rapportere selv om resten av pipelinen ikke kan kjore her.
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.width = 100000
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.allow_unicode = True
+    with open(args.spots_yaml, encoding="utf-8") as f:
+        doc = yaml.load(f)
+
+    log("\n" + "=" * 70)
+    log("STEG 1 - konsistenssjekk: offshore_point mot swell_window")
+    log("=" * 70)
+    log_offshore_point_bearing_check(doc["spots"])
+
     data_dir = Path(args.data_dir)
     kyst_path = data_dir / "kystkontur.geojson"
     dybde_path = data_dir / "dybdekurve.geojson"
     for p in (kyst_path, dybde_path):
         if not p.exists():
-            log(f"FEIL: {p} finnes ikke. Kjor fetch_geodata.py foerst.")
+            log(f"\nFEIL: {p} finnes ikke. Kjor fetch_geodata.py foerst.")
             sys.exit(1)
 
     log(f"Laster {kyst_path} ...")
@@ -569,14 +720,6 @@ def main():
     dybde_raw = G.load_geojson(dybde_path)
     dybde_utm = [(G.reproject_geom(g, G.WGS84, G.UTM32), p) for g, p in dybde_raw]
     depth_trees = group_by_depth(dybde_utm, DEPTH_TARGETS_M)
-
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    yaml.width = 100000
-    yaml.indent(mapping=2, sequence=4, offset=2)
-    yaml.allow_unicode = True
-    with open(args.spots_yaml, encoding="utf-8") as f:
-        doc = yaml.load(f)
 
     log("\n" + "=" * 70)
     log("STEG 2 - fetch, 72 retninger")
@@ -635,18 +778,22 @@ def main():
             f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
 
     log("\n" + "=" * 70)
-    log("STEG 3 - dybdeprofil langs facing")
+    log("STEG 3 - dybdeprofil langs offshore_point/gate-peiling (fallback: facing)")
     log("=" * 70)
     for spot in doc["spots"]:
         lon, lat, facing = spot["lon"], spot["lat"], spot["facing"]
-        profile = compute_depth_profile(lon, lat, facing, depth_trees,
+        bearing, bearing_source = depth_bearing_for_spot(spot)
+        profile = compute_depth_profile(lon, lat, bearing, depth_trees,
                                          edge_tree, edge_lines, kyst_tree, kyst_lines,
                                          label=spot["id"])
         for target in DEPTH_TARGETS_M:
             value, status = profile[target]
             spot[f"dybde_{target}m_km"] = value
             spot[f"dybde_{target}m_status"] = status
-        log(f"  {spot['id']:<16} facing={facing:<4} "
+        bearing_note = (f"bearing={bearing:.1f} (facing, ingen offshore_point/gate)"
+                         if bearing_source == "facing"
+                         else f"bearing={bearing:.1f} ({bearing_source})")
+        log(f"  {spot['id']:<16} facing={facing:<4} {bearing_note:<38} "
             + "  ".join(f"{t}m={profile[t][0]}({profile[t][1]})" for t in DEPTH_TARGETS_M))
 
         # fetch_km_72*/dybde_*-feltene over er nettopp regnet fra spotens

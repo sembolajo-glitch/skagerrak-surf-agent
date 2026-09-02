@@ -248,6 +248,81 @@ def test_group_by_depth_ingen_treff_utelates():
     assert groups == {}
 
 
+def test_depth_bearing_for_spot_bruker_offshore_point():
+    """Peiling mot offshore_point, IKKE facing, naar feltet finnes -
+    se rapporten om Moelen odden (27 grader avvik mellom de to)."""
+    spot = {"lat": 58.975217, "lon": 9.812139, "facing": 175,
+            "offshore_point": [58.970, 9.808]}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "offshore_point"
+    assert 195 < bearing < 210          # ~202 grader, IKKE 175 (facing)
+
+
+def test_depth_bearing_for_spot_bruker_gate_naar_ingen_offshore_point():
+    """Skallevold (klasse C, ekte spots.yaml-koordinater): facing=115
+    peker inn i bukta. Den GEOMETRISKE peilingen fra spotens (lat, lon)
+    til gate-punktet (59.030, 10.520, mot Faerder) er ~173 grader - IKKE
+    identisk med gate.bearing_deg=185 lagret i spots.yaml (det tallet er
+    sektorsenteret for retningsfiltrering VED gate-punktet, en annen,
+    fysisk uavhengig storrelse - se depth_bearing_for_spot() sin
+    docstring). Begge peker uansett mot aapent vann, ikke inn i bukta."""
+    spot = {"lat": 59.290, "lon": 10.470, "facing": 115,
+            "gate": {"lat": 59.030, "lon": 10.520}}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "gate"
+    assert 168 < bearing < 178
+
+
+def test_depth_bearing_for_spot_offshore_point_foran_gate():
+    """Prioritet: offshore_point slaar gate naar begge finnes."""
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190,
+            "offshore_point": [58.98, 9.99],
+            "gate": {"lat": 59.03, "lon": 10.52}}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "offshore_point"
+
+
+def test_depth_bearing_for_spot_faller_tilbake_til_facing():
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert (bearing, source) == (190, "facing")
+
+
+def test_depth_bearing_for_spot_ingen_offshore_point_eller_gate_naar_null():
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190, "offshore_point": None, "gate": None}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert (bearing, source) == (190, "facing")
+
+
+def test_offshore_point_bearing_check_flagger_utenfor_vindu():
+    """Jomfruland-saken, gjenskapt: det GAMLE offshore_point-et stemte kun
+    med det forkastede koordinatet - peiling utenfor swell_window derfra."""
+    spots = [
+        {"id": "old_style", "lat": 58.840144, "lon": 9.565695,
+         "swell_window": [100, 230], "offshore_point": [58.845, 9.650]},
+    ]
+    rows = B.offshore_point_bearing_check(spots)
+    assert len(rows) == 1
+    spot_id, bearing, window, ok = rows[0]
+    assert spot_id == "old_style"
+    assert ok is False
+    assert not (100 <= bearing <= 230)
+
+
+def test_offshore_point_bearing_check_ok_innenfor_vindu():
+    spots = [
+        {"id": "fixed", "lat": 58.840144, "lon": 9.565695,
+         "swell_window": [100, 230], "offshore_point": [58.8330, 9.5760]},
+    ]
+    rows = B.offshore_point_bearing_check(spots)
+    assert rows[0][3] is True
+
+
+def test_offshore_point_bearing_check_hopper_over_spot_uten_feltet():
+    spots = [{"id": "class_c", "lat": 59.0, "lon": 10.0, "swell_window": [160, 200]}]
+    assert B.offshore_point_bearing_check(spots) == []
+
+
 def test_compute_depth_profile_manglende_dybde_gir_none():
     profile = B.compute_depth_profile(10.0, 59.0, 180, depth_trees={},
                                        edge_tree=None, edge_lines=[],

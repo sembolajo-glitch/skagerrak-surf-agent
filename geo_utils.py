@@ -58,6 +58,20 @@ def bearing_vector(bearing_deg):
     return math.sin(rad), math.cos(rad)
 
 
+def bearing_between(lon1, lat1, lon2, lat2):
+    """
+    Kompasspeiling (0=N, med klokka) fra (lon1,lat1) til (lon2,lat2) - inversen
+    av bearing_vector(). Regnet i UTM32 (meter), samme metriske plan resten av
+    modulen skyter straaler i, ikke storsirkel/geodetisk - presist nok for
+    avstandene dette brukes paa (under noen faa km, f.eks. spot -> eget
+    offshore_point), og konsistent med hvordan build_fetch.py sine andre
+    peilinger allerede regnes.
+    """
+    x1, y1 = to_utm(lon1, lat1)
+    x2, y2 = to_utm(lon2, lat2)
+    return math.degrees(math.atan2(x2 - x1, y2 - y1)) % 360
+
+
 # ------------------------------------------------------------- GeoJSON I/O
 
 
