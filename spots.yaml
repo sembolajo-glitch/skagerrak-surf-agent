@@ -334,8 +334,14 @@ spots:
     max_hs: 4.0
     min_tp: 6.0
     wind_weight: 0.75
-    offshore_point: [58.970, 9.808]  # ANSLAATT - boer sjekkes: skal ligge i aapent
-                                      # vann sorvest for spotten, ikke paa torrfall
+    offshore_point: [58.9700, 9.8050]  # ANSLAATT (flyttet ordre 2026-09-02): opprinnelig
+                                        # [58.970, 9.808] laa kun 628 m unna, 4-8x naermere
+                                        # enn de andre 8 klasse A/B-spottenes offshore_point
+                                        # (2,2-4,9 km) - trolig paa eller nesten paa torrfallet
+                                        # naevnt i notes under. Flyttet til klart utenfor
+                                        # 15-meterskoten, iflg. kartutsnitt - fortsatt ANSLAATT,
+                                        # ikke maalt. Boer sjekkes naar build_fetch.py kan kjores
+                                        # med ekte data.
     drive_min: 120
     notes: >
       Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet

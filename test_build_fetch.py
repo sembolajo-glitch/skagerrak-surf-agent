@@ -258,14 +258,38 @@ def test_depth_bearing_for_spot_bruker_offshore_point():
     assert 195 < bearing < 210          # ~202 grader, IKKE 175 (facing)
 
 
+def test_depth_bearing_for_spot_bruker_gate_naar_ingen_offshore_point():
+    """Skallevold (klasse C, ekte spots.yaml-koordinater): facing=115
+    peker inn i bukta. Den GEOMETRISKE peilingen fra spotens (lat, lon)
+    til gate-punktet (59.030, 10.520, mot Faerder) er ~173 grader - IKKE
+    identisk med gate.bearing_deg=185 lagret i spots.yaml (det tallet er
+    sektorsenteret for retningsfiltrering VED gate-punktet, en annen,
+    fysisk uavhengig storrelse - se depth_bearing_for_spot() sin
+    docstring). Begge peker uansett mot aapent vann, ikke inn i bukta."""
+    spot = {"lat": 59.290, "lon": 10.470, "facing": 115,
+            "gate": {"lat": 59.030, "lon": 10.520}}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "gate"
+    assert 168 < bearing < 178
+
+
+def test_depth_bearing_for_spot_offshore_point_foran_gate():
+    """Prioritet: offshore_point slaar gate naar begge finnes."""
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190,
+            "offshore_point": [58.98, 9.99],
+            "gate": {"lat": 59.03, "lon": 10.52}}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert source == "offshore_point"
+
+
 def test_depth_bearing_for_spot_faller_tilbake_til_facing():
     spot = {"lat": 59.0, "lon": 10.0, "facing": 190}
     bearing, source = B.depth_bearing_for_spot(spot)
     assert (bearing, source) == (190, "facing")
 
 
-def test_depth_bearing_for_spot_ingen_offshore_point_naar_null():
-    spot = {"lat": 59.0, "lon": 10.0, "facing": 190, "offshore_point": None}
+def test_depth_bearing_for_spot_ingen_offshore_point_eller_gate_naar_null():
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190, "offshore_point": None, "gate": None}
     bearing, source = B.depth_bearing_for_spot(spot)
     assert (bearing, source) == (190, "facing")
 
