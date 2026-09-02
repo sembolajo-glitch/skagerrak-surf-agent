@@ -429,7 +429,19 @@ spots:
     klasse: B
     lat: 59.0773
     lon: 10.4729
-    offshore_point: [59.095, 10.510]
+    offshore_point: [59.0650, 10.4900]  # ANSLAATT (flyttet ordre 2026-09-02): opprinnelig
+                                         # [59.095, 10.510] laa dypvann i Sandosundet, NO for
+                                         # spotten (peiling 45.9 grader) - UTENFOR eget
+                                         # swell_window [110,200] (se STEG 1-sjekken i
+                                         # build_fetch.py). Ikke en feil i seg selv: Hvasser
+                                         # har TO energikilder (notes under) - lokalt dypvann
+                                         # NO, og swellen som faktisk driver spotten kommer fra
+                                         # SO over fetchen mot Koster/Skagen. offshore_point kan
+                                         # bare peke ETT sted, og punktet skal beskrive boelgens
+                                         # vei inn (brukt til dybdeprofilen), ikke hvor det er
+                                         # dypest - derfor valgt etter SO-swellretningen. ~1,5 km
+                                         # SO for spotten, peiling dit er 143.1 grader (innenfor
+                                         # vinduet). Fortsatt ANSLAATT, ikke maalt.
     wind_weight: 1.0
     facing: 100
     swell_window: [110, 200]
