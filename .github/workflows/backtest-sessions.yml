@@ -140,15 +140,17 @@ jobs:
 
           def render_table(rows, title):
               lines.append(f"\n## {title}\n\n")
-              lines.append("| dato | spot | kvalitet | tid | valgt (UTC) | hs | tp | regional_wp |\n")
-              lines.append("|---|---|---|---|---|---|---|---|\n")
+              lines.append("| dato | spot | kvalitet | forv. stjerner | tid | valgt (UTC) | hs | tp | regional_wp |\n")
+              lines.append("|---|---|---|---|---|---|---|---|---|\n")
               ok_rows = [r for r in rows if "feil" not in r]
               for r in sorted(ok_rows, key=lambda r: r["wp"]):
-                  lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {r['tid']} | "
+                  fs = r.get("forventet_stars")
+                  fs_str = "-" if fs is None else f"{fs:.1f}"
+                  lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {fs_str} | {r['tid']} | "
                                 f"{r['valgt_tid_utc']} | {r['hs']:.2f} | {r['tp']:.1f} | {r['wp']:.1f} |\n")
               for r in rows:
                   if "feil" in r:
-                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | |\n")
+                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | | FEIL: {r['feil']} | | | | |\n")
               if ok_rows:
                   wps = [r["wp"] for r in ok_rows]
                   lines.append(f"\n**n={len(ok_rows)}, regional_wp: min={min(wps):.1f}, "
@@ -163,7 +165,11 @@ jobs:
                         "Alle elleve oktene var positive - tabellene over viser GULVET "
                         "regional_wp positive okter faktisk hadde, ikke en bekreftelse "
                         "paa at lavere regional_wp betyr daarlig surf. Ingen terskler er "
-                        "justert av denne kjoringen.\n")
+                        "justert av denne kjoringen.\n\n"
+                        "'kvalitet' (0-5) og 'forv. stjerner' (1-10) er IKKE samme skala - "
+                        "sistnevnte er kvalitet mappet gjennom backtest_sessions.py sin "
+                        "KVALITET_TIL_STARS (ulineaer, se der). Sammenlign aldri kvalitet "
+                        "direkte mot en modell-stjerneverdi.\n")
 
           http = report.get("http_stats", {})
           if http:

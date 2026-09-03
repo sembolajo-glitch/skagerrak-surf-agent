@@ -64,6 +64,33 @@ def test_parse_time_window_ugyldig_klokkeslett_gir_feil():
         B.parse_time_window("25:00")
 
 
+# ------------------------------------------------------- kvalitet<->stars
+
+
+def test_forventet_stars_folger_brukerens_mapping():
+    assert B.forventet_stars(0) is None
+    assert B.forventet_stars(1) == pytest.approx(2.5)
+    assert B.forventet_stars(2) == pytest.approx(4.0)
+    assert B.forventet_stars(3) == pytest.approx(5.5)
+    assert B.forventet_stars(4) == pytest.approx(8.0)
+    assert B.forventet_stars(5) == pytest.approx(9.5)
+
+
+def test_forventet_stars_er_ikke_lineaer():
+    """Byggverifisering av selve poenget med mappingen (ordre
+    2026-09-03): en naiv kvalitet*2-skalering ville gitt 2,0/4,0/6,0/
+    8,0/10,0 - stemmer med kvalitet 2 (4,0) men IKKE med resten.
+    kvalitet 0 (None, 'ingen surf') er ikke med i selve stigningen -
+    den har ingen numerisk forventet_stars aa ta steget fra."""
+    steg = [B.forventet_stars(k) - B.forventet_stars(k - 1) for k in range(2, 6)]
+    assert len(set(steg)) > 1, "stegene mellom nabo-kvaliteter skal IKKE alle vaere like store"
+
+
+def test_forventet_stars_ukjent_kvalitet_gir_feil():
+    with pytest.raises(KeyError):
+        B.forventet_stars(6)
+
+
 # ------------------------------------------------------------ maalvelging
 
 
@@ -412,6 +439,7 @@ def test_regional_energy_for_session_happy_path(monkeypatch):
     assert r["exact_time"] is False
     assert 6 <= int(r["valgt_tid_utc"][11:13]) <= 10
     assert r["wp"] > 0
+    assert r["forventet_stars"] == pytest.approx(8.0), "kvalitet 4 -> 8.0 via KVALITET_TIL_STARS"
 
 
 def test_regional_energy_for_session_ukjent_spot():

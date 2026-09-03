@@ -172,6 +172,37 @@ BIAS_REFERENCE_ID = "saltstein"
 # STEDET avgjor hvilken celle som treffes. Godt innenfor ERA5-historikk.
 GRID_PROBE_DATE = "2015-06-01"
 
+# ordre 2026-09-03: sessions_historisk.csv sin 'kvalitet'-kolonne (0-5,
+# menneskelig vurdering) og agent.py sin 'stars' (1-10, modellens
+# skala) er IKKE samme skala - tidligere rapporter (se rapport til
+# bruker) har feilaktig sammenlignet dem som om de var det. Mappingen
+# under er brukerens egen, empirisk satt, og eksplisitt IKKE lineaer:
+# "bra og oppover" ligger hoyt paa en tidelsskala, mens "saa vidt
+# surfbart" ligger lavt - en kvalitet-5-okt forventes IKKE aa lande paa
+# 10, den lander paa 9,5, mens en kvalitet-1-okt forventer bare 2,5, ikke
+# 2,0 (som en naiv "kvalitet*2"-lineaer skalering ville gitt her, men
+# ville feilet grovt lenger opp, f.eks. kvalitet 4 -> 8, ikke 8 er OK,
+# men kvalitet 2 -> 4 stemmer med lineaer mens kvalitet 3 -> 5,5 ikke
+# gjor det - poenget er at IKKE ekstrapoler denne, bruk tabellen).
+# forventet_stars() er den ENESTE stedet denne mappingen skal brukes -
+# ALDRI kvalitet direkte mot stars, i noen rapport.
+KVALITET_TIL_STARS = {
+    0: None,  # ingen surf i det hele tatt - ingen forventet stjerneverdi
+    1: 2.5,
+    2: 4.0,
+    3: 5.5,
+    4: 8.0,
+    5: 9.5,
+}
+
+
+def forventet_stars(kvalitet):
+    """kvalitet (int, 0-5, sessions_historisk.csv sin skala) -> forventet
+    agent.py 'stars' (1-10) via KVALITET_TIL_STARS. Kaster KeyError paa
+    en kvalitet utenfor 0-5 (dataintegritetsfeil i CSV-en, ikke noe aa
+    stille inn en default for)."""
+    return KVALITET_TIL_STARS[kvalitet]
+
 
 # ------------------------------------------------------------- tidsvindu
 
@@ -574,7 +605,8 @@ def regional_energy_for_session(session, spots_by_id, saltstein_pt, bias=None):
 
     ts, row = target
     return {**session, "exact_time": exact, "valgt_tid_utc": ts,
-            "hs": row["hs"], "tp": row["tp"], "wp": row["wp"]}
+            "hs": row["hs"], "tp": row["tp"], "wp": row["wp"],
+            "forventet_stars": forventet_stars(int(session["kvalitet"]))}
 
 
 def regional_energy_all(sessions, spots_by_id, saltstein_pt, bias=None):
@@ -611,16 +643,27 @@ def print_regional_table(rows, title):
     akkurat tallet en empirisk regional_wp_min-kalibrering trenger. Se
     modulens docstring for forbeholdet om at datasettet KUN har positive
     okter (kan vise et gulv, ikke bekrefte at lavere er daarlig).
+
+    Viser BAADE 'kvalitet' (0-5, sessions_historisk.csv sin skala) OG
+    'forventet_stars' (1-10, agent.py sin skala, via KVALITET_TIL_STARS)
+    side om side - ordre 2026-09-03, etter at tidligere rapporter
+    feilaktig sammenlignet de to skalaene direkte. To Pearson r-tall
+    rapporteres av samme grunn: mot raa kvalitet (den GAMLE, feilaktige
+    sammenligningen - beholdt for sporbarhet) og mot forventet_stars
+    (den RIKTIGE skalaen) - de to kan avvike siden mappingen er ulineaer.
     """
     print(f"\n{'='*90}\n{title}\n{'='*90}")
     ok_rows = [r for r in rows if "feil" not in r]
-    header = f"{'dato':<11}{'spot':<16}{'kval':>5}{'tid':>12}  {'valgt (UTC)':<20}{'hs':>7}{'tp':>7}{'regional_wp':>13}"
+    header = (f"{'dato':<11}{'spot':<16}{'kval':>5}{'forv.stjerner':>14}{'tid':>12}  "
+              f"{'valgt (UTC)':<20}{'hs':>7}{'tp':>7}{'regional_wp':>13}")
     print(header)
     pairs = []
     for r in sorted(ok_rows, key=lambda r: r["wp"]):
-        print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}{r['tid']:>12}  "
+        fs = r["forventet_stars"]
+        print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}"
+              f"{('-' if fs is None else f'{fs:.1f}'):>14}{r['tid']:>12}  "
               f"{r['valgt_tid_utc']:<20}{r['hs']:>7.2f}{r['tp']:>7.1f}{r['wp']:>13.1f}")
-        pairs.append((r["wp"], int(r["kvalitet"])))
+        pairs.append((r["wp"], int(r["kvalitet"]), fs))
     for r in rows:
         if "feil" in r:
             print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}  FEIL: {r['feil']}")
@@ -630,12 +673,19 @@ def print_regional_table(rows, title):
         wps = [p[0] for p in pairs]
         print(f"\n  n={n}  regional_wp (kW/m): min={min(wps):.1f}  median={st.median(wps):.1f}  max={max(wps):.1f}")
         print(f"  Gulvet blant disse {n} positive oktene: {min(wps):.1f} kW/m "
-              f"(alle var kvalitet {min(p[1] for p in pairs)}-{max(p[1] for p in pairs)} av 5).")
+              f"(alle var kvalitet {min(p[1] for p in pairs)}-{max(p[1] for p in pairs)} av 5, "
+              f"forventet {min(p[2] for p in pairs):.1f}-{max(p[2] for p in pairs):.1f} stjerner).")
         if n >= 3:
             try:
                 r_coef = st.correlation(wps, [p[1] for p in pairs])
-                print(f"  Pearson r (regional_wp vs. kvalitet): {r_coef:.2f} "
-                      f"(n={n} - svakt datagrunnlag, KUN positive okter, se docstring)")
+                print(f"  Pearson r (regional_wp vs. RAA KVALITET - feil skala, beholdt for sporbarhet): "
+                      f"{r_coef:.2f} (n={n})")
+            except st.StatisticsError:
+                pass
+            try:
+                r_coef_stars = st.correlation(wps, [p[2] for p in pairs])
+                print(f"  Pearson r (regional_wp vs. FORVENTET STARS - riktig skala): "
+                      f"{r_coef_stars:.2f} (n={n} - svakt datagrunnlag, KUN positive okter, se docstring)")
             except st.StatisticsError:
                 pass
     return pairs
