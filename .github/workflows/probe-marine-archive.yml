@@ -169,3 +169,42 @@ jobs:
                           "mangler boelgedata fra denne kilden, og backtest_sessions.py maa "
                           "haandtere det eksplisitt (ikke bygges som om data finnes).\n")
           PYEOF
+
+  # Midlertidig tillegg (ordre 2026-09-03, siste sjekk foer backtest-
+  # runden lukkes): kjorer diagnose_standard_model_2025_2026.py fra en
+  # ALLEREDE REGISTRERT workflow-fil, samme grunn/trick som forrige
+  # midlertidige tillegg her (se git-historikken) - et helt nytt
+  # workflow_dispatch-workflow maa ligge paa main foer det er
+  # dispatchbart, og denne branchen skal ikke merges til main utenom PR.
+  # Fjernes sammen med selve engangsscriptet naar resultatet er
+  # rapportert (samme muster som diagnose_saltstein_20181218.py).
+  diagnose_standard_model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer avhengigheter (hoved + geodata for geo_utils.py)
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-geodata.txt
+
+      - name: Kjor diagnose_standard_model_2025_2026.py
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python -u diagnose_standard_model_2025_2026.py | tee diagnose_output.txt
+
+      - name: Skriv resultatet til step summary
+        if: always()
+        run: |
+          {
+            echo "# Diagnose: standardmodell mot ERA5-Ocean, tre nyeste okter"
+            echo
+            echo '```'
+            cat diagnose_output.txt 2>/dev/null || echo "(ingen utskrift - se loggen fra forrige steg)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
