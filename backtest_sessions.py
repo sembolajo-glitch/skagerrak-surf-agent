@@ -67,6 +67,7 @@ import pathlib
 import random
 import statistics as st
 import sys
+import time
 
 import requests
 
@@ -78,6 +79,16 @@ OUT = ROOT / "out"
 
 WIND_URL = "https://archive-api.open-meteo.com/v1/archive"
 WAVE_URL = "https://marine-api.open-meteo.com/v1/marine"
+
+# ordre 2026-09-02 (produksjonskjoring i backtest-sessions.yml feilet med
+# ReadTimeout): quantify_bias() gjor opptil ~60 kall raskt etter hverandre
+# (2 modeller x ca. 33 datoer), sannsynligvis der Open-Meteo sin rate-
+# grense treffes - se RATE_LIMIT_PAUSE_S. HTTP_TIMEOUT_S/RETRY_DELAYS_S
+# gjelder ALLE kall (ogsaa build_hours_window() sine, via _get_json()
+# under), ikke bare skjevhetsmaalingen.
+HTTP_TIMEOUT_S = 60
+RETRY_DELAYS_S = (2, 5, 15)  # ventetid FOR hvert av de tre nye forsokene
+RATE_LIMIT_PAUSE_S = 0.5  # mellom HVERT kall i quantify_bias() sin lokke
 
 # Vage tidspunkt tolkes som vinduer (hel-timer, begge ender inkludert) -
 # "de surfet sannsynligvis naar det var best", se pick_target_hour().
@@ -139,10 +150,52 @@ def _at(arr, i):
     return arr[i] if arr and i < len(arr) else None
 
 
-def _get_json(url, params, timeout=30):
-    r = requests.get(url, params=params, timeout=timeout)
-    r.raise_for_status()
-    return r.json()
+# ordre 2026-09-02: tellere for HTTP-robustheten under, IKKE en del av
+# scoringen. n_calls = totalt antall _get_json()-kall denne prosessen
+# har gjort; n_retried = hvor mange av dem som trengte MINST ett nytt
+# forsok foer de lyktes. run_report() rapporterer disse til slutt - se
+# ogsaa reset_http_stats() (brukt av testene, saa tellerne ikke lekker
+# mellom testfunksjoner som deler denne modulens tilstand).
+_http_stats = {"n_calls": 0, "n_retried": 0}
+
+
+def reset_http_stats():
+    _http_stats["n_calls"] = 0
+    _http_stats["n_retried"] = 0
+
+
+def _get_json(url, params, timeout=HTTP_TIMEOUT_S):
+    """
+    GET -> .json(), med inntil tre NYE forsok (fire totalt) ved
+    forbigaaende feil (ReadTimeout, tilkoblingsfeil osv.) - ventetid FOR
+    hvert nytt forsok fra RETRY_DELAYS_S (2, 5, 15 s). Produksjons-
+    kjoringen (backtest-sessions.yml, ordre 2026-09-02) feilet med
+    ReadTimeout mot Open-Meteo - se HTTP_TIMEOUT_S/RETRY_DELAYS_S sin
+    kommentar over for hvorfor (sannsynligvis quantify_bias() sine ~60
+    kall raskt etter hverandre, se RATE_LIMIT_PAUSE_S der).
+
+    Gir opp og lar unntaket forplante seg naar alle forsokene er brukt
+    opp - IKKE fanget her. quantify_bias() fanger det per kall (fortsetter
+    med faerre par i stedet for aa velte hele kjoringen), mens
+    build_hours_window()/backtest_session() lar det forplante seg til
+    backtest_session() sin egen try/except (se der) - samme
+    "feiler mykt per enhet" -prinsipp som sources.py sin docstring.
+    """
+    _http_stats["n_calls"] += 1
+    last_exc = None
+    for attempt, delay in enumerate((0.0,) + RETRY_DELAYS_S):
+        if delay:
+            time.sleep(delay)
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+        except requests.RequestException as exc:
+            last_exc = exc
+            continue
+        if attempt > 0:
+            _http_stats["n_retried"] += 1
+        return r.json()
+    raise last_exc
 
 
 def fetch_era5_wind(lat, lon, date_from, date_to):
@@ -225,19 +278,44 @@ def quantify_bias(lat, lon, dates):
     Hent BEGGE modellene (era5_ocean og standardmodellen) for hver dato
     i `dates`, regn forholdet ERA5/standardmodell time for time for Hs
     og Tp separat. Returnerer median, kvartiler og min/max for begge,
-    pluss de raa parvise radene (til --dump-bias-csv).
+    pluss de raa parvise radene og en feiltelling.
 
     IKKE et scorekomponent - rent maalt, brukes til aa lage
     korreksjonsfaktoren backtest_all(..., bias=...) deler ERA5-verdier
     paa. Kjores FOR resten av backtesten (se modulens docstring/
-    run_report()) - stopper (raise) hvis IKKE NOK par ble funnet, i
-    stedet for aa stille returnere en tallverdi fra et for lite utvalg.
+    run_report()).
+
+    Robusthet (ordre 2026-09-02, etter ReadTimeout i produksjon): dette
+    er ~2 x len(dates) kall raskt etter hverandre - den mest sannsynlige
+    plassen til aa treffe Open-Meteo sin rate-grense. To tiltak:
+      1. RATE_LIMIT_PAUSE_S pause FOR hvert kall (proaktivt, ikke bare
+         reaktivt - _get_json() sin retry-logikk haandterer forbigaaende
+         feil, denne pausen er ment aa forebygge dem i utgangspunktet).
+      2. Ett kall som feiler (alle _get_json()-forsokene brukt opp)
+         STOPPER IKKE hele maalingen lenger - den datoen/det kallet
+         hoppes over, telles i `n_calls_failed`, og maalingen fortsetter
+         med det den fikk. Stopper (raise) KUN hvis null par i det hele
+         tatt ble samlet inn (kan ikke regne en median av ingenting) -
+         "faerre par enn haapet" er noe aa RAPPORTERE (se
+         n_calls_failed/n_dates_partial under, og run_report() sin
+         utskrift), ikke noe aa avbryte for.
     """
     pairs = {"hs": [], "tp": []}
     per_date = []
+    n_calls_failed = 0
+    failed_dates = []
     for date in dates:
-        era5 = fetch_era5_waves(lat, lon, date, date, model="era5_ocean")
-        std = fetch_era5_waves(lat, lon, date, date, model=None)
+        try:
+            time.sleep(RATE_LIMIT_PAUSE_S)
+            era5 = fetch_era5_waves(lat, lon, date, date, model="era5_ocean")
+            time.sleep(RATE_LIMIT_PAUSE_S)
+            std = fetch_era5_waves(lat, lon, date, date, model=None)
+        except requests.RequestException as exc:
+            n_calls_failed += 1
+            failed_dates.append((date, str(exc)))
+            per_date.append((date, 0))
+            continue
+
         n_before = len(pairs["hs"])
         for ts in sorted(set(era5) & set(std)):
             e, s = era5[ts], std[ts]
@@ -247,20 +325,34 @@ def quantify_bias(lat, lon, dates):
                 pairs["tp"].append((date, ts, e["tp"], s["tp"], e["tp"] / s["tp"]))
         per_date.append((date, len(pairs["hs"]) - n_before))
 
-    if len(pairs["hs"]) < 10:
+    if not pairs["hs"]:
         raise RuntimeError(
-            f"Bare {len(pairs['hs'])} Hs-par mellom era5_ocean og standardmodellen "
-            f"funnet over {len(dates)} datoer - for lite til aa stole paa en median. "
-            f"Sjekk om standardmodellen faktisk har data i perioden (se "
-            f"probe-marine-archive.yml)."
+            f"Null Hs-par mellom era5_ocean og standardmodellen funnet over "
+            f"{len(dates)} datoer ({n_calls_failed} kall feilet helt) - kan ikke "
+            f"regne noen median. Sjekk om standardmodellen faktisk har data i "
+            f"perioden (se probe-marine-archive.yml), og se failed_dates for hva "
+            f"som feilet."
         )
+    if len(pairs["hs"]) < 10:
+        print(f"  ADVARSEL: bare {len(pairs['hs'])} Hs-par samlet inn (av forventet "
+              f"~{24 * len(dates)}) - medianen under er mindre paalitelig enn normalt.",
+              file=sys.stderr)
 
     def summarize(vals):
-        ratios = [v[4] for v in vals]
-        ratios.sort()
-        q1, med, q3 = st.quantiles(ratios, n=4)[0], st.median(ratios), st.quantiles(ratios, n=4)[2]
+        """n=0 (f.eks. Tp mangler helt en periode Hs finnes for) ->
+        alle felt None, IKKE en krasjet st.quantiles()/st.median() paa
+        en tom liste. n=1 -> kvartiler udefinerbare, faller tilbake til
+        selve verdien for alle fem tallene i stedet for aa kreve n>=2
+        (st.quantiles() sin egen grense)."""
+        ratios = sorted(v[4] for v in vals)
+        n = len(ratios)
+        if n == 0:
+            return {"n": 0, "median": None, "p25": None, "p75": None, "min": None, "max": None}
+        med = st.median(ratios)
+        q1, q3 = (st.quantiles(ratios, n=4)[0], st.quantiles(ratios, n=4)[2]) if n >= 2 \
+            else (ratios[0], ratios[0])
         return {
-            "n": len(ratios), "median": round(med, 3),
+            "n": n, "median": round(med, 3),
             "p25": round(q1, 3), "p75": round(q3, 3),
             "min": round(ratios[0], 3), "max": round(ratios[-1], 3),
         }
@@ -270,6 +362,8 @@ def quantify_bias(lat, lon, dates):
         "tp": summarize(pairs["tp"]),
         "n_dates_with_data": sum(1 for _, n in per_date if n > 0),
         "n_dates_requested": len(dates),
+        "n_calls_failed": n_calls_failed,
+        "failed_dates": failed_dates,
         "raw_pairs": pairs,
     }
 
@@ -418,6 +512,12 @@ def _weakest_led(h):
 def print_bias_report(bias, label):
     print(f"\n{'='*78}\nMODELLSKJEVHET: ERA5-Ocean / standardmodell (EWAM/GWAM) - {label}\n{'='*78}")
     print(f"  datoer med begge modeller: {bias['n_dates_with_data']}/{bias['n_dates_requested']}")
+    n_failed = bias.get("n_calls_failed", 0)
+    if n_failed:
+        print(f"  ADVARSEL: {n_failed} dato(er) manglet helt - alle forsokene (se "
+              f"RETRY_DELAYS_S) feilet for dem. Maalingen fortsatte med resten:")
+        for date, err in bias.get("failed_dates", []):
+            print(f"    {date}: {err}")
     for var in ("hs", "tp"):
         b = bias[var]
         print(f"  {var.upper():<3} forhold ERA5/standard: median {b['median']}  "
@@ -452,6 +552,7 @@ def print_session_table(results, title):
 
 
 def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
+    reset_http_stats()
     spots, _ = A.load_spots()
     spots_by_id = {s["id"]: s for s in spots}
     sessions = load_sessions(sessions_path)
@@ -475,6 +576,11 @@ def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
         print_bias_report(bias, f"{bias['n_dates_requested']} datoer, referansepunkt {BIAS_REFERENCE_ID}")
 
     bias_factor = {"hs": bias["hs"]["median"], "tp": bias["tp"]["median"]}
+    for var, factor in list(bias_factor.items()):
+        if factor is None:
+            print(f"  ADVARSEL: ingen {var.upper()}-par i det hele tatt - "
+                  f"korreksjonsfaktoren settes til 1.0 (ingen korreksjon) for {var}.")
+            bias_factor[var] = 1.0
 
     raw = backtest_all(sessions, spots_by_id, bias=None)
     corrected = backtest_all(sessions, spots_by_id, bias=bias_factor)
@@ -489,11 +595,16 @@ def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
     print(f"  for HOYE terskler (alle elleve oktene var positive). Ingen terskler er")
     print(f"  justert her.")
 
+    print(f"\n  HTTP: {_http_stats['n_calls']} kall totalt, "
+          f"{_http_stats['n_retried']} maatte proeve paa nytt minst en gang "
+          f"(RETRY_DELAYS_S={RETRY_DELAYS_S}).")
+
     OUT.mkdir(exist_ok=True)
     report_path = OUT / "backtest_report.json"
     report_path.write_text(json.dumps({
         "bias": {k: v for k, v in bias.items() if k != "raw_pairs"} if not skip_bias else bias,
         "raw": raw, "corrected": corrected,
+        "http_stats": dict(_http_stats),
     }, indent=2, default=str), encoding="utf-8")
     print(f"\n-> {report_path}")
 

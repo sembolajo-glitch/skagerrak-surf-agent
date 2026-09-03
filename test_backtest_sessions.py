@@ -13,6 +13,21 @@ import agent as A
 import backtest_sessions as B
 
 
+@pytest.fixture(autouse=True)
+def no_real_sleep(monkeypatch):
+    """RATE_LIMIT_PAUSE_S/RETRY_DELAYS_S skal ikke gjore testsuiten
+    treg - vi tester ATFERDEN (antall kall, retries), ikke faktisk
+    forloept tid. Autouse: gjelder hele denne testfila."""
+    monkeypatch.setattr(B.time, "sleep", lambda seconds: None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_http_stats():
+    B.reset_http_stats()
+    yield
+    B.reset_http_stats()
+
+
 # --------------------------------------------------------------- tidsvindu
 
 
@@ -136,12 +151,116 @@ def test_quantify_bias_regner_riktig_median_forhold(monkeypatch):
     assert result["n_dates_with_data"] == 2
 
 
-def test_quantify_bias_for_faa_par_gir_feil(monkeypatch):
+def test_quantify_bias_null_par_gir_feil(monkeypatch):
     def get(url, params, timeout=30):
         return {"hourly": {"time": [], "wave_height": [], "wave_direction": [], "wave_period": []}}
     monkeypatch.setattr(B, "_get_json", get)
     with pytest.raises(RuntimeError):
         B.quantify_bias(58.930, 9.830, ["2024-01-01"])
+
+
+def test_quantify_bias_fortsetter_naar_en_dato_feiler_helt(monkeypatch, capsys):
+    """ordre 2026-09-02: et kall som feiler etter alle _get_json()-forsokene
+    skal IKKE velte hele maalingen - datoen hoppes over og telles i
+    n_calls_failed/failed_dates, resten av datoene brukes som normalt."""
+    def get(url, params, timeout=30):
+        if params["start_date"] == "2024-01-02":
+            raise requests.Timeout("boom")
+        n = 24
+        hs = 1.8 if params.get("models") == "era5_ocean" else 0.9
+        return {"hourly": {
+            "time": [f"{params['start_date']}T{h:02d}:00" for h in range(n)],
+            "wave_height": [hs] * n,
+            "wave_direction": [190.0] * n,
+            "wave_period": [7.0] * n,
+        }}
+    monkeypatch.setattr(B, "_get_json", get)
+
+    result = B.quantify_bias(58.930, 9.830, ["2024-01-01", "2024-01-02", "2024-01-03"])
+    assert result["n_calls_failed"] == 1
+    assert result["failed_dates"][0][0] == "2024-01-02"
+    assert result["n_dates_with_data"] == 2
+    assert result["hs"]["n"] == 48  # 2 gode datoer x 24 timer
+    assert result["hs"]["median"] == pytest.approx(2.0)
+
+
+def test_quantify_bias_advarer_men_fortsetter_under_ti_par(monkeypatch, capsys):
+    """Faerre enn 10 par skal IKKE lenger stoppe (raise) - kun en
+    advarsel til stderr, se run_report()/print_bias_report() for hvor
+    dette ogsaa vises til brukeren."""
+    def get(url, params, timeout=30):
+        hs = 1.8 if params.get("models") == "era5_ocean" else 0.9
+        return {"hourly": {
+            "time": [f"{params['start_date']}T00:00"],
+            "wave_height": [hs], "wave_direction": [190.0], "wave_period": [7.0],
+        }}
+    monkeypatch.setattr(B, "_get_json", get)
+    result = B.quantify_bias(58.930, 9.830, ["2024-01-01"])
+    assert result["hs"]["n"] == 1
+    assert "ADVARSEL" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------- HTTP-robusthet
+
+
+def test_get_json_gir_opp_etter_alle_forsok(monkeypatch):
+    calls = []
+
+    def raising_get(url, params=None, timeout=None):
+        calls.append(1)
+        raise requests.Timeout("treg")
+
+    monkeypatch.setattr(requests, "get", raising_get)
+    with pytest.raises(requests.Timeout):
+        B._get_json(B.WAVE_URL, {"start_date": "2024-01-01"})
+    assert len(calls) == 1 + len(B.RETRY_DELAYS_S), "forste forsok + alle retries"
+    assert B._http_stats["n_calls"] == 1
+    assert B._http_stats["n_retried"] == 0, "ingen av forsokene lyktes"
+
+
+def test_get_json_lykkes_etter_to_feil_telles_som_retried(monkeypatch):
+    attempts = {"n": 0}
+
+    class FakeResp:
+        status_code = 200
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"ok": True}
+
+    def flaky_get(url, params=None, timeout=None):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise requests.ConnectionError("midlertidig")
+        return FakeResp()
+
+    monkeypatch.setattr(requests, "get", flaky_get)
+    result = B._get_json(B.WAVE_URL, {})
+    assert result == {"ok": True}
+    assert attempts["n"] == 3
+    assert B._http_stats["n_calls"] == 1
+    assert B._http_stats["n_retried"] == 1
+
+
+def test_get_json_lykkes_forste_gang_telles_ikke_som_retried(monkeypatch):
+    class FakeResp:
+        status_code = 200
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"ok": True}
+
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: FakeResp())
+    B._get_json(B.WAVE_URL, {})
+    assert B._http_stats["n_calls"] == 1
+    assert B._http_stats["n_retried"] == 0
+
+
+def test_reset_http_stats():
+    B._http_stats["n_calls"] = 7
+    B._http_stats["n_retried"] = 3
+    B.reset_http_stats()
+    assert B._http_stats == {"n_calls": 0, "n_retried": 0}
 
 
 # ------------------------------------------------------------- henting
