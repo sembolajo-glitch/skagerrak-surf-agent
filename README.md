@@ -406,6 +406,24 @@ Vestfjorden-punktet (59.200/10.600) lå enda nærmere – rett ved
 Bolærne/Rauer, ikke i åpen fjord – og ble flyttet til 59.250/10.560 av
 samme grunn.
 
+**`diagnose_spot.py`** – ett diagnosekart (SVG) per spot, ca. 4×4 km rundt
+spotkoordinatet: kystkontur + dybdekoter 20/30/50 m (gråtoner), spot- og
+`offshore_point`-koordinat, `facing`- og dybdepeiling-piler (sistnevnte fra
+`build_fetch.depth_bearing_for_spot()`, med kilde påskrevet), kryss der
+dybdepeilingen traff hver kote, `swell_window` som en vifte, og
+`fetch_km`/`local_fetch_km` som en liten logaritmisk polardiagram-rose i
+hjørnet (skalert til spottens egen maksverdi – en enkelt urimelig retning
+skal synes med det samme). Pluss en oversiktsside
+(`out/diagnose/oversikt.svg`) med alle 14 spot side om side i mindre
+format. Fem avvik markeres automatisk i rødt, både i tekstboksen og på selve
+kartet: peiling til `offshore_point` utenfor `swell_window`, over 45°
+avvik mellom `facing` og dybdepeilingen, `dybde_50m_km` nærmere enn
+`dybde_20m_km`, `offshore_point` nærmere enn 500 m eller lenger enn 8 km
+unna, og spot-koordinat nærmere enn 50 m fra kystkontur (sannsynligvis på
+land). Leser kun de allerede beregnede feltene i `spots.yaml` (regner
+ingenting på nytt) – kjøres i `geodata.yml` rett etter `build_fetch.py`,
+lastes opp som Actions-artifact (`diagnose-spot`), committes ingen steder.
+
 **`debug_fetch_rays.py`** (engangsdiagnose, ikke i `geodata.yml`) – for de
 fem klasse C-spottene: skriver ut alle 72 råe `fetch_km_72`-verdiene i en
 tabell sammen med retning, og klassifiserer hver stråle som ekte
