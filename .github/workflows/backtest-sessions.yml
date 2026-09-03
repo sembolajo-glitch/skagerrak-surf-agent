@@ -115,12 +115,12 @@ jobs:
 
           def render_table(rows, title):
               lines.append(f"\n## {title}\n\n")
-              lines.append("| dato | spot | kvalitet | stars | p_surf | regional_wp | port | svakeste ledd | score |\n")
-              lines.append("|---|---|---|---|---|---|---|---|---|\n")
+              lines.append("| dato | spot | kvalitet | stars | p_surf | hs_eff | tp_eff | regional_wp | port | svakeste ledd | score |\n")
+              lines.append("|---|---|---|---|---|---|---|---|---|---|---|\n")
               n_zero = 0
               for r in rows:
                   if "feil" in r:
-                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | | |\n")
+                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | | | | |\n")
                       continue
                   h = r["hour"]
                   score = h["score"]
@@ -130,7 +130,8 @@ jobs:
                           "STENGT" if h.get("regional_gate_closed") else "aapen")
                   led, led_v = B._weakest_led(h)
                   lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {h.get('stars')} | "
-                                f"{h.get('p_surf')} | {h.get('regional_wp')} | {port} | "
+                                f"{h.get('p_surf')} | {h.get('hs_eff')} | {h.get('tp_eff')} | "
+                                f"{h.get('regional_wp')} | {port} | "
                                 f"{led} ({led_v:.2f}) | {score} |\n")
               n_total = sum(1 for r in rows if "feil" not in r)
               lines.append(f"\n**{n_zero}/{n_total} okter fikk score 0.0.**\n")

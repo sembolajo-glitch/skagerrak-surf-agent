@@ -137,8 +137,36 @@
 #                       agenten overvurderer.
 #
 #  regional_wp_min,
-#  regional_wp_max:  valgfritt, kW/m. EN EGEN, UAVHENGIG port paa toppen av
-#                 min_hs/ideal_hs/max_hs - IKKE en erstatning for dem og
+#  regional_wp_max:  DEAKTIVERT (ordre 2026-09-02, backtest_sessions.py
+#                 mot sessions_historisk.csv - se rapport til bruker).
+#                 Feilkalibrert, ikke bare unoyaktig: alle tre Saltstein-
+#                 oktene i backtesten (to "svaert bra", en "sesongens
+#                 beste") ble stengt av porten - regional_wp laa 1,2-2,8
+#                 kW/m mot terskelen 12,2, en faktor 4-10 for lavt.
+#                 Konverteringen fra surf-forecast sin skala (se ankeret
+#                 under) holder rett og slett ikke. IKKE justert til et
+#                 nytt tall - deaktivert, siden det ikke finnes grunnlag
+#                 for aa gjette en bedre terskel ennaa. Alle tre spot-
+#                 oppforingene under har derfor regional_wp_min/max
+#                 satt til null (tomt = "ingen grense", se under) - kun
+#                 verdiene er endret, IKKE koden (score_hour() i
+#                 agent.py haandterer None uendret) og IKKE feltene
+#                 (fortsatt fjernet fra spots.yaml ville vaert et STORRE
+#                 grep-avtrykk enn aa bare nulle dem). regional_wp
+#                 LOGGES fortsatt (se agent.py sin score_hour()) - porten
+#                 er av, maalingen er det ikke. Kalibrer empirisk mot
+#                 ekstern_wp naar nok parvise observasjoner finnes,
+#                 i stedet for aa gjette paa nytt fra surf-forecast sin
+#                 skala.
+#
+#                 Resten av denne feltbeskrivelsen er HISTORIKK - hvordan
+#                 feltet var TENKT aa virke, og hvilke tall (na null/
+#                 utelatt paa alle spots) det stod paa foer det ble
+#                 deaktivert over. Beholdt for aa vise HVORFOR de gamle
+#                 tallene var feil, ikke fordi noe av det under fortsatt
+#                 gjelder:
+#
+#                 EN EGEN, UAVHENGIG port paa toppen av
 #                 IKKE samme stedsreferanse. min_hs maaler boelgehoyde VED
 #                 SPOTTEN (etter propagering/lokal fetch der det gjelder).
 #                 regional_wp_min/max maaler agent.py sin regional_wp -
@@ -211,22 +239,20 @@ spots:
     water_sensitivity_cm: 60
     drive_min: 110
     kalibrert: true               # kjent spot - bruk som referanse
-    regional_wp_min: 12.2         # starter - se merknad ved regional_wp_min/max over.
-                                   # Observert paa surf-forecasts skala: starter 150,
-                                   # best 200-300, lukker seg over 400. Ankeret 250 =
-                                   # 20.35 kW/m (wave_power(2.5, tp_est(2.5))) gir, ved
-                                   # LINEAER ekstrapolering fra det ene ankerpunktet,
-                                   # 150 -> 12.2 kW/m.
-                                   # PROVISORISK: forholdet mellom surf-forecast sin
-                                   # skala og vaar kW/m er IKKE nodvendigvis konstant
-                                   # over hele spennet - 150 og 400 kan hver ha sin
-                                   # egen reelle omregningsfaktor som avviker fra denne
-                                   # ene lineaere ekstrapoleringen (samme forbehold
-                                   # gjelder regional_wp_max under). Provisorisk til
-                                   # ekstern_wp gir nok parvise observasjoner til aa
-                                   # kalibrere en ekte (mulig ikke-lineaer) kurve.
-    regional_wp_max: 32.6         # lukker seg over 400 (samme skala, samme forbehold
-                                   # over) - se merknad ved regional_wp_min/max over
+    regional_wp_min:               # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
+                                    # regional_wp_min/max i toppteksten. Stod paa 12.2,
+                                    # utledet ved lineaer ekstrapolering fra surf-forecast
+                                    # sin skala (ankeret 250 = 20.35 kW/m). Backtest mot
+                                    # sessions_historisk.csv: alle tre Saltstein-oktene
+                                    # (kvalitet 4, 4, 5 av 5) hadde regional_wp paa
+                                    # 1.2-2.8 kW/m - en faktor 4-10 under 12.2. Porten
+                                    # hadde stengt samtlige. Konverteringen holder ikke -
+                                    # ikke justert til et nytt tall, bare slaatt av.
+    regional_wp_max:                # DEAKTIVERT (ordre 2026-09-02) - stod paa 32.6,
+                                    # samme ekstrapolering, samme forbehold. Ingen
+                                    # backtest-okt traff denne siden - kun _min var
+                                    # tydelig feil - men samme metode ligger bak begge,
+                                    # saa begge slaas av til en ekte kalibrering finnes.
     notes: >
       Referansespotten. SV-vendt steinrev. "Jekker fra dypt vann" var en
       antagelse - malt paa nytt (ordre 2026-09-02) etter koordinatrettingen
@@ -490,7 +516,15 @@ spots:
     min_tp: 5.0
     drive_min: 95
     kalibrert: true
-    regional_wp_min: 38.7         # starter - se merknad ved regional_wp_min/max lenger opp
+    regional_wp_min:                # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
+                                    # regional_wp_min/max i toppteksten. Stod paa 38.7,
+                                    # samme surf-forecast-ekstrapolering som Saltstein
+                                    # (som backtesten viste var feil med faktor 4-10) -
+                                    # ingen egen Hvasser-okt i backtesten ennaa, men
+                                    # samme metodefeil rammer trolig dette tallet ogsaa.
+                                    # Slaatt av, ikke justert - se ogsaa bypass-unntaket
+                                    # under (source="local_fetch") som uansett gjorde
+                                    # denne terskelen stort sett irrelevant for Hvasser.
     local_fetch_km: [1, 2, 6, 12, 22, 35, 80, 120, 90, 40, 20, 3, 0.5, 0.3, 0.3, 0.5]
     notes: >
       Har egen SØ-fetch mot Koster/Skagen på 100+ km. Ved ren SØ-kuling
@@ -552,8 +586,17 @@ spots:
     water_sensitivity_cm: 80
     drive_min: 80
     kalibrert: true
-    regional_wp_min: 65.1         # starter - se merknad ved regional_wp_min/max lenger opp
-    regional_wp_max: 244.2        # taaler opptil - samme merknad
+    regional_wp_min:                # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
+                                    # regional_wp_min/max i toppteksten. Stod paa 65.1,
+                                    # samme surf-forecast-ekstrapolering som Saltstein
+                                    # (faktor 4-10 feil der). Slagen har flest okter i
+                                    # sessions_historisk.csv (seks av elleve) - resultatet
+                                    # for dem spesifikt star i backtest-report-artifacten,
+                                    # ikke gjentatt her, men samme metodefeil rammer
+                                    # ankeret alle disse tallene deler. Slaatt av, ikke
+                                    # justert.
+    regional_wp_max:                # DEAKTIVERT (ordre 2026-09-02) - stod paa 244.2,
+                                    # samme forbehold som _min over.
     #          N   NNO  NO  ONO   O  OSO   SO  SSO    S  SSV   SV  VSV   V  VNV  NV  NNV
     fetch_km: [0.5, 1.0, 3, 10, 14, 16, 22, 48, 33, 20, 8, 0.2, 0.1, 0.1, 0.1, 0.2]
     gate:

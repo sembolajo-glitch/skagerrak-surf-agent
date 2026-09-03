@@ -525,9 +525,17 @@ def print_bias_report(bias, label):
 
 
 def print_session_table(results, title):
-    print(f"\n{'='*100}\n{title}\n{'='*100}")
+    """
+    hs_eff/tp_eff (ordre 2026-09-02, etter at regional_wp-porten ble
+    deaktivert - se rapport til bruker): de tallene som faktisk avgjor
+    om min_hs/ideal_hs/max_hs/min_tp treffer, tidligere skjult bak
+    porten sin score==0.0. Trykkes med rett fra `hour` (score_hour() sin
+    egen avrunding, se agent.py), ingen ny utledning her.
+    """
+    print(f"\n{'='*112}\n{title}\n{'='*112}")
     header = (f"{'dato':<11}{'spot':<16}{'kval':>5}  {'stars':>6}{'p_surf':>8}"
-              f"{'regional_wp':>13}  {'port':<10}{'svakeste ledd':<20}{'score':>7}")
+              f"{'hs_eff':>8}{'tp_eff':>8}{'regional_wp':>13}  {'port':<10}"
+              f"{'svakeste ledd':<20}{'score':>7}")
     print(header)
     n_zero = 0
     for r in results:
@@ -543,6 +551,7 @@ def print_session_table(results, title):
         led, led_v = _weakest_led(h)
         print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}  "
               f"{str(h.get('stars')):>6}{h.get('p_surf'):>8.0f}"
+              f"{h.get('hs_eff'):>8}{h.get('tp_eff'):>8}"
               f"{str(h.get('regional_wp')):>13}  {port:<10}"
               f"{led+f' ({led_v:.2f})':<20}{score:>7.1f}")
     n_total = sum(1 for r in results if "feil" not in r)

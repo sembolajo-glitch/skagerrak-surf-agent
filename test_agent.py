@@ -11,16 +11,37 @@ import pytest
 import agent as A
 
 
-def _hvasser():
-    """Klasse B, kun regional_wp_min satt (38.7)."""
+def _with_regional_wp(spot_id, **thresholds):
+    """
+    Ekte spot fra spots.yaml, MED regional_wp_min/max overstyrt lokalt
+    for testen (ordre 2026-09-02: porten er deaktivert paa alle spots i
+    selve spots.yaml etter backtest_sessions.py - se rapport til bruker
+    - saa disse testene kan ikke lenger lese terskler derfra og maa
+    sette dem selv). Dette tester PORT-MEKANISMEN i score_hour(), IKKE
+    dagens produksjonskalibrering - de to skal ikke vaere koblet sammen.
+    """
     spots, _ = A.load_spots()
-    return next(s for s in spots if s["id"] == "hvasser_sando")
+    spot = dict(next(s for s in spots if s["id"] == spot_id))
+    spot.update(thresholds)
+    return spot
+
+
+def _hvasser():
+    """Klasse B - regional_wp_min satt til 38.7 for denne testen (se
+    _with_regional_wp())."""
+    return _with_regional_wp("hvasser_sando", regional_wp_min=38.7)
 
 
 def _saltstein():
-    """Klasse A, regional_wp_min (12.2) og regional_wp_max (32.6) satt."""
-    spots, _ = A.load_spots()
-    return next(s for s in spots if s["id"] == "saltstein")
+    """Klasse A - regional_wp_min=12.2/regional_wp_max=32.6 satt for
+    denne testen (se _with_regional_wp())."""
+    return _with_regional_wp("saltstein", regional_wp_min=12.2, regional_wp_max=32.6)
+
+
+def _slagen():
+    """Klasse C - regional_wp_min=65.1 satt for denne testen (se
+    _with_regional_wp())."""
+    return _with_regional_wp("slagen", regional_wp_min=65.1)
 
 
 def _favorable_computed(spot, hs=2.0, tp=7.0):
@@ -108,8 +129,7 @@ def test_regional_gate_bypasses_naar_lokal_fetch_dominerer():
     historiske timene backtesten fant (se rapport til bruker 2026-09-02)."""
     import datetime as dt
 
-    spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "hvasser_sando")
+    spot = _hvasser()
     start = dt.datetime.fromisoformat("2026-11-14T00:00:00+00:00")
     times = [(start + dt.timedelta(hours=i)).isoformat() for i in range(10)]
     ts = times[-1]
@@ -141,8 +161,7 @@ def test_regional_gate_bypasses_naar_lokal_energifluks_dominerer_klasse_c():
     ikke boolsk local_hs > prop_hs. Haandlagd `computed` (samme felt som
     evaluate_class_c() bygger) fremfor aa kjore hele gate-simuleringen,
     siden score_hour() bare leser feltene."""
-    spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "slagen")
+    spot = _slagen()
     ts = "2026-11-14T09:00:00+00:00"
     computed = {
         "source": "local+gate", "hs_eff": 2.0, "tp_eff": 5.0, "dir_eff": 180.0,
@@ -166,8 +185,7 @@ def test_regional_gate_bypasses_naar_lokal_energifluks_dominerer_klasse_c():
 def test_regional_gate_ikke_bypass_naar_propagert_energifluks_dominerer_klasse_c():
     """Samme spot, men propagert energifluks langt over lokal - da skal
     porten lukke som normalt, IKKE bypasses."""
-    spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "slagen")
+    spot = _slagen()
     ts = "2026-11-14T09:00:00+00:00"
     computed = {
         "source": "local+gate", "hs_eff": 2.0, "tp_eff": 5.0, "dir_eff": 180.0,
@@ -191,8 +209,7 @@ def test_regional_gate_delvis_bypass_naer_paritet_klasse_c():
     en MELLOMLIGGENDE vekt, ikke et hardt 0/1-hopp - det er hele poenget
     med aa bytte fra boolsk til kontinuerlig (se score_hour() sin
     docstring). q_size skal vaere delvis, men ikke fullt, redusert."""
-    spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "slagen")
+    spot = _slagen()
     ts = "2026-11-14T09:00:00+00:00"
     # e_lokal = e_prop (samme hs OG tp) -> r=0 -> w=0.5 noyaktig
     computed = {
