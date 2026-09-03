@@ -286,3 +286,24 @@ def test_klasse_ab_local_fetch_uendret_w_1_uansett_medlem():
 
     assert med_port["p_surf"] == uten_port["p_surf"]
     assert med_port["stars"] == uten_port["stars"]
+
+
+def test_evaluate_bruker_wind_floor_konsistent_med_score_hour():
+    """ensemble.evaluate() (per-medlem-scoringen som driver p_surf/stars)
+    MAA bruke samme wind_floor-mekanisme som agent.py sin score_hour()
+    (logget i shadow.csv sin q_wind/score) - ellers gjentar vi noeyaktig
+    bugen window_factor hadde helt til 2026-09-03 (se rapport til bruker):
+    to ULIKE modeller av samme vindstraff, en logget og en som faktisk
+    driver UI-et."""
+    spot_uten_gulv = _spot(facing=225, wind_weight=0.55)  # wind_floor mangler -> 0.10 default
+    spot_med_gulv = _spot(facing=225, wind_weight=0.55, wind_floor=0.40)
+    base = {"model_hs": 2.0, "model_tp": 7.0, "model_dir": 215}  # midt i swell_window
+    wind = {"wind_speed": 10.0, "wind_from_direction": 225}  # d=0, dodrett paalandsvind
+
+    uten = E.evaluate(spot_uten_gulv, base, wind, lead_h=24, water_cm=None, wave_rec={})
+    med = E.evaluate(spot_med_gulv, base, wind, lead_h=24, water_cm=None, wave_rec={})
+    # begge har p_surf=100% her (score>0 krever bare q_wind>0, som holder
+    # uansett gulv-stoerrelse) - stars (median kvalitet GITT surf) er
+    # derimot proporsjonal med q_wind sin faktiske stoerrelse, og er der
+    # gulvet skal vise seg
+    assert med["stars"] > uten["stars"], (med["stars"], uten["stars"])
