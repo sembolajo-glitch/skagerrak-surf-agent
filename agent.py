@@ -132,13 +132,34 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     wfrom = wind.get("wind_from_direction")
 
     # retningsvindu (klasse A/B - for klasse C er filtreringen alt gjort i gate)
+    #
+    # ordre 2026-09-03 (rettet reell bug, se rapport til bruker): wf ble FOR
+    # regnet her, men aldri brukt - kun window_ok (bare/utenfor) styrte
+    # q_size, med en haard 0/1-grense akkurat ved vinduskanten. ensemble.py
+    # sin evaluate() (per-medlem-scoringen som faktisk driver p_surf/stars)
+    # har ALDRI hatt denne haarde grensen - den ganger alltid hs med
+    # window_factor() sin glatte avtrapping (1.0 inne, glatt ned til 0.0
+    # 15 grader utenfor, se physics.window_factor()). Score/q_size (denne
+    # funksjonen, logget i shadow.csv) og stars/p_surf (ensemble.py) regnet
+    # dermed fra to ULIKE modeller av samme retningsvindu. Fikset ved aa
+    # skalere q_size sitt hs-grunnlag med wf her ogsaa, OG fjerne den haarde
+    # window_ok-nullstillingen - matcher ensemble.py sin struktur noeyaktig
+    # (den har aldri hatt en tilsvarende haard grense). window_ok beholdes
+    # KUN som et informativt returfelt (se retur-dict under), det styrer
+    # ikke lenger q_size.
+    #
+    # IKKE roert her: selve window_factor() sin FORM (flat 1.0 inne i
+    # vinduet, lineaer taper utenfor) - kun at den na faktisk BRUKES. En
+    # eventuell glatting av formen (myk vekting inne i vinduet, ikke bare
+    # flat) er en egen, separat endring - se physics.window_factor() sin
+    # docstring/rapport til bruker for hvorfor de to er holdt fra hverandre.
     if spot["klasse"] in ("A", "B") and wdir is not None:
         window_ok = P.in_window(wdir, spot["swell_window"])
-        wf = P.window_factor(wdir, spot) if hasattr(P, "window_factor") else 1.0
+        wf = P.window_factor(wdir, spot)
     else:
         window_ok, wf = True, 1.0
 
-    q_size = P.size_quality(hs, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
+    q_size = P.size_quality(hs * wf, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
     q_period = P.period_quality(tp, spot["min_tp"])
     q_wind_raw, wind_label = (
         P.wind_quality(ws, wfrom, spot["facing"]) if wfrom is not None else (0.5, "ukjent")
@@ -149,9 +170,6 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         spot["water_optimal_cm"],
         spot["water_sensitivity_cm"],
     )
-
-    if not window_ok:
-        q_size = 0.0
 
     # brattheit-justering (ordre 2026-09-02, se physics.gate_threshold_factor()):
     # regional_wp_min skaleres ned naar den gjenvaerende sjoen er ren/lang
@@ -969,6 +987,22 @@ def append_shadow_log(payload):
     "fil med data, men uten header" (reparerer sistnevnte ved aa sette
     inn header forrest, i stedet for aa hoppe over den for alltid).
 
+    Header-VEKST (ordre 2026-09-03 - funn: samme feilklasse igjen, na
+    fordi FIELDS i shadow_schema.py vokste ETTER at headeren sist ble
+    skrevet - 12 166 av 45 234 rader paa data-grenen fikk model_rev/
+    bypass_weight/log_energy_margin/steepness/gate_factor plassert bak
+    en header som stoppet ved regional_gate_bypassed. csv.DictReader
+    (ogsaa calibrate.py sin) mapper POSISJONELT mot headeren - de fem
+    nyeste feltene ble dermed usynlige for enhver leser som stoler paa
+    headeren, ikke fordi dataene manglet, men fordi headeren ikke fulgte
+    med. Sjekker na OGSAA om en EKSISTERENDE header er et STRIKT PREFIKS
+    av dagens FIELDS (fields vokste, samme append-only-kontrakt som
+    shadow_schema.py sin docstring krever) - i saa fall byttes KUN
+    headerlinja ut med en fersk, full header. Ingen datarader roeres.
+    En header som IKKE er et prefiks (uventet - feltnavn endret/fjernet,
+    strider mot kontrakten) roeres ikke - det er ikke noe aa gjette seg
+    forbi her.
+
     Feltlista er FIELDS i shadow_schema.py, ikke lokal her lenger - se
     den modulens docstring for append-only-kontrakten
     (test_shadow_schema.py haandhever den)."""
@@ -976,12 +1010,23 @@ def append_shadow_log(payload):
     fields = shadow_schema.FIELDS
 
     existing = path.read_bytes() if path.exists() else b""
-    has_header = existing[:7] == b"run_at,"
-    if existing and not has_header:
-        # data uten header - sett headeren FORREST, ikke bakerst
-        header_buf = io.StringIO()
-        csv.DictWriter(header_buf, fieldnames=fields).writeheader()
-        path.write_bytes(header_buf.getvalue().encode("utf-8") + existing)
+    header_line, _, rest = existing.partition(b"\n")
+    has_header_line = header_line.startswith(b"run_at,")
+
+    def fresh_header_bytes():
+        buf = io.StringIO()
+        csv.DictWriter(buf, fieldnames=fields).writeheader()
+        return buf.getvalue().encode("utf-8")
+
+    if existing and not has_header_line:
+        # data uten header i det hele tatt - sett headeren FORREST
+        path.write_bytes(fresh_header_bytes() + existing)
+    elif has_header_line:
+        existing_fields = next(csv.reader([header_line.decode("utf-8")]))
+        if existing_fields != fields and existing_fields == fields[:len(existing_fields)]:
+            # headeren er et strikt prefiks av dagens FIELDS - byttes ut,
+            # datalinjene (rest) er uendret
+            path.write_bytes(fresh_header_bytes() + rest)
 
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")

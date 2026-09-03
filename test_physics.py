@@ -73,6 +73,29 @@ def test_bred_spredning_hjelper_nar_toppen_ligger_utenfor_sektoren():
     assert bred > smal, (bred, smal)
 
 
+def test_window_factor_flat_inne_i_vinduet():
+    """Uendret form (ordre 2026-09-03) - kun BRUKEN av denne ble fikset i
+    agent.py sin score_hour(), ikke selve formen ennaa (se rapport til
+    bruker om glattingsforslaget, ikke bygget)."""
+    spot = {"swell_window": (170, 260)}
+    assert P.window_factor(170, spot) == 1.0
+    assert P.window_factor(215, spot) == 1.0
+    assert P.window_factor(260, spot) == 1.0
+
+
+def test_window_factor_glatt_taper_utenfor_vinduet():
+    spot = {"swell_window": (170, 260)}
+    like_utenfor = P.window_factor(265, spot)
+    lenger_utenfor = P.window_factor(270, spot)
+    assert 0.0 < lenger_utenfor < like_utenfor < 1.0
+
+
+def test_window_factor_null_15_grader_utenfor_og_lenger():
+    spot = {"swell_window": (170, 260)}
+    assert P.window_factor(275, spot) == 0.0
+    assert P.window_factor(300, spot) == 0.0
+
+
 def test_vindkvalitet():
     # Slagen facing=120 (OSO). NV-vind (315) skal vaere fralands.
     q_nv, lbl = P.wind_quality(8, 315, 120)

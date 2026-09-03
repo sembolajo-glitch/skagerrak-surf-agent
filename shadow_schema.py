@@ -49,6 +49,14 @@ FIELDS = [
     # tidspunkt regional_wp er regnet fra); gate_factor er faktoren
     # regional_wp_min ble ganget med FOR porten ble sjekket denne timen.
     "steepness", "gate_factor",
+    # lokal middelvind (ordre 2026-09-03 - Slagen-diagnosen: 0,59 mot
+    # ventet 0,80 m ved 15 m/s/33 km fetch forklartes av at build_local_sea()
+    # sin faktiske vindmiddelverdi laa lavere enn den observerte
+    # punktvinden. Feltet fantes allerede per time (agent.py sin
+    # evaluate_class_c(), noekkelen "local_wind_mean") og skrives allerede
+    # til out/spots/<id>.json, men manglet i shadow.csv - uten det kan
+    # klasse C-beregningen ikke etterproeves fra loggen alene.
+    "local_wind_mean",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra
