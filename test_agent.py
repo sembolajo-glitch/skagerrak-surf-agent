@@ -6,6 +6,9 @@ spots.yaml via load_spots() og evaluate_class_ab() for aa faa et gyldig
 enklere aa bygge riktig via den ekte kjeden enn aa gjette strukturen.
 """
 
+import argparse
+import json
+
 import pytest
 
 import agent as A
@@ -47,9 +50,19 @@ def _slagen():
 def _favorable_computed(spot, hs=2.0, tp=7.0):
     """Et `computed`-objekt som ELLERS ville gitt god score - innenfor
     swell_window, hs mellom min_hs og max_hs, glassy vind (wind_speed<2
-    -> q_wind=1.0 uansett retning, se physics.wind_quality)."""
+    -> q_wind=1.0 uansett retning, se physics.wind_quality).
+
+    wave_dir er satt til MIDTPUNKTET av swell_window, ikke bare "5 grader
+    innenfor kanten" (som den var foer ordre 2026-09-03) - cos^(2s)
+    (physics.window_factor(), se rapport til bruker) taper glatt ogsaa
+    INNENFOR vinduet og er hoyest praesist ved senteret, saa denne
+    fixturen maa treffe senteret for fortsatt aa vaere det beste tilfellet
+    testene under forutsetter (de tester regional_wp-porten, IKKE
+    retningsvinduets form)."""
     ts = "2026-11-14T09:00:00+00:00"
-    wave_dir = spot["swell_window"][0] + 5  # godt innenfor vinduet
+    lo, hi = spot["swell_window"]
+    width = (hi - lo) if hi >= lo else (hi + 360 - lo)
+    wave_dir = (lo + width / 2.0) % 360  # midtpunktet - se docstring over
     wind = {ts: {"wind_speed": 1.0, "wind_from_direction": 0.0}}
     waves = {ts: {"hs": hs, "tp": tp, "wave_from_direction": wave_dir}}
     computed = A.evaluate_class_ab(spot, [ts], wind, waves)
@@ -232,14 +245,56 @@ def test_regional_gate_delvis_bypass_naer_paritet_klasse_c():
     assert h["q_size"] > 0.0
 
 
+def test_window_ok_er_none_for_klasse_c_uansett_retning():
+    """ordre 2026-09-03, runde 2 (se rapport til bruker): window_ok var
+    tidligere hardkodet True for klasse C uansett dir_eff - et EKTE funn
+    (Baastoey odden: 10/80 timer med dir_eff klart utenfor swell_window,
+    men window_ok=True likevel), fordi klasse C aldri har filtrert retning
+    via swell_window/window_ok - det skjer i gate (gate_energy_frac). Na
+    None (ikke anvendelig), ikke en paastand - uansett om dir_eff faktisk
+    ligger innenfor Slagens eget swell_window [160,200] (180) eller klart
+    utenfor (30), siden feltet ikke skal bety noe for klasse C i det hele
+    tatt."""
+    spot = _slagen()  # swell_window [160, 200]
+    ts = "2026-11-14T09:00:00+00:00"
+    base_computed = {
+        "source": "local+gate", "hs_eff": 2.0, "tp_eff": 5.0,
+        "local_hs": 1.0, "local_tp": 6.0, "prop_hs": 1.0, "prop_tp": 6.0,
+        "swell_hs": 1.0, "windsea_hs": 1.0,
+        "local_wind_mean": 8.0, "local_fetch_km": 20.0, "local_duration_h": 4,
+        "local_dir": 180.0, "gate_hs": 0.0, "gate_tp": 0.0, "gate_dir": None,
+    }
+    for dir_eff in (180.0, 30.0):  # innenfor vinduet, og 130+ grader utenfor det
+        computed = dict(base_computed, dir_eff=dir_eff)
+        h = A.score_hour(spot, ts, {"wind_speed": 1.0}, {}, None, computed, regional_wp=10.0)
+        assert h["window_ok"] is None, (dir_eff, h["window_ok"])
+
+
+def test_window_ok_fortsatt_bool_for_klasse_ab():
+    """Uendret av runde 2 (se testen over) - klasse A/B skal fortsatt faa
+    en ekte bool, ikke None."""
+    spot = _saltstein()  # klasse A
+    ts, wind, waves, computed = _favorable_computed(spot)
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["window_ok"] in (True, False)
+
+
 # ---------------------------------------------- window_factor i q_size (klasse A/B)
 #
 # ordre 2026-09-03 (rettet reell bug, se rapport til bruker): score_hour()
 # regnet wf (physics.window_factor()) men brukte den aldri - kun window_ok
 # (haard 0/1-grense ved vinduskanten) styrte q_size, mens ensemble.py sin
-# per-medlem-scoring (som driver p_surf/stars) ALLTID har brukt window_factor()
-# sin glatte taper. Testene under dekker fiksen: wf ganges inn i q_size sitt
-# hs-grunnlag, og window_ok styrer ikke lenger en haard nullstilling.
+# per-medlem-scoring (som driver p_surf/stars) ALLTID har brukt window_factor().
+# Testene under dekker fiksen: wf ganges inn i q_size sitt hs-grunnlag, og
+# window_ok styrer ikke lenger en haard nullstilling.
+#
+# ordre 2026-09-03, runde 2 (se rapport til bruker): window_factor() sin FORM
+# er ogsaa byttet ut - fra flat/lineaer-taper til cos^(2s) (samme spredning
+# gate.spread_s allerede brukte for klasse C). Testene under er oppdatert for
+# den nye formen: den er IKKE flat=1.0 gjennom hele vinduet (hoyest praesist
+# ved senteret), og har IKKE noe hardt 0.0-kutt utenfor (kun naer 180 grader
+# fra senteret) - se test_score_hour_retning_langt_utenfor_vinduet_* under
+# for begge disse.
 
 
 def _computed_med_retning(spot, wave_dir, hs=2.0, tp=7.0):
@@ -252,8 +307,8 @@ def _computed_med_retning(spot, wave_dir, hs=2.0, tp=7.0):
     return ts, wind[ts], waves[ts], computed[0][1]
 
 
-def test_score_hour_retning_god_innenfor_vinduet_gir_full_q_size():
-    spot = _saltstein()  # swell_window (170, 260)
+def test_score_hour_retning_ved_vindussenter_gir_positiv_q_size():
+    spot = _saltstein()  # swell_window (170, 260), senter 215
     ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=215)
     h = A.score_hour(spot, ts, wind, waves, None, computed)
     assert h["window_ok"] is True
@@ -261,9 +316,10 @@ def test_score_hour_retning_god_innenfor_vinduet_gir_full_q_size():
 
 
 def test_score_hour_retning_like_utenfor_vinduet_gir_delvis_q_size_ikke_null():
-    """Kjernen i fiksen: 5 grader utenfor vindkanten skal IKKE lenger gi
-    q_size=0 (den gamle haarde window_ok-grensen) - window_factor() sin
-    taper skal gi en delvis, men positiv, verdi (matcher ensemble.py)."""
+    """Kjernen i den ORIGINALE fiksen (window_ok styrer ikke lenger en haard
+    nullstilling): 5 grader utenfor vindkanten skal fortsatt gi en delvis,
+    men positiv, verdi - lavere enn ved senteret, siden cos^(2s) avtar
+    monotont med avstand fra senteret."""
     spot = _saltstein()
     innenfor_ts, innenfor_wind, innenfor_waves, innenfor_computed = _computed_med_retning(spot, wave_dir=215)
     h_innenfor = A.score_hour(spot, innenfor_ts, innenfor_wind, innenfor_waves, None, innenfor_computed)
@@ -274,14 +330,68 @@ def test_score_hour_retning_like_utenfor_vinduet_gir_delvis_q_size_ikke_null():
     assert 0.0 < h["q_size"] < h_innenfor["q_size"]
 
 
-def test_score_hour_retning_langt_utenfor_vinduet_gir_null_q_size():
-    """Utenfor window_factor() sin 15-graders taper skal q_size fortsatt
-    vaere 0 - fiksen fjerner den haarde KANT-grensen, ikke all filtrering."""
+def test_score_hour_retning_langt_utenfor_vinduet_gir_null_q_size_via_min_hs():
+    """Med default-fixturens hs=2.0 (min_hs=1.2) blir q_size fortsatt 0 ved
+    30 grader forbi kanten - MEN av en annen grunn enn foer 2026-09-03: det
+    er IKKE lenger window_factor() selv som gir 0 (cos^(2s) har ikke noe
+    hardt kutt der, se testen under) - det er det redusterte hs*wf som
+    faller under spottens EGEN min_hs-grense (physics.size_quality()).
+    Tilfeldig sammenfall av grenseverdier for akkurat denne hs-en, ikke et
+    generelt "utenfor vinduet = null"-utsagn - se testen under for det."""
     spot = _saltstein()
-    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290)  # 30 grader forbi 260
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290, hs=2.0)  # 30 grader forbi 260
     h = A.score_hour(spot, ts, wind, waves, None, computed)
     assert h["window_ok"] is False
     assert h["q_size"] == 0.0
+
+
+def test_score_hour_retning_langt_utenfor_vinduet_gir_ikke_lenger_null_naar_hs_er_hoy_nok():
+    """Selve poenget med byttet til cos^(2s) (ordre 2026-09-03, se rapport
+    til bruker): window_factor() har IKKE lenger noe hardt 0.0-kutt utenfor
+    vinduet. Med en hs hoy nok til at hs*wf fortsatt klarer min_hs selv 30
+    grader forbi kanten, blir q_size na POSITIV - noe den ALDRI kunne bli
+    foer byttet, uansett hvor hoy hs var, siden wf selv var eksakt 0.0 der."""
+    spot = _saltstein()  # min_hs=1.2
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290, hs=5.0)  # 30 grader forbi 260
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["window_ok"] is False
+    assert h["q_size"] > 0.0
+
+
+def test_score_hour_retning_naer_180_grader_fra_senter_gir_null_q_size():
+    """Den eneste retningen cos^(2s) faktisk gir (naer) 0.0 - motsatt av
+    vindussenteret - selv med hoy hs."""
+    spot = _saltstein()  # swell_window (170, 260), senter 215
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=215 + 180, hs=10.0)
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["q_size"] == 0.0
+
+
+# --------------------------------------- per-spot detaljfil (out/spots/<id>.json)
+
+
+def test_run_skriver_name_klasse_kalibrert_params_til_detaljfil(tmp_path, monkeypatch):
+    """ordre 2026-09-03 (se rapport til bruker): detaljfila inneholdt
+    tidligere KUN id/generated_at/hours - en klient som leser den ALENE
+    (som chatten i appen tydeligvis gjor) hadde ingen kalibrert-nokkel aa
+    lese og falt stille tilbake til False, selv for spots som faktisk er
+    kalibrert (feil FIL, ikke feil verdi - forecast.json sitt "spots"-
+    array hadde alltid riktig verdi). name/klasse/kalibrert/params tas na
+    med, saa detaljfila kan tolkes alene."""
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    monkeypatch.setattr(A, "SPOTS_OUT", tmp_path / "spots")
+    (tmp_path / "spots").mkdir()
+
+    args = argparse.Namespace(mock="storm", shadow=False, spot=["saltstein"], explain=[])
+    A.run(args)
+
+    data = json.loads((tmp_path / "spots" / "saltstein.json").read_text())
+    assert set(data.keys()) == {"id", "generated_at", "name", "klasse", "kalibrert", "params", "hours"}
+    assert data["name"] == "Saltstein"
+    assert data["klasse"] == "A"
+    assert data["kalibrert"] is True  # spots.yaml sier kalibrert: true for saltstein
+    assert data["params"]["swell_window"] == [170, 260]
+    assert len(data["hours"]) > 0
 
 
 # ------------------------------------------------- append_shadow_log()

@@ -99,6 +99,19 @@ SEA_RAY_BEARING_DEG = 180
 SEA_RAY_KM = 150.0
 
 # SO til VSV - den aapne sektoren mot Skagerrak for denne kysten.
+#
+# IKKE fjern eller utvid denne begrensningen for aa "finne den faktiske
+# aapne sektoren" per spot over hele sirkelen (ordre 2026-09-03, se
+# rapport til bruker og STOPP-notatet ved swell_window i spots.yaml sin
+# topptekst) - forsokt, med samme feilklasse som fetch_km_72* sitt kjente
+# problem: en straale (ogsaa kjeglekasting, compute_fetch_72_kjegle())
+# smetter gjennom et sund/en kanal og rapporterer "apent" 50-225 grader
+# feil vei for flere kjente spot (rakke, skallevold, larkollen - alle
+# vender sor per sine egne facing/notes-felt, men fikk en beregnet sektor
+# sentrert 100+ grader unna). Den faste 135-250-begrensningen her er
+# DERFOR bevisst, ikke bare en optimalisering - den unngaar aa i det hele
+# tatt lete i retninger (som nordover, inn i land/skjaergaard) der en
+# straale kan smette gjennom noe som ser sammenhengende ut paa kartet.
 SECTOR_LO_DEG = 135
 SECTOR_HI_DEG = 250
 SECTOR_STEP_DEG = FETCH_STEP_DEG  # 5 - samme konvensjon som fetch_km_72

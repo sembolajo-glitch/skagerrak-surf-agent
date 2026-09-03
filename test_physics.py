@@ -1,6 +1,9 @@
 """Enhetstester. Kjor: python -m pytest test_physics.py -v"""
 
 import math
+
+import pytest
+
 import physics as P
 
 
@@ -73,27 +76,75 @@ def test_bred_spredning_hjelper_nar_toppen_ligger_utenfor_sektoren():
     assert bred > smal, (bred, smal)
 
 
-def test_window_factor_flat_inne_i_vinduet():
-    """Uendret form (ordre 2026-09-03) - kun BRUKEN av denne ble fikset i
-    agent.py sin score_hour(), ikke selve formen ennaa (se rapport til
-    bruker om glattingsforslaget, ikke bygget)."""
+def test_window_factor_er_sqrt_av_directional_energy_fraction():
+    """Byttet ut (ordre 2026-09-03, se rapport til bruker) fra en flat/
+    lineaer-taper-modell til cos^(2s) - samme spredning
+    directional_energy_fraction() bruker for klasse C sin gate. Denne
+    testen laaser selve koblingen: window_factor() er sqrt() av
+    energiandelen for sektoren [senter-halvbredde, senter+halvbredde],
+    der senter er midtpunktet av swell_window."""
     spot = {"swell_window": (170, 260)}
-    assert P.window_factor(170, spot) == 1.0
-    assert P.window_factor(215, spot) == 1.0
-    assert P.window_factor(260, spot) == 1.0
+    frac = P.directional_energy_fraction(200, 215, 45, s=5)
+    assert P.window_factor(200, spot) == math.sqrt(frac)
 
 
-def test_window_factor_glatt_taper_utenfor_vinduet():
-    spot = {"swell_window": (170, 260)}
-    like_utenfor = P.window_factor(265, spot)
-    lenger_utenfor = P.window_factor(270, spot)
-    assert 0.0 < lenger_utenfor < like_utenfor < 1.0
+def test_window_factor_hoyest_ved_senteret_ikke_flat_1():
+    """I motsetning til den gamle modellen er IKKE vekten 1.0 gjennom hele
+    vinduet - cos^(2s) taper glatt ogsaa INNENFOR sektoren, hoyest praesist
+    ved midtpunktet."""
+    spot = {"swell_window": (170, 260)}  # senter 215
+    senter = P.window_factor(215, spot)
+    kant = P.window_factor(170, spot)  # 45 grader fra senter, fortsatt i vinduet
+    assert 0.0 < kant < senter < 1.0
 
 
-def test_window_factor_null_15_grader_utenfor_og_lenger():
-    spot = {"swell_window": (170, 260)}
-    assert P.window_factor(275, spot) == 0.0
-    assert P.window_factor(300, spot) == 0.0
+def test_window_factor_symmetrisk_om_senteret():
+    spot = {"swell_window": (170, 260)}  # senter 215
+    assert P.window_factor(175, spot) == pytest.approx(P.window_factor(255, spot))
+
+
+def test_window_factor_avtar_monotont_med_avstand_fra_senter():
+    spot = {"swell_window": (170, 260)}  # senter 215
+    verdier = [P.window_factor(d, spot) for d in (215, 240, 265, 300)]
+    assert verdier == sorted(verdier, reverse=True)
+
+
+def test_window_factor_ingen_hardt_kutt_utenfor_vinduet():
+    """Kjernen i forskjellen fra den gamle modellen: det finnes IKKE noe
+    punkt utenfor vinduet der vekten er eksakt 0.0 (bortsett fra ~180
+    grader fra senteret) - selv langt utenfor gir cos^(2s) en liten, men
+    positiv vekt. Den gamle modellen kuttet haardt til 0.0 15 grader
+    utenfor kanten (se git-historikken til denne testen)."""
+    spot = {"swell_window": (170, 260)}  # senter 215, vinduskant 260
+    langt_utenfor = P.window_factor(300, spot)  # 40 grader forbi kanten
+    assert langt_utenfor > 0.0
+
+
+def test_window_factor_naer_null_kun_motsatt_av_senteret():
+    spot = {"swell_window": (170, 260)}  # senter 215
+    motsatt = P.window_factor(215 + 180, spot)
+    langt_utenfor = P.window_factor(300, spot)
+    assert motsatt < 0.01 < langt_utenfor
+
+
+def test_window_factor_bruker_spot_sin_spread_s_med_fallback_5():
+    """spread_s (samme feltnavn/standardverdi-monster som gate.spread_s
+    for klasse C) styrer hvor smal spredningen er - lavere s = bredere =
+    mer slipper inn langt fra senteret."""
+    smal = {"swell_window": (170, 260), "spread_s": 20}
+    bred = {"swell_window": (170, 260), "spread_s": 2}
+    uten_felt = {"swell_window": (170, 260)}  # skal falle tilbake til 5
+
+    langt_fra_senter = 300
+    assert P.window_factor(langt_fra_senter, bred) > P.window_factor(langt_fra_senter, uten_felt)
+    assert P.window_factor(langt_fra_senter, uten_felt) > P.window_factor(langt_fra_senter, smal)
+
+
+def test_window_factor_haandterer_vindu_som_wrapper_over_0():
+    """Senter/halvbredde-beregningen bruker samme wrap-konvensjon som
+    in_window() naar lo > hi."""
+    spot = {"swell_window": (350, 30)}  # senter 10, halvbredde 20
+    assert P.window_factor(10, spot) > P.window_factor(200, spot)
 
 
 def test_vindkvalitet():
