@@ -331,15 +331,16 @@ def test_score_hour_retning_like_utenfor_vinduet_gir_delvis_q_size_ikke_null():
 
 
 def test_score_hour_retning_langt_utenfor_vinduet_gir_null_q_size_via_min_hs():
-    """Med default-fixturens hs=2.0 (min_hs=1.2) blir q_size fortsatt 0 ved
-    30 grader forbi kanten - MEN av en annen grunn enn foer 2026-09-03: det
-    er IKKE lenger window_factor() selv som gir 0 (cos^(2s) har ikke noe
-    hardt kutt der, se testen under) - det er det redusterte hs*wf som
-    faller under spottens EGEN min_hs-grense (physics.size_quality()).
-    Tilfeldig sammenfall av grenseverdier for akkurat denne hs-en, ikke et
-    generelt "utenfor vinduet = null"-utsagn - se testen under for det."""
+    """Med hs=1.7 (min_hs=0.8, senket fra 1.2 ved rekalibreringen 2026-09-03
+    - se rapport til bruker) blir q_size 0 ved 30 grader forbi kanten - MEN
+    av en annen grunn enn foer 2026-09-03: det er IKKE lenger window_factor()
+    selv som gir 0 (cos^(2s) har ikke noe hardt kutt der, se testen under) -
+    det er det redusterte hs*wf som faller under spottens EGEN min_hs-grense
+    (physics.size_quality()). Tilfeldig sammenfall av grenseverdier for
+    akkurat denne hs-en, ikke et generelt "utenfor vinduet = null"-utsagn -
+    se testen under for det."""
     spot = _saltstein()
-    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290, hs=2.0)  # 30 grader forbi 260
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290, hs=1.7)  # 30 grader forbi 260
     h = A.score_hour(spot, ts, wind, waves, None, computed)
     assert h["window_ok"] is False
     assert h["q_size"] == 0.0
@@ -351,7 +352,7 @@ def test_score_hour_retning_langt_utenfor_vinduet_gir_ikke_lenger_null_naar_hs_e
     vinduet. Med en hs hoy nok til at hs*wf fortsatt klarer min_hs selv 30
     grader forbi kanten, blir q_size na POSITIV - noe den ALDRI kunne bli
     foer byttet, uansett hvor hoy hs var, siden wf selv var eksakt 0.0 der."""
-    spot = _saltstein()  # min_hs=1.2
+    spot = _saltstein()  # min_hs=0.8 (rekalibrert 2026-09-03, se rapport til bruker)
     ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290, hs=5.0)  # 30 grader forbi 260
     h = A.score_hour(spot, ts, wind, waves, None, computed)
     assert h["window_ok"] is False
@@ -411,20 +412,23 @@ def test_run_skriver_name_klasse_kalibrert_params_til_detaljfil(tmp_path, monkey
     lese og falt stille tilbake til False, selv for spots som faktisk er
     kalibrert (feil FIL, ikke feil verdi - forecast.json sitt "spots"-
     array hadde alltid riktig verdi). name/klasse/kalibrert/params tas na
-    med, saa detaljfila kan tolkes alene."""
+    med, saa detaljfila kan tolkes alene.
+
+    Bruker hvasser_sando, IKKE saltstein - saltstein sin kalibrert-status
+    ble satt tilbake til false ved rekalibreringen 2026-09-03 (se rapport
+    til bruker), saa den er ikke lenger et eksempel paa kalibrert: true."""
     monkeypatch.setattr(A, "OUT", tmp_path)
     monkeypatch.setattr(A, "SPOTS_OUT", tmp_path / "spots")
     (tmp_path / "spots").mkdir()
 
-    args = argparse.Namespace(mock="storm", shadow=False, spot=["saltstein"], explain=[])
+    args = argparse.Namespace(mock="storm", shadow=False, spot=["hvasser_sando"], explain=[])
     A.run(args)
 
-    data = json.loads((tmp_path / "spots" / "saltstein.json").read_text())
+    data = json.loads((tmp_path / "spots" / "hvasser_sando.json").read_text())
     assert set(data.keys()) == {"id", "generated_at", "name", "klasse", "kalibrert", "params", "hours"}
-    assert data["name"] == "Saltstein"
-    assert data["klasse"] == "A"
-    assert data["kalibrert"] is True  # spots.yaml sier kalibrert: true for saltstein
-    assert data["params"]["swell_window"] == [170, 260]
+    assert data["klasse"] == "B"
+    assert data["kalibrert"] is True  # spots.yaml sier kalibrert: true for hvasser_sando
+    assert data["params"]["swell_window"] == [110, 200]
     assert len(data["hours"]) > 0
 
 
@@ -775,3 +779,74 @@ def test_hs_vektet_i_shadow_fields():
     til out/shadow.csv i det hele tatt."""
     import shadow_schema
     assert shadow_schema.FIELDS[-1] == "hs_vektet"
+
+
+# ------------------------------------------------- rekalibrering av Saltstein
+#
+# ordre 2026-09-03 (se rapport til bruker): min_hs/ideal_hs senket fra
+# 1.2/2.5 til 0.8/1.9 (max_hs=4.5 uendret) - ekstern kilde (surf-forecast)
+# setter samme nedre terskel (0,8 m @ 7 s), og observert topp uke 3.-9.
+# sept 2026 (1,5-1,7 m, "svaert gode forhold") laa godt under det gamle
+# idealet. kalibrert satt tilbake til false - se spots.yaml sin egen
+# begrunnelse ved feltene for full kontekst.
+
+
+def test_saltstein_ny_hs_trippel_og_kalibrert_false():
+    spot = _with_regional_wp("saltstein")  # ekte spot fra spots.yaml, uendret
+    assert spot["min_hs"] == 0.8
+    assert spot["ideal_hs"] == 1.9
+    assert spot["max_hs"] == 4.5
+    assert spot["min_hs"] < spot["ideal_hs"] < spot["max_hs"]  # monotonitet
+    assert spot["kalibrert"] is False
+
+
+def test_saltstein_q_size_topper_ved_nytt_ideal_1_9():
+    spot = _with_regional_wp("saltstein")
+    q_ideal = A.P.size_quality(1.9, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
+    assert q_ideal == 1.0
+    # strengt lavere paa begge sider - 1.9 er et EKTE toppunkt, ikke en flate
+    assert A.P.size_quality(1.7, spot["min_hs"], spot["ideal_hs"], spot["max_hs"]) < q_ideal
+    assert A.P.size_quality(2.1, spot["min_hs"], spot["ideal_hs"], spot["max_hs"]) < q_ideal
+
+
+def test_saltstein_hs_0_8_gir_positiv_q_size_var_null_foer():
+    """0,8 m var under den gamle min_hs (1.2) og ga q_size=0.0 - med det
+    nye, senkede min_hs (0.8) skal 0,8 m akkurat treffe bunnen av kurven
+    (0.35, se physics.size_quality()), ikke lenger null."""
+    spot = _with_regional_wp("saltstein")
+    q = A.P.size_quality(0.8, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
+    assert q > 0.0
+    assert q == pytest.approx(0.35, abs=0.001)
+
+
+def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
+    """Regresjon: KUN saltstein sin trippel/kalibrert-status skal ha
+    endret seg. De andre 13 spottene sine min_hs/ideal_hs/max_hs (og
+    dermed q_size for enhver gitt hs) skal vaere byte-for-byte identiske
+    med foer denne endringen."""
+    forventet = {
+        "svenner": (1.1, 2.2, 4.0),
+        "jomfruland_ost": (1.3, 2.5, 4.5),
+        "rakke": (1.7, 2.6, 4.5),
+        "molen_odden": (1.5, 2.5, 4.0),
+        "portor": (1.5, 2.5, 4.2),
+        "verdens_ende": (2.0, 3.0, 5.0),
+        "hvasser_sando": (1.3, 2.0, 3.5),
+        "orekroken": (2.2, 3.0, 5.0),
+        "slagen": (1.6, 2.4, 3.4),
+        "skallevold": (1.9, 2.7, 3.6),
+        "sletteroyene": (1.5, 2.3, 3.5),
+        "bastoy_odden": (2.1, 2.8, 3.6),
+        "larkollen": (1.8, 2.5, 3.5),
+    }
+    spots, _ = A.load_spots()
+    by_id = {s["id"]: s for s in spots}
+    assert set(by_id) - {"saltstein"} == set(forventet)
+    for sid, (min_hs, ideal_hs, max_hs) in forventet.items():
+        s = by_id[sid]
+        assert (s["min_hs"], s["ideal_hs"], s["max_hs"]) == (min_hs, ideal_hs, max_hs), sid
+        # samme trippel -> byte-for-byte samme q_size for enhver hs, se
+        # physics.size_quality() (rent funksjonell av (hs, min, ideal, max))
+        for hs in (0.8, 1.5, 2.2, 3.0, 4.0):
+            assert A.P.size_quality(hs, s["min_hs"], s["ideal_hs"], s["max_hs"]) == \
+                A.P.size_quality(hs, min_hs, ideal_hs, max_hs), (sid, hs)

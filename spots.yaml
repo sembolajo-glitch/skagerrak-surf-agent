@@ -290,14 +290,44 @@ spots:
     facing: 225
     swell_window: [170, 260]
     spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
-    min_hs: 1.2
-    ideal_hs: 2.5
+    # ordre 2026-09-03 (rekalibrering, se rapport til bruker): min/ideal
+    # senket fra 1.2/2.5 til 0.8/1.9 - max_hs (4.5) UENDRET, ikke roert.
+    # To uavhengige grunner:
+    #   1. surf-forecast (ekstern kilde) setter selv nedre surfbar-terskel
+    #      for Saltstein til 0,8 m ved 7 s - samme tall, uavhengig kilde.
+    #   2. Observert topp uke 3.-9. sept 2026 var 1,5-1,7 m, beskrevet
+    #      lokalt som svaert gode forhold - godt under det gamle idealet
+    #      (2,5), som dermed presset stjernene systematisk ned for noe
+    #      som faktisk var bra.
+    # Den nye trippelen er ogsaa tilnaermet symmetrisk i log-Hs
+    # (1,9/0,8 = 2,38, 4,5/1,9 = 2,37) mot den gamle sin skjeve
+    # (2,5/1,2 = 2,08, 4,5/2,5 = 1,80) - IKKE selve begrunnelsen for
+    # endringen, men et tegn paa at den nye trippelen er mer konsistent
+    # med physics.size_quality() sin kurveform (symmetrisk stigning/fall
+    # rundt idealet paa log-skala).
+    #
+    # AAPENT: max_hs=4.5 er na den UTESTEDE enden - ovre arm spenner
+    # 2,6 m (1,9->4,5) mot nedre arms 1,1 m (0,8->1,9), saa fallet over
+    # idealet er svaert slakt (3,2 m scorer fortsatt 6,2 stjerner, se
+    # rapport til bruker). Vi vet ikke om Saltstein holder seg surfbar
+    # ved 3 m eller om spottet i praksis lukker - trenger oektdata foer
+    # max_hs justeres, IKKE endret her.
+    min_hs: 0.8
+    ideal_hs: 1.9
     max_hs: 4.5
     min_tp: 6.0
     water_optimal_cm: -10
     water_sensitivity_cm: 60
     drive_min: 110
-    kalibrert: true               # kjent spot - bruk som referanse
+    # kalibrert satt tilbake til false (ordre 2026-09-03) - den forrige
+    # kalibreringen ("kjent spot - bruk som referanse") gjaldt kurven
+    # 1.2/2.5/4.5 og er ikke lenger gyldig for 0.8/1.9/4.5. model_rev
+    # (se agent.py sin _model_rev()) skifter naar denne commiten naar
+    # produksjon, saa calibrate.py sin (spot, model_rev)-gruppering
+    # holder gamle og nye Saltstein-rader fra hverandre automatisk -
+    # se test_calibrate.py sin test_ulike_model_rev_gir_egne_seksjoner_i_rapporten
+    # (bruker allerede saltstein som eksempel).
+    kalibrert: false
     regional_wp_min:               # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
                                     # regional_wp_min/max i toppteksten. Stod paa 12.2,
                                     # utledet ved lineaer ekstrapolering fra surf-forecast
