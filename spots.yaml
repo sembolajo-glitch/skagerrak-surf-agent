@@ -246,6 +246,13 @@ defaults:
   water_optimal_cm: 0
   water_sensitivity_cm: 0        # 0 = vannstand ignoreres
   wind_weight: 1.0               # <1 = spotten taaler chop, >1 = vindfolsom
+  wind_floor: 0.10               # GULV for q_wind, ikke helning (se wind_weight over -
+                                  # to ulike fysiske egenskaper, se physics.apply_wind_weight()/
+                                  # apply_wind_floor() sine docstrings, ordre 2026-09-03).
+                                  # 0.10, ikke 0.15 - ville bundet utilsiktet for spot med
+                                  # wind_weight > 1.0 (0.15**1.25 ≈ 0.107 < 0.15). Overstyr
+                                  # per spot naar det finnes en strukturell grunn (dyptvannsrev
+                                  # osv.) - se saltstein.
   alert_min_p_surf: 50           # varsle nar sannsynlighet >= denne (%)
   alert_min_stars: 5.5           # OG forventet kvalitet >= denne (1-10)
   min_window_hours: 2
@@ -273,6 +280,13 @@ spots:
                              # build_fetch.py naar spotten regnes paa nytt.
     offshore_point: [58.930, 9.830]
     wind_weight: 0.55          # kraftig dyptvannsrev - surfes rutinemessig i onshore chop
+    wind_floor: 0.40           # ordre 2026-09-03, se rapport til bruker: samme begrunnelse
+                                # som wind_weight over (dyptvannsrev, jekker opp uavhengig av
+                                # vindretning), men et GULV, ikke en helning - de to feltene
+                                # uttrykker ulike egenskaper, se physics.apply_wind_floor().
+                                # IKKE hev for aa snu ett bestemt utfall (en mandag/loerdag) -
+                                # det ville vaere kalibrering mot ett doegn, ikke mot spottens
+                                # kjente karakter.
     facing: 225
     swell_window: [170, 260]
     spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda

@@ -300,6 +300,14 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS, regional
             if wfrom is not None else (0.5, "")
         )
         q_wind = P.apply_wind_weight(q_wind_raw, spot.get("wind_weight", 1.0))
+        # wind_floor - samme mekanisme som agent.py sin score_hour() bruker
+        # (se der og physics.apply_wind_floor() for hvorfor dette maa
+        # matche NOEYAKTIG: score_hour() og evaluate() sin per-medlem-
+        # scoring maa regne fra samme retningsmodell, ellers gjentar vi
+        # nettopp bugen window_factor hadde helt til 2026-09-03, se rapport
+        # til bruker - score/q_wind (logget) og stars/p_surf (denne
+        # funksjonen) fra to ULIKE modeller av samme vindstraff).
+        q_wind = P.apply_wind_floor(q_wind, spot.get("wind_floor", 0.10))
         q_water = P.water_level_quality(
             water_cm if water_cm is not None else spot["water_optimal_cm"],
             spot["water_optimal_cm"], spot["water_sensitivity_cm"],

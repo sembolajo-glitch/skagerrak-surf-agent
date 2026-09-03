@@ -177,6 +177,17 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         P.wind_quality(ws, wfrom, spot["facing"]) if wfrom is not None else (0.5, "ukjent")
     )
     q_wind = P.apply_wind_weight(q_wind_raw, spot.get("wind_weight", 1.0))
+    # wind_floor (ordre 2026-09-03, se rapport til bruker): STRUKTURELT
+    # ulik wind_weight over - weight er HELNINGEN (hvor fort kvaliteten
+    # faller med vinkelavviket), floor er et eget GULV (at et kraftig
+    # dyptvannsrev som Saltstein aldri blir helt ubrukelig i paalandsvind,
+    # fordi boelgen jekker opp fra dypt vann uavhengig av vindretning) -
+    # se physics.apply_wind_floor()/apply_wind_weight() sine docstrings
+    # for hvorfor en ren eksponent ikke kan uttrykke begge samtidig.
+    # Standardverdi 0.10, IKKE 0.15 - 0.15 ville bundet utilsiktet for de
+    # fem spottene med wind_weight > 1.0 (0.15**1.25 ≈ 0.107 < 0.15, se
+    # rapport til bruker), og vi endrer én ting av gangen.
+    q_wind = P.apply_wind_floor(q_wind, spot.get("wind_floor", 0.10))
     q_water = P.water_level_quality(
         water_cm if water_cm is not None else spot["water_optimal_cm"],
         spot["water_optimal_cm"],

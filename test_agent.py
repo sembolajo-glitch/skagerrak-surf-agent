@@ -367,6 +367,40 @@ def test_score_hour_retning_naer_180_grader_fra_senter_gir_null_q_size():
     assert h["q_size"] == 0.0
 
 
+# ----------------------------------------------------------- wind_floor
+
+
+def test_score_hour_wind_floor_binder_for_saltstein_i_dodrett_paalandsvind():
+    """spots.yaml setter wind_floor: 0.40 for saltstein (ordre 2026-09-03,
+    se rapport til bruker - dyptvannsrev, jekker opp uavhengig av
+    vindretning). Dodrett paalandsvind (d=0) gir raate 0.15, vektet
+    (weight=0.55) rundt 0.35 - UNDER gulvet paa 0.40, som derfor skal
+    bestemme q_wind i stedet for kurven."""
+    spot = _saltstein()
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=215, hs=2.0)
+    wind = dict(wind, wind_speed=10.0, wind_from_direction=float(spot["facing"]))  # d=0
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    vektet_uten_gulv = 0.15 ** spot["wind_weight"]
+    assert vektet_uten_gulv < spot["wind_floor"]  # forutsetning for at gulvet faktisk binder her
+    assert h["q_wind"] == pytest.approx(spot["wind_floor"])
+
+
+def test_score_hour_wind_floor_default_binder_ikke_for_spot_uten_override():
+    """Spot uten eksplisitt wind_floor bruker standardverdien 0.10 (se
+    defaults i spots.yaml) - langt under det en normal vindvekting
+    normalt gir, saa gulvet skal IKKE paavirke resultatet her (kjernen i
+    "ingenting endres for spots uten feltet")."""
+    spots, _ = A.load_spots()
+    spot = next(s for s in spots if s["id"] == "svenner")
+    assert spot["wind_floor"] == 0.10  # standardverdien fra defaults - ingen per-spot-override
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=190, hs=2.0)
+    wind = dict(wind, wind_speed=10.0, wind_from_direction=float(spot["facing"]))  # d=0
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    vektet_uten_gulv = 0.15 ** spot["wind_weight"]
+    assert vektet_uten_gulv > spot.get("wind_floor", 0.10)  # gulvet binder ikke
+    assert h["q_wind"] == pytest.approx(vektet_uten_gulv, abs=0.001)  # h["q_wind"] er avrundet til 3 desimaler
+
+
 # --------------------------------------- per-spot detaljfil (out/spots/<id>.json)
 
 
