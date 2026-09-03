@@ -181,3 +181,66 @@ def test_openmeteo_waves_unionen_av_tidspunkter_naar_kildene_ikke_matcher(monkey
     assert set(out) == {"2026-08-31T12:00:00+00:00", "2026-08-31T14:00:00+00:00"}
     assert out["2026-08-31T12:00:00+00:00"]["partisjon_kilde"] == "ewam"
     assert out["2026-08-31T14:00:00+00:00"]["partisjon_kilde"] == "global"
+
+
+# ------------------------------------------------------- met_waves() grid_out
+
+
+class _FakeMetResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
+
+
+def _met_payload(coordinates, timeseries=()):
+    """Minimal MET Oceanforecast 2.0-svar - geometry.coordinates er
+    [lon, lat, hoyde], det FAKTISKE gridpunktet svaret ble snappet til."""
+    return {
+        "geometry": {"type": "Point", "coordinates": list(coordinates)},
+        "properties": {"timeseries": list(timeseries)},
+    }
+
+
+def _met_entry(time, hs=1.2, wave_dir=200.0):
+    return {"time": time, "data": {"instant": {"details": {
+        "sea_surface_wave_height": hs,
+        "sea_surface_wave_from_direction": wave_dir,
+    }}}}
+
+
+def test_met_waves_fyller_grid_out_med_faktisk_gridpunkt(monkeypatch):
+    """ordre 2026-09-03 (se rapport til bruker): MET sitt svar forteller
+    hvilket gridpunkt forespoerselen faktisk ble snappet til
+    (geometry.coordinates, [lon, lat, hoyde]) - kastet foer denne testen.
+    grid_out er en valgfri OUT-parameter, ikke en del av returverdien -
+    den etablerte {tidspunkt: {...}}-kontrakten er uendret (se testen
+    under for at kallere UTEN grid_out fortsatt fungerer helt likt)."""
+    payload = _met_payload([9.85, 58.95, 0], [_met_entry("2026-08-31T12:00:00Z")])
+    monkeypatch.setattr(S, "_get", lambda url, params=None, **kw: _FakeMetResponse(payload))
+
+    grid = {}
+    out = S.met_waves(58.93, 9.83, grid_out=grid)
+
+    assert grid == {"lat": 58.95, "lon": 9.85}
+    assert out["2026-08-31T12:00:00+00:00"]["hs"] == 1.2
+
+
+def test_met_waves_uten_grid_out_uendret_oppforsel(monkeypatch):
+    payload = _met_payload([9.85, 58.95, 0], [_met_entry("2026-08-31T12:00:00Z")])
+    monkeypatch.setattr(S, "_get", lambda url, params=None, **kw: _FakeMetResponse(payload))
+
+    out = S.met_waves(58.93, 9.83)  # ingen grid_out - skal ikke krasje
+    assert out["2026-08-31T12:00:00+00:00"]["hs"] == 1.2
+
+
+def test_met_waves_grid_out_uendret_naar_geometry_mangler(monkeypatch):
+    """Svar uten geometry (uventet, men skal ikke krasje) - grid_out
+    forblir tomt i stedet for aa kaste KeyError."""
+    payload = {"properties": {"timeseries": [_met_entry("2026-08-31T12:00:00Z")]}}
+    monkeypatch.setattr(S, "_get", lambda url, params=None, **kw: _FakeMetResponse(payload))
+
+    grid = {}
+    S.met_waves(58.93, 9.83, grid_out=grid)
+    assert grid == {}

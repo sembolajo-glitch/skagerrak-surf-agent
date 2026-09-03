@@ -25,6 +25,28 @@ def ang_diff(a, b):
     return abs(((a - b + 180) % 360) - 180)
 
 
+EARTH_RADIUS_KM = 6371.0
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    """
+    Storsirkelavstand i km, ingen projeksjonsavhengighet (pyproj/shapely) -
+    til bruk i agent.py sin LETTE kjoretidsbane (forecast.yml), som
+    bevisst ikke drar inn geo_utils.py sine tyngre avhengigheter (se
+    requirements-geodata.txt sin topptekst: "Kun for fetch_geodata.py,
+    build_fetch.py og validate_geodata.py - engangs-/offline-skript, IKKE
+    brukt av forecast.yml"). Presist nok for avstander paa noen faa km til
+    noen hundre km (gridpunkt-avstander, offshore_point-sjekker) - IKKE
+    ment for centimeterpresisjonen UTM-projeksjonen i geo_utils.py gir til
+    straaleskyting mot kystkontur.
+    """
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
 def in_window(direction, window):
     """Er retningen innenfor [lo, hi]? Haandterer wrap over 0."""
     lo, hi = window

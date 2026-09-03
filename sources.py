@@ -68,7 +68,7 @@ def met_wind(lat, lon):
 # ============================================================ MET Oceanforecast
 
 
-def met_waves(lat, lon):
+def met_waves(lat, lon, grid_out=None):
     """
     Bolger fra WAVEWATCHIII 4 km (Nordsjoen/Norskehavet), forsert med MEPS 2.5 km.
 
@@ -78,9 +78,25 @@ def met_waves(lat, lon):
 
     Merk ogsa at API-et ikke alltid leverer periode. Da faller vi tilbake pa
     Open-Meteo for Tp. Kryss av i output hvilken kilde perioden kom fra.
+
+    grid_out (ordre 2026-09-03, se rapport til bruker): valgfri dict som,
+    hvis gitt, fylles med {"lat": ..., "lon": ...} - det FAKTISKE
+    gridpunktet MET snappet forespoerselen til (svarets eget
+    geometry.coordinates, [lon, lat, hoyde] - vi kastet dette foer). Tre
+    runder med gjetting rundt Saltstein/Hvasser sitt offshore_point (se
+    rapport til bruker) kunne vaert avgjort direkte med dette tallet i
+    stedet. Out-parameter, ikke en del av returverdien - unngaar aa endre
+    funksjonens etablerte {tidspunkt: {...}}-kontrakt (mange kallere/
+    tester stoler paa den formen direkte, se test_sources.py).
     """
     url = "https://api.met.no/weatherapi/oceanforecast/2.0/complete"
     data = _get(url, params={"lat": round(lat, 4), "lon": round(lon, 4)}).json()
+
+    if grid_out is not None:
+        coords = (data.get("geometry") or {}).get("coordinates") or []
+        if len(coords) >= 2:
+            grid_out["lat"] = coords[1]
+            grid_out["lon"] = coords[0]
 
     out = {}
     for entry in data["properties"]["timeseries"]:

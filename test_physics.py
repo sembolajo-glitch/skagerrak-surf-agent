@@ -47,6 +47,24 @@ def test_gruppehastighet_og_forsinkelse():
     assert approx(P.travel_time_h(33, 8.0), 1.47)
 
 
+def test_haversine_km_null_ved_samme_punkt():
+    assert P.haversine_km(58.93, 9.83, 58.93, 9.83) == 0.0
+
+
+def test_haversine_km_saltstein_offshore_point_til_spot():
+    """Kjent avstand fra tidligere rapport til bruker (regnet med
+    geo_utils sin UTM-projeksjon, se der) - haversine skal matche godt
+    innenfor noen titalls meter paa denne skalaen."""
+    d = P.haversine_km(58.965643, 9.848614, 58.930, 9.830)
+    assert approx(d, 4.11, tol=0.02)
+
+
+def test_haversine_km_symmetrisk():
+    a = P.haversine_km(58.93, 9.83, 59.03, 10.52)
+    b = P.haversine_km(59.03, 10.52, 58.93, 9.83)
+    assert a == pytest.approx(b)
+
+
 def test_retningsfiltrering_slipper_lite_gjennom():
     """S-sektoren opp fjorden skal ta en klar bit, men ikke alt."""
     frac = P.directional_energy_fraction(
