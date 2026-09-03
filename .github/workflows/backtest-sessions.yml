@@ -106,6 +106,13 @@ jobs:
               else:
                   lines.append(f"| {var.upper()} | {b.get('median')} | (oppgitt manuelt, ikke maalt) | | |\n")
 
+          n_bias_failed = bias.get("n_calls_failed", 0)
+          if n_bias_failed:
+              failed = ", ".join(d for d, _ in bias.get("failed_dates", []))
+              lines.append(f"\n**ADVARSEL**: {n_bias_failed} dato(er) manglet helt fra "
+                            f"skjevhetsmaalingen etter gjentatte feil: {failed}. "
+                            f"Malingen fortsatte med resten - se `n` over.\n")
+
           def render_table(rows, title):
               lines.append(f"\n## {title}\n\n")
               lines.append("| dato | spot | kvalitet | stars | p_surf | regional_wp | port | svakeste ledd | score |\n")
@@ -138,6 +145,11 @@ jobs:
           lines.append("Reanalyse, ikke prognose (se backtest_sessions.py sin docstring). "
                         "Kan KUN avsloere for hoye terskler - alle elleve oktene var positive, "
                         "ingen bomturer i datasettet. Ingen terskler er justert av denne kjoringen.\n")
+
+          http = report.get("http_stats", {})
+          if http:
+              lines.append(f"\n**HTTP**: {http.get('n_calls')} kall totalt, "
+                            f"{http.get('n_retried')} maatte proeve paa nytt minst en gang.\n")
 
           if summary_path:
               with open(summary_path, "a", encoding="utf-8") as f:
