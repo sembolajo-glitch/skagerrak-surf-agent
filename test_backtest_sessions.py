@@ -2,6 +2,14 @@
 Enhetstester for backtest_sessions.py. Ingen nettverk - _get_json()
 erstattes med en fake, samme monkeypatch-konvensjon som test_sources.py
 bruker for sources._get().
+
+ordre 2026-09-02 (regional-energi-ombygging): testene for den gamle
+spot-fysikk-pipelinen (build_hours_window/pick_target_hour/
+backtest_session/backtest_all/print_session_table) er FJERNET - den
+koden finnes ikke lenger, se backtest_sessions.py sin docstring for
+hvorfor (ERA5-Ocean sitt grid er for grovt for lokal boelgehoyde her).
+Erstattet med tester for gridcelle-rapporten og regional-energi-
+pipelinen som tok over.
 """
 
 import datetime as dt
@@ -11,6 +19,7 @@ import requests
 
 import agent as A
 import backtest_sessions as B
+import physics as P
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +49,7 @@ def test_parse_time_window_vage_kategorier():
 
 def test_parse_time_window_presist_klokkeslett_er_ikke_et_vindu():
     """exact=True - dette skal IKKE 'beste time i vindu'-velges, se
-    pick_target_hour()."""
+    pick_target_hour_regional()."""
     assert B.parse_time_window("15:30") == (15, 15, True)
     assert B.parse_time_window("07:30") == (7, 7, True)
 
@@ -55,42 +64,72 @@ def test_parse_time_window_ugyldig_klokkeslett_gir_feil():
         B.parse_time_window("25:00")
 
 
+# ------------------------------------------------------- kvalitet<->stars
+
+
+def test_forventet_stars_folger_brukerens_mapping():
+    assert B.forventet_stars(0) is None
+    assert B.forventet_stars(1) == pytest.approx(2.5)
+    assert B.forventet_stars(2) == pytest.approx(4.0)
+    assert B.forventet_stars(3) == pytest.approx(5.5)
+    assert B.forventet_stars(4) == pytest.approx(8.0)
+    assert B.forventet_stars(5) == pytest.approx(9.5)
+
+
+def test_forventet_stars_er_ikke_lineaer():
+    """Byggverifisering av selve poenget med mappingen (ordre
+    2026-09-03): en naiv kvalitet*2-skalering ville gitt 2,0/4,0/6,0/
+    8,0/10,0 - stemmer med kvalitet 2 (4,0) men IKKE med resten.
+    kvalitet 0 (None, 'ingen surf') er ikke med i selve stigningen -
+    den har ingen numerisk forventet_stars aa ta steget fra."""
+    steg = [B.forventet_stars(k) - B.forventet_stars(k - 1) for k in range(2, 6)]
+    assert len(set(steg)) > 1, "stegene mellom nabo-kvaliteter skal IKKE alle vaere like store"
+
+
+def test_forventet_stars_ukjent_kvalitet_gir_feil():
+    with pytest.raises(KeyError):
+        B.forventet_stars(6)
+
+
 # ------------------------------------------------------------ maalvelging
 
 
-def test_pick_target_hour_velger_hoyest_score_i_vinduet():
-    hours = [
-        {"time": "2018-08-18T06:00:00+00:00", "score": 10.0},
-        {"time": "2018-08-18T08:00:00+00:00", "score": 55.0},
-        {"time": "2018-08-18T10:00:00+00:00", "score": 30.0},
-        {"time": "2018-08-18T14:00:00+00:00", "score": 90.0},  # utenfor morgen-vinduet
-    ]
-    best = B.pick_target_hour(hours, "2018-08-18", 6, 10)
-    assert best["time"] == "2018-08-18T08:00:00+00:00"
+def test_pick_target_hour_regional_velger_hoyest_wp_i_vinduet():
+    series = {
+        "2018-08-18T06:00:00+00:00": {"hs": 1.0, "tp": 6.0, "wp": 10.0},
+        "2018-08-18T08:00:00+00:00": {"hs": 1.8, "tp": 7.0, "wp": 55.0},
+        "2018-08-18T10:00:00+00:00": {"hs": 1.3, "tp": 6.5, "wp": 30.0},
+        "2018-08-18T14:00:00+00:00": {"hs": 2.5, "tp": 8.0, "wp": 90.0},  # utenfor morgen-vinduet
+    }
+    ts, row = B.pick_target_hour_regional(series, "2018-08-18", 6, 10)
+    assert ts == "2018-08-18T08:00:00+00:00"
+    assert row["wp"] == 55.0
 
 
-def test_pick_target_hour_exact_reduserer_til_en_time():
-    hours = [
-        {"time": "2018-08-18T14:00:00+00:00", "score": 90.0},
-        {"time": "2018-08-18T15:00:00+00:00", "score": 10.0},
-    ]
-    assert B.pick_target_hour(hours, "2018-08-18", 15, 15)["score"] == 10.0
+def test_pick_target_hour_regional_exact_reduserer_til_en_time():
+    series = {
+        "2018-08-18T14:00:00+00:00": {"hs": 2.5, "tp": 8.0, "wp": 90.0},
+        "2018-08-18T15:00:00+00:00": {"hs": 1.0, "tp": 6.0, "wp": 10.0},
+    }
+    ts, row = B.pick_target_hour_regional(series, "2018-08-18", 15, 15)
+    assert ts == "2018-08-18T15:00:00+00:00"
+    assert row["wp"] == 10.0
 
 
-def test_pick_target_hour_ingen_treff_gir_none():
-    hours = [{"time": "2018-08-18T08:00:00+00:00", "score": 10.0}]
-    assert B.pick_target_hour(hours, "2018-08-19", 6, 10) is None
-    assert B.pick_target_hour(hours, "2018-08-18", 12, 13) is None
+def test_pick_target_hour_regional_ingen_treff_gir_none():
+    series = {"2018-08-18T08:00:00+00:00": {"hs": 1.0, "tp": 6.0, "wp": 10.0}}
+    assert B.pick_target_hour_regional(series, "2018-08-19", 6, 10) is None
+    assert B.pick_target_hour_regional(series, "2018-08-18", 12, 13) is None
 
 
-def test_pick_target_hour_ignorerer_andre_dager_i_arrayet():
-    """hours inneholder ofte doegnet FOR ogsaa (lookback-kontekst, se
-    build_hours_window) - den skal ikke plukkes som kandidat."""
-    hours = [
-        {"time": "2018-08-17T08:00:00+00:00", "score": 999.0},
-        {"time": "2018-08-18T08:00:00+00:00", "score": 10.0},
-    ]
-    assert B.pick_target_hour(hours, "2018-08-18", 6, 10)["score"] == 10.0
+def test_pick_target_hour_regional_ignorerer_andre_dager():
+    series = {
+        "2018-08-17T08:00:00+00:00": {"hs": 9.0, "tp": 20.0, "wp": 999.0},
+        "2018-08-18T08:00:00+00:00": {"hs": 1.0, "tp": 6.0, "wp": 10.0},
+    }
+    ts, row = B.pick_target_hour_regional(series, "2018-08-18", 6, 10)
+    assert ts == "2018-08-18T08:00:00+00:00"
+    assert row["wp"] == 10.0
 
 
 # ------------------------------------------------------------- skjevhet
@@ -291,108 +330,171 @@ def test_fetch_era5_waves_default_model_omits_models_param(monkeypatch):
     assert seen["models"] == "era5_ocean"
 
 
-# ---------------------------------------------------------- full pipeline
+# ------------------------------------------------------------ gridcelle-rapport
 
 
-def _fake_get_json_full(hs_by_model=None):
-    """Generisk fake for build_hours_window(): samme konstante vaerdag
-    for enhver lat/lon/dato, nok til aa kjore hele evaluate_class_ab/
-    evaluate_class_c/score_hour-kjeden uten aa krasje. hs_by_model lar
-    testen skille era5_ocean fra standardmodellen naar det trengs."""
-    hs_by_model = hs_by_model or {"era5_ocean": 2.0, None: 1.0}
+def test_spot_wave_point_klasse_c_bruker_gate_ellers_offshore_point():
+    spots, _ = A.load_spots()
+    spots_by_id = {s["id"]: s for s in spots}
+    assert B._spot_wave_point(spots_by_id["saltstein"]) == (58.930, 9.830)
+    slagen = spots_by_id["slagen"]
+    assert B._spot_wave_point(slagen) == (slagen["gate"]["lat"], slagen["gate"]["lon"])
 
+
+def test_fetch_grid_cell_leser_toppniva_lat_lon(monkeypatch):
     def get(url, params, timeout=30):
-        d0 = dt.date.fromisoformat(params["start_date"])
-        d1 = dt.date.fromisoformat(params["end_date"])
-        times = []
-        d = d0
-        while d <= d1:
-            times += [f"{d.isoformat()}T{h:02d}:00" for h in range(24)]
-            d += dt.timedelta(days=1)
-        n = len(times)
-        if url == B.WIND_URL:
-            return {"hourly": {
-                "time": times,
-                "wind_speed_10m": [3.0] * n,
-                "wind_direction_10m": [40.0] * n,
-            }}
-        assert url == B.WAVE_URL
-        hs = hs_by_model.get(params.get("models"), 1.5)
+        assert params["models"] == "era5_ocean"
+        assert params["start_date"] == B.GRID_PROBE_DATE
+        return {"latitude": 58.5, "longitude": 10.0, "hourly": {"time": [], "wave_height": []}}
+    monkeypatch.setattr(B, "_get_json", get)
+    assert B.fetch_grid_cell(58.930, 9.830) == (58.5, 10.0)
+
+
+def test_report_spot_grid_cells_grupperer_kolliderende_spots(monkeypatch, capsys):
+    """To vilkaarlige punkter skal havne i SAMME (avrundede) celle,
+    resten spres - grupperingen skal fange den kollisjonen uansett
+    hvilke id-er som faktisk kolliderer."""
+    def get(url, params, timeout=30):
+        lat = float(params["latitude"])
+        # alt under 59.0 havner i EN celle, alt over i en annen - vilkaarlig,
+        # bare for aa faa en faktisk kollisjon aa teste grupperingen paa.
+        grid = (58.5, 10.0) if lat < 59.0 else (59.5, 10.0)
+        return {"latitude": grid[0], "longitude": grid[1], "hourly": {"time": [], "wave_height": []}}
+    monkeypatch.setattr(B, "_get_json", get)
+
+    spots, _ = A.load_spots()
+    rows = B.report_spot_grid_cells(spots)
+    assert len(rows) == len(spots)
+
+    by_grid = {}
+    for r in rows:
+        by_grid.setdefault(tuple(r["grid"]), []).append(r["id"])
+    # De fem klasse C-spotene deler samme gate-koordinat (59.03, 10.52,
+    # lat >= 59.0) AV DESIGN - skal havne i samme celle i denne faken.
+    klasse_c_ids = {s["id"] for s in spots if s["klasse"] == "C"}
+    assert any(klasse_c_ids <= set(ids) for ids in by_grid.values())
+
+    out = capsys.readouterr().out
+    assert "FLERE SPOTS I SAMME CELLE" in out
+
+
+def test_report_spot_grid_cells_fortsetter_naar_en_spot_feiler(monkeypatch, capsys):
+    def get(url, params, timeout=30):
+        if abs(float(params["latitude"]) - 58.930) < 1e-6:
+            raise requests.Timeout("boom")
+        return {"latitude": 58.5, "longitude": 10.0, "hourly": {"time": [], "wave_height": []}}
+    monkeypatch.setattr(B, "_get_json", get)
+
+    spots, _ = A.load_spots()
+    rows = B.report_spot_grid_cells(spots)
+    assert len(rows) == len(spots) - 1, "saltstein sin feilende henting skal hoppes over, ikke velte resten"
+    assert "FEIL" in capsys.readouterr().out
+
+
+# -------------------------------------------------------------- regional energi
+
+
+def _fake_get_json_regional(hs_by_hour=None, tp=6.0):
+    """Fake for regional-energi-pipelinen: konstant Tp, valgfri per-time
+    Hs (default stigende fra 0.5 til 1.7 gjennom doegnet - nok til aa
+    teste at "hoyest wp i vinduet" faktisk skiller timer fra hverandre)."""
+    def get(url, params, timeout=30):
+        d0 = params["start_date"]
+        n = 24
+        hs = hs_by_hour or [0.5 + 0.05 * h for h in range(n)]
         return {"hourly": {
-            "time": times,
-            "wave_height": [hs] * n,
+            "time": [f"{d0}T{h:02d}:00" for h in range(n)],
+            "wave_height": hs,
             "wave_direction": [190.0] * n,
-            "wave_period": [8.0] * n,
+            "wave_period": [tp] * n,
         }}
     return get
 
 
-@pytest.mark.parametrize("spot_id", ["saltstein", "jomfruland_ost", "hvasser_sando", "slagen"])
-def test_build_hours_window_kjorer_for_alle_klasser(monkeypatch, spot_id):
-    """Klasse A (saltstein/jomfruland_ost), B (hvasser_sando) og C
-    (slagen) - samme kode, ingen ny fysikk. Verifiserer bare at
-    pipelinen produserer 48 timer med de standardfeltene score_hour()
-    alltid returnerer, uansett klasse."""
-    monkeypatch.setattr(B, "_get_json", _fake_get_json_full())
+def test_fetch_regional_wave_series_regner_wp_per_time(monkeypatch):
+    monkeypatch.setattr(B, "_get_json", _fake_get_json_regional(hs_by_hour=[1.0] * 24, tp=6.0))
+    series = B.fetch_regional_wave_series(58.930, 9.830, "2018-08-18")
+    assert len(series) == 24
+    row = series["2018-08-18T12:00:00+00:00"]
+    assert row["hs"] == 1.0 and row["tp"] == 6.0
+    assert row["wp"] == pytest.approx(round(P.wave_power(1.0, 6.0), 2))
+
+
+def test_fetch_regional_wave_series_bias_reduserer_wp(monkeypatch):
+    monkeypatch.setattr(B, "_get_json", _fake_get_json_regional(hs_by_hour=[2.0] * 24, tp=8.0))
+    raw = B.fetch_regional_wave_series(58.930, 9.830, "2018-08-18")
+    corrected = B.fetch_regional_wave_series(58.930, 9.830, "2018-08-18", bias={"hs": 2.0, "tp": 1.0})
+    raw_wp = raw["2018-08-18T12:00:00+00:00"]["wp"]
+    corr_wp = corrected["2018-08-18T12:00:00+00:00"]["wp"]
+    assert corr_wp < raw_wp, "halvert Hs skal gi lavere wave_power"
+
+
+def test_regional_energy_for_session_happy_path(monkeypatch):
+    monkeypatch.setattr(B, "_get_json", _fake_get_json_regional())
     spots, _ = A.load_spots()
     spots_by_id = {s["id"]: s for s in spots}
-
-    hours = B.build_hours_window(spots_by_id[spot_id], "2018-08-18", spots_by_id["saltstein"])
-    assert len(hours) == 48
-    for key in ("time", "score", "stars", "p_surf", "regional_wp", "regional_gate_closed"):
-        assert key in hours[0]
-    assert all(h["lead_h"] == 0.0 for h in hours), "reanalyse - lead_h skal alltid vaere 0"
-
-
-def test_build_hours_window_bias_reduserer_hs(monkeypatch):
-    monkeypatch.setattr(B, "_get_json", _fake_get_json_full())
-    spots, _ = A.load_spots()
-    spots_by_id = {s["id"]: s for s in spots}
-
-    raw = B.build_hours_window(spots_by_id["saltstein"], "2018-08-18", spots_by_id["saltstein"])
-    corrected = B.build_hours_window(spots_by_id["saltstein"], "2018-08-18", spots_by_id["saltstein"],
-                                      bias={"hs": 2.0, "tp": 1.0})
-    raw_hs = next(h["hs_eff"] for h in raw if h["time"].startswith("2018-08-18T12"))
-    corr_hs = next(h["hs_eff"] for h in corrected if h["time"].startswith("2018-08-18T12"))
-    assert corr_hs == pytest.approx(raw_hs / 2.0, rel=0.05)
+    session = {"dato": "2018-08-18", "tid": "morgen", "spot": "saltstein", "kvalitet": "4"}
+    r = B.regional_energy_for_session(session, spots_by_id, (58.930, 9.830))
+    assert "feil" not in r
+    assert r["exact_time"] is False
+    assert 6 <= int(r["valgt_tid_utc"][11:13]) <= 10
+    assert r["wp"] > 0
+    assert r["forventet_stars"] == pytest.approx(8.0), "kvalitet 4 -> 8.0 via KVALITET_TIL_STARS"
 
 
-# -------------------------------------------------------------- feilstier
-
-
-def test_backtest_session_ukjent_spot():
-    r = B.backtest_session({"dato": "2020-01-01", "tid": "morgen", "spot": "ikke_finnes", "kvalitet": "3"}, {})
+def test_regional_energy_for_session_ukjent_spot():
+    r = B.regional_energy_for_session(
+        {"dato": "2020-01-01", "tid": "morgen", "spot": "ikke_finnes", "kvalitet": "3"},
+        {}, (58.930, 9.830))
     assert "feil" in r
     assert "ikke_finnes" in r["feil"]
 
 
-def test_backtest_session_ugyldig_tid():
+def test_regional_energy_for_session_ugyldig_tid():
     spots, _ = A.load_spots()
     spots_by_id = {s["id"]: s for s in spots}
-    r = B.backtest_session({"dato": "2020-01-01", "tid": "kveld", "spot": "saltstein", "kvalitet": "3"}, spots_by_id)
+    r = B.regional_energy_for_session(
+        {"dato": "2020-01-01", "tid": "kveld", "spot": "saltstein", "kvalitet": "3"},
+        spots_by_id, (58.930, 9.830))
     assert "feil" in r
 
 
-def test_backtest_session_nettverksfeil_fanges(monkeypatch):
+def test_regional_energy_for_session_nettverksfeil_fanges(monkeypatch):
     def raising(*a, **kw):
         raise requests.ConnectionError("boom")
     monkeypatch.setattr(B, "_get_json", raising)
     spots, _ = A.load_spots()
     spots_by_id = {s["id"]: s for s in spots}
-    r = B.backtest_session({"dato": "2020-01-01", "tid": "morgen", "spot": "saltstein", "kvalitet": "3"}, spots_by_id)
+    r = B.regional_energy_for_session(
+        {"dato": "2020-01-01", "tid": "morgen", "spot": "saltstein", "kvalitet": "3"},
+        spots_by_id, (58.930, 9.830))
     assert "feil" in r
     assert "boom" in r["feil"]
 
 
-def test_backtest_session_ingen_data_for_dato(monkeypatch):
+def test_regional_energy_for_session_ingen_data_for_dato(monkeypatch):
     def get(url, params, timeout=30):
-        return {"hourly": {"time": [], "wave_height": [], "wave_direction": [],
-                            "wave_period": [], "wind_speed_10m": [], "wind_direction_10m": []}}
+        return {"hourly": {"time": [], "wave_height": [], "wave_direction": [], "wave_period": []}}
     monkeypatch.setattr(B, "_get_json", get)
     spots, _ = A.load_spots()
     spots_by_id = {s["id"]: s for s in spots}
-    r = B.backtest_session({"dato": "2020-01-01", "tid": "morgen", "spot": "saltstein", "kvalitet": "3"}, spots_by_id)
+    r = B.regional_energy_for_session(
+        {"dato": "2020-01-01", "tid": "morgen", "spot": "saltstein", "kvalitet": "3"},
+        spots_by_id, (58.930, 9.830))
     assert "feil" in r
+
+
+def test_regional_energy_all_kjorer_alle_oktene(monkeypatch):
+    monkeypatch.setattr(B, "_get_json", _fake_get_json_regional())
+    spots, _ = A.load_spots()
+    spots_by_id = {s["id"]: s for s in spots}
+    sessions = [
+        {"dato": "2018-08-18", "tid": "morgen", "spot": "saltstein", "kvalitet": "4"},
+        {"dato": "2018-08-18", "tid": "16:00", "spot": "slagen", "kvalitet": "5"},
+    ]
+    rows = B.regional_energy_all(sessions, spots_by_id, (58.930, 9.830))
+    assert len(rows) == 2
+    assert all("feil" not in r for r in rows)
 
 
 # -------------------------------------------------------------------- CSV

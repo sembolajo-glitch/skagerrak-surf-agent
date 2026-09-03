@@ -1,58 +1,117 @@
 #!/usr/bin/env python3
 """
-Reanalyse mot faktiske okter (sessions_historisk.csv).
+Regional boelgeenergi (ERA5-Ocean) mot faktiske okter (sessions_historisk.csv).
 
-VIKTIG FORBEHOLD, les foer du tolker noe: dette er REANALYSE, ikke
-PROGNOSE. Vi bruker ERA5/ERA5-Ocean sitt beste etterpaaklokre estimat
-for hva vaeret/sjoen FAKTISK var den dagen, ikke det en prognose ville
-sagt paa forhaand. Vi tester derfor om FYSIKKEN (score_hour(),
-size_quality(), regional_wp-porten osv.) stemmer mot faktiske okter -
-IKKE om varselet ville truffet (det trenger et helt annet datasett:
-faktiske MET/Open-Meteo-PROGNOSER slik de saa ut PAA FORHAAND, som
-ikke finnes arkivert tilbake til 2018). lead_h settes derfor til 0.0
-for alle timer her - riktig for en reanalyse, meningslost for en
-prognose (se build_hours_window()).
+VIKTIG - LES FOER DU TOLKER NOE: dette skriptet kjorer IKKE lenger noen
+spot-fysikk (evaluate_class_ab/evaluate_class_c/score_hour) paa ERA5-
+data. Det gjorde tidligere versjoner, og resultatet (hs_eff/tp_eff/
+stars per okt) er FORKASTET - se begrunnelsen under. Skriptet gjor na
+KUN ETT tall: regional boelgeeffekt (regional_wp, kW/m) fra ERA5-Ocean,
+paret mot hver okts observerte kvalitet. Ingenting annet.
 
-Enda et forbehold: alle elleve oktene i datasettet er POSITIVE (noen
-brukte, kvalitet >= 2 av 5) - ingen bomturer. Denne testen kan derfor
-KUN avsloere for HOYE terskler (dager som burde scoret, men fikk
-naer-null). Den kan IKKE si noe om for LAVE terskler (dager som burde
-vaert null, men scoret hoyt) - det datasettet finnes ikke her.
+  OPPLOSNINGSFUNNET (ordre 2026-09-02, diagnose_saltstein_20181218.py,
+  se rapport til bruker) - HVORFOR spot-fysikk er droppet:
 
-Datakilder (se rapport til bruker, samtalene 2026-09-02):
-  - Vind: Open-Meteo Historical Weather API (ERA5-reanalyse,
-    archive-api.open-meteo.com/v1/archive), dekker 1940- og fremover.
+  ERA5-Ocean via Open-Meteo Marine API har et grid paa ~0,25 grader
+  (~28 km ved 59N). For Saltstein ble tre kandidatpunkter testet -
+  offshore_point, spot-koordinatet selv, og et punkt 5 km paa facing -
+  og ALLE TRE traff NOYAKTIG SAMME gridcelle, sentrert 49-53 km unna
+  Saltstein, ute i aapent Skagerrak. Punktvalg innenfor noen faa
+  kilometer (det eneste en spot-korreksjon eller en bedre offshore_point
+  kan justere) forandrer INGENTING - griddet er for grovt til aa
+  oppdage det i det hele tatt.
+
+  Konklusjon: ERA5-Ocean (denne kilden) kan IKKE brukes til LOKAL
+  boelgehoyde naer kysten i denne regionen. Ethvert tall denne kilden
+  har gitt for min_hs/ideal_hs/max_hs/min_tp (per-spot terskler) ved en
+  navngitt spot er upaalitelig og skal IKKE brukes til aa kalibrere de
+  tersklene - de maaler forholdene i en fjern, aapen gridcelle, ikke
+  ved spotten.
+
+  MEN: den samme fjerne, aapne gridcellen er nettopp det regional_wp
+  (agent.py sin region-dekkende port, se score_hour()) er MENT aa
+  maale - regional energi i aapent Skagerrak, IKKE lokal boelgehoyde
+  ved en bestemt spot. Her er ERA5-Ocean en rimelig proxy. Derfor:
+  dette skriptet regner regional_wp fra Saltsteins offshore_point (den
+  ENE referansen agent.py alltid bruker for alle spots, se
+  BIAS_REFERENCE_ID/regional_wp_by_time i agent.py sin run()) og parer
+  det tallet mot observert kvalitet, INGENTING annet - se
+  regional_energy_for_session()/print_regional_table().
+
+  GRIDCELLE-KOLLISJONER (report_spot_grid_cells(), kjort forst i
+  run_report()): siden griddet er saa grovt, kan flere spotters egne
+  bolge-hentepunkter treffe SAMME celle. De fem klasse C-spotene
+  (indre Oslofjord) deler allerede AV DESIGN eksakt samme gate-punkt
+  (Faerder), saa det er ingen overraskelse der - men A/B-spotene sine
+  offshore_point kan ogsaa kollidere uten at det er tilsiktet. Kolliderer
+  to spotters punkter, er ERA5-seriene deres IKKE uavhengige
+  datapunkter for noe som helst - se rapporten skriptet skriver ut.
+
+  MAALT (ordre 2026-09-02, faktisk kjoring - se rapport til bruker): kun
+  FIRE distinkte ERA5-gridceller dekker alle 14 spotene. AATTE spots
+  (svenner, verdens_ende, hvasser_sando + de fem klasse C-spotene) deler
+  EN celle. Kun oerekroken staar paa egen celle. 13 av 14 spots deler
+  celle med minst en annen - ERA5-Ocean kan derfor IKKE si noe om
+  FORSKJELLER mellom spots i denne regionen, verken lokalt eller
+  regionalt kalibrert. Kombinert med opplosningsfunnet over er dette
+  konklusjonen, ikke bare et forbehold: ERA5-Ocean via Open-Meteo er
+  STENGT som kilde for videre spot-spesifikk kalibrering her. Den ENE
+  gjenvaerende bruken er regional_wp som ETT tall for hele regionen (se
+  under for hva den maalingen faktisk ga) - og selv den maalingen kommer
+  fra en celle 49-53 km fra kysten, ikke fra Skagerrak-kysten selv.
+
+  KONKLUSJON PAA regional_wp (ordre 2026-09-02): gulvet blant de elleve
+  positive oktene var regional_wp=1,2 kW/m (raa ERA5, Saltstein kvalitet
+  5, 2018-12-18) mot den deaktiverte terskelen 12,2 - TI GANGER for hoy,
+  samme retning og storrelsesorden som feilfunnet som fikk porten slaatt
+  av i utgangspunktet. regional_wp_min/max i spots.yaml FORBLIR
+  deaktivert - dette bekrefter at det var riktig, det gir IKKE grunnlag
+  for et nytt tall. NESTE kalibreringsforsok maa bruke out/shadow.csv fra
+  faktisk drift (EWAM ~5 km/MET WW3 ~4 km, se sources.py - opploser
+  Skagerrak-kysten, ERA5-Ocean sitt grid gjor ikke det), IKKE ERA5. Dette
+  skriptet bygges ikke videre paa til det finnes et konkret behov for
+  REGIONAL (ikke spot-spesifikk) historikk lenger tilbake enn shadow.csv
+  daekker.
+
+VIDERE FORBEHOLD (uendret fra tidligere versjoner):
+  - Reanalyse, ikke prognose: ERA5 er et etterpaaklokt beste-estimat
+    for hva sjoen FAKTISK var, ikke hva en prognose ville sagt paa
+    forhaand. lead_h-begrepet fra agent.py er ikke i bruk her i det
+    hele tatt lenger (ingen score_hour()-kall).
+  - Alle elleve oktene er POSITIVE (kvalitet >= 2 av 5) - ingen
+    bomturer. Denne testen kan derfor vise hvilken regional_wp positive
+    okter FAKTISK hadde (og dermed en EMPIRISK nedre grense-kandidat
+    for regional_wp_min), men kan IKKE bekrefte at en LAVERE regional_wp
+    faktisk betyr daarlig surf - det datasettet finnes ikke her.
+  - 'tid'-kolonnen i sessions_historisk.csv har aldri hatt dokumentert
+    tidssone. parse_time_window()/regional_energy_for_session() matcher
+    presise klokkeslett direkte mot ERA5 sine UTC-stemplede timer -
+    testet for Saltstein 2018-12-18 (diagnose_saltstein_20181218.py):
+    UTC-tolkning vs. norsk lokaltid (UTC+1 i desember) ga kun 0,04 kW/m
+    forskjell der, altsaa neppe avgjorende, men fortsatt en udokumentert
+    antagelse verdt aa rette uavhengig av dette.
+
+Datakilder:
   - Bolger: Open-Meteo Marine API i historisk modus
     (marine-api.open-meteo.com/v1/marine, start_date/end_date),
-    models=era5_ocean. Standardmodellen (EWAM/GWAM, samme familie som
-    agent.py bruker i produksjon via sources.openmeteo_waves()) har
-    IKKE historikk foer desember 2023 (bekreftet med
-    .github/workflows/probe-marine-archive.yml) - ERA5 brukes derfor
-    for ALLE elleve oktene her, ikke bare de fra foer 2023, for AA FAA
-    ÉN konsistent kilde i stedet for en blanding.
+    models=era5_ocean (eneste modell med historikk foer desember 2023 -
+    bekreftet med .github/workflows/probe-marine-archive.yml).
+  - Vind hentes IKKE lenger (fetch_era5_wind() star igjen i modulen,
+    ubrukt av rapporten - regional_wp er en ren bolgestorrelse, se
+    physics.wave_power()).
 
-Kjent skjevhet mellom modellene (samme probe, 2023-06-01 og
-2025-08-05): ERA5 ligger 50-130 % HOYERE i Hs enn standardmodellen paa
-overlappende datoer. spots.yaml sine terskler (min_hs, regional_wp_min/
-max osv.) er kalibrert mot surf-forecast sitt tall, som antas naermere
-standardmodellen (samme WW3-familie som EWAM/GWAM) enn ERA5-Ocean. Raa
-ERA5 rett inn i eksisterende scoring ville derfor systematisk
-OVERVURDERE. quantify_bias() under maaler skjevheten empirisk FOR noe
-annet kjores (kalt forst i main()), og backtest_all() kjores TO ganger
-- raa ERA5 og skjevhetskorrigert (delt paa median-forholdet) - begge
+Kjent modellskjevhet mellom ERA5-Ocean og standardmodellen (samme probe,
+2023-06-01 og 2025-08-05): ERA5 ligger 50-130 % HOYERE i Hs. Produksjonens
+regional_wp (agent.py, sanntid) bruker standardmodellen, ikke ERA5-Ocean.
+quantify_bias() maaler forholdet empirisk FOR resten av rapporten (kalt
+forst i run_report()), og regional_energy_all() kjores TO ganger - raa
+ERA5 og skjevhetskorrigert (delt paa median-forholdet) - begge
 rapportert, se run_report().
-
-IKKE NY FYSIKK: all scoring gaar via agent.py sin evaluate_class_ab()/
-evaluate_class_c()/score_hour()/explain() UENDRET. Dette skriptet
-bygger bare wind/waves-dict-strukturene (samme form gather() selv
-produserer, se sources.py) fra ERA5 i stedet for sanntidskildene, og
-kjorer eksisterende scoring paa dem.
 
 Kjores manuelt (ikke i noen workflow, ikke koblet inn i forecast.yml).
 Dette miljoet hadde ingen utgaaende nettverkstilgang til Open-Meteo i
 det hele tatt da dette ble skrevet - se .github/workflows/ for
-motstykket som faktisk KAN naa nettet (ab-test.yml, probe-marine-
-archive.yml). Kjor dette skriptet et sted med nettverkstilgang.
+motstykket som faktisk KAN naa nettet (backtest-sessions.yml).
 
     python backtest_sessions.py
     python backtest_sessions.py --bias-sample-n 30 --seed 20260902
@@ -81,30 +140,68 @@ WIND_URL = "https://archive-api.open-meteo.com/v1/archive"
 WAVE_URL = "https://marine-api.open-meteo.com/v1/marine"
 
 # ordre 2026-09-02 (produksjonskjoring i backtest-sessions.yml feilet med
-# ReadTimeout): quantify_bias() gjor opptil ~60 kall raskt etter hverandre
-# (2 modeller x ca. 33 datoer), sannsynligvis der Open-Meteo sin rate-
-# grense treffes - se RATE_LIMIT_PAUSE_S. HTTP_TIMEOUT_S/RETRY_DELAYS_S
-# gjelder ALLE kall (ogsaa build_hours_window() sine, via _get_json()
-# under), ikke bare skjevhetsmaalingen.
+# ReadTimeout): opptil ~60 kall raskt etter hverandre (quantify_bias(),
+# 2 modeller x ca. 33 datoer), sannsynligvis der Open-Meteo sin rate-
+# grense treffes. HTTP_TIMEOUT_S/RETRY_DELAYS_S gjelder ALLE kall via
+# _get_json() under.
 HTTP_TIMEOUT_S = 60
 RETRY_DELAYS_S = (2, 5, 15)  # ventetid FOR hvert av de tre nye forsokene
 RATE_LIMIT_PAUSE_S = 0.5  # mellom HVERT kall i quantify_bias() sin lokke
 
 # Vage tidspunkt tolkes som vinduer (hel-timer, begge ender inkludert) -
-# "de surfet sannsynligvis naar det var best", se pick_target_hour().
-# Presise klokkeslett ("HH:MM") i CSV-en tolkes IKKE som et vindu - de
-# ER observasjonen, se parse_time_window().
+# "de surfet sannsynligvis naar det var best" - her: hoyest regional_wp
+# i vinduet, se pick_target_hour_regional(). Presise klokkeslett
+# ("HH:MM") i CSV-en tolkes IKKE som et vindu - de ER observasjonen,
+# se parse_time_window().
 TIME_WINDOWS = {
     "morgen": (6, 10),
     "lunsj": (11, 14),
     "ettermiddag": (14, 19),
 }
 
-# ETT referansepunkt for skjevhetsmaalingen (Saltsteins offshore_point,
-# samme punkt regional_wp alltid regnes fra) - IKKE per-spot. Modell-
-# skjevheten antas regional (samme to modeller, samme del av Skagerrak),
-# ikke spot-spesifikk. Eksplisitt forenkling - se quantify_bias().
+# ETT referansepunkt for BAADE skjevhetsmaalingen OG selve regional_wp-
+# tallet (Saltsteins offshore_point) - IKKE per-spot. Samme referanse
+# agent.py sin run() alltid bruker for regional_wp_by_time, uansett
+# hvilken spot som scores. Se modulens docstring for gridcelle-funnet
+# som gjor akkurat dette punktet til en brukbar REGIONAL (ikke lokal)
+# maaling.
 BIAS_REFERENCE_ID = "saltstein"
+
+# Vilkaarlig dato for report_spot_grid_cells() - griddet ERA5-Ocean
+# bruker er tidsuavhengig (samme celleinndeling for alle datoer), bare
+# STEDET avgjor hvilken celle som treffes. Godt innenfor ERA5-historikk.
+GRID_PROBE_DATE = "2015-06-01"
+
+# ordre 2026-09-03: sessions_historisk.csv sin 'kvalitet'-kolonne (0-5,
+# menneskelig vurdering) og agent.py sin 'stars' (1-10, modellens
+# skala) er IKKE samme skala - tidligere rapporter (se rapport til
+# bruker) har feilaktig sammenlignet dem som om de var det. Mappingen
+# under er brukerens egen, empirisk satt, og eksplisitt IKKE lineaer:
+# "bra og oppover" ligger hoyt paa en tidelsskala, mens "saa vidt
+# surfbart" ligger lavt - en kvalitet-5-okt forventes IKKE aa lande paa
+# 10, den lander paa 9,5, mens en kvalitet-1-okt forventer bare 2,5, ikke
+# 2,0 (som en naiv "kvalitet*2"-lineaer skalering ville gitt her, men
+# ville feilet grovt lenger opp, f.eks. kvalitet 4 -> 8, ikke 8 er OK,
+# men kvalitet 2 -> 4 stemmer med lineaer mens kvalitet 3 -> 5,5 ikke
+# gjor det - poenget er at IKKE ekstrapoler denne, bruk tabellen).
+# forventet_stars() er den ENESTE stedet denne mappingen skal brukes -
+# ALDRI kvalitet direkte mot stars, i noen rapport.
+KVALITET_TIL_STARS = {
+    0: None,  # ingen surf i det hele tatt - ingen forventet stjerneverdi
+    1: 2.5,
+    2: 4.0,
+    3: 5.5,
+    4: 8.0,
+    5: 9.5,
+}
+
+
+def forventet_stars(kvalitet):
+    """kvalitet (int, 0-5, sessions_historisk.csv sin skala) -> forventet
+    agent.py 'stars' (1-10) via KVALITET_TIL_STARS. Kaster KeyError paa
+    en kvalitet utenfor 0-5 (dataintegritetsfeil i CSV-en, ikke noe aa
+    stille inn en default for)."""
+    return KVALITET_TIL_STARS[kvalitet]
 
 
 # ------------------------------------------------------------- tidsvindu
@@ -117,8 +214,8 @@ def parse_time_window(tid):
     Returnerer (lo_hour, hi_hour, exact). exact=True betyr lo == hi og
     at dette IKKE skal "beste time i vinduet"-velges - det presise
     klokkeslettet ER observasjonen. exact=False for de tre vage
-    kategoriene (TIME_WINDOWS) - der velges beste scorede time i
-    vinduet, se pick_target_hour().
+    kategoriene (TIME_WINDOWS) - der velges timen med hoyest regional_wp
+    i vinduet, se pick_target_hour_regional().
     """
     t = tid.strip().lower()
     if t in TIME_WINDOWS:
@@ -138,8 +235,8 @@ def parse_time_window(tid):
 
 def _to_iso(t):
     """Open-Meteo sine tidsstempel ('2023-06-01T14:00', timezone=UTC i
-    forespoerselen) -> samme normaliserte iso-form som sources.py sin
-    _iso() produserer, saa wind/waves-dict-noklene stemmer overens."""
+    forespoerselen) -> normalisert iso-form (samme konvensjon som
+    sources.py sin _iso())."""
     d = dt.datetime.fromisoformat(t)
     if d.tzinfo is None:
         d = d.replace(tzinfo=dt.timezone.utc)
@@ -168,18 +265,14 @@ def _get_json(url, params, timeout=HTTP_TIMEOUT_S):
     """
     GET -> .json(), med inntil tre NYE forsok (fire totalt) ved
     forbigaaende feil (ReadTimeout, tilkoblingsfeil osv.) - ventetid FOR
-    hvert nytt forsok fra RETRY_DELAYS_S (2, 5, 15 s). Produksjons-
-    kjoringen (backtest-sessions.yml, ordre 2026-09-02) feilet med
-    ReadTimeout mot Open-Meteo - se HTTP_TIMEOUT_S/RETRY_DELAYS_S sin
-    kommentar over for hvorfor (sannsynligvis quantify_bias() sine ~60
-    kall raskt etter hverandre, se RATE_LIMIT_PAUSE_S der).
+    hvert nytt forsok fra RETRY_DELAYS_S (2, 5, 15 s).
 
     Gir opp og lar unntaket forplante seg naar alle forsokene er brukt
     opp - IKKE fanget her. quantify_bias() fanger det per kall (fortsetter
     med faerre par i stedet for aa velte hele kjoringen), mens
-    build_hours_window()/backtest_session() lar det forplante seg til
-    backtest_session() sin egen try/except (se der) - samme
-    "feiler mykt per enhet" -prinsipp som sources.py sin docstring.
+    regional_energy_for_session() lar det forplante seg til sitt eget
+    try/except - samme "feiler mykt per enhet"-prinsipp som sources.py
+    sin docstring.
     """
     _http_stats["n_calls"] += 1
     last_exc = None
@@ -199,8 +292,9 @@ def _get_json(url, params, timeout=HTTP_TIMEOUT_S):
 
 
 def fetch_era5_wind(lat, lon, date_from, date_to):
-    """ERA5 vind - samme dict-form som sources.met_wind() (delmengde:
-    kun feltene score_hour()/build_local_sea() faktisk leser)."""
+    """ERA5 vind - IKKE brukt av regional-energi-rapporten (regional_wp
+    er en ren bolgestorrelse, se physics.wave_power()). Star igjen som
+    generell hjelpefunksjon, samme dict-form som sources.met_wind()."""
     data = _get_json(WIND_URL, {
         "latitude": lat, "longitude": lon,
         "start_date": date_from, "end_date": date_to,
@@ -220,13 +314,11 @@ def fetch_era5_wind(lat, lon, date_from, date_to):
 def fetch_era5_waves(lat, lon, date_from, date_to, model="era5_ocean"):
     """
     Bolger fra Open-Meteo Marine API i historisk modus - samme dict-form
-    som sources.met_waves()/openmeteo_waves() (delmengden score_hour()/
-    evaluate_class_ab()/evaluate_class_c() faktisk leser: hs, tp,
-    wave_from_direction).
+    som sources.met_waves()/openmeteo_waves() (hs, tp, wave_from_direction).
 
     model=None ber om standardmodellen (EWAM/GWAM, "best_match") - kun
-    brukt i quantify_bias(), IKKE i selve backtesten (som alltid bruker
-    era5_ocean, se modulens docstring for hvorfor).
+    brukt i quantify_bias(), IKKE i regional-energi-rapporten (som
+    alltid bruker era5_ocean, se modulens docstring for hvorfor).
     """
     params = {
         "latitude": lat, "longitude": lon,
@@ -281,8 +373,8 @@ def quantify_bias(lat, lon, dates):
     pluss de raa parvise radene og en feiltelling.
 
     IKKE et scorekomponent - rent maalt, brukes til aa lage
-    korreksjonsfaktoren backtest_all(..., bias=...) deler ERA5-verdier
-    paa. Kjores FOR resten av backtesten (se modulens docstring/
+    korreksjonsfaktoren regional_energy_all(..., bias=...) deler ERA5-
+    verdier paa. Kjores FOR resten av rapporten (se modulens docstring/
     run_report()).
 
     Robusthet (ordre 2026-09-02, etter ReadTimeout i produksjon): dette
@@ -383,90 +475,119 @@ def _apply_bias(waves, bias):
     return out
 
 
-# -------------------------------------------------------------- scoring
+# ------------------------------------------------------- gridcelle-rapport
 
 
-def build_hours_window(spot, day, saltstein_spot, bias=None):
-    """
-    Hent vind og bolger for doegnet FOR `day` og `day` selv (48 t -
-    lookback build_local_sea()/evaluate_class_c() trenger, se
-    agent.py), bygg samme hours-struktur run() selv bygger, og kjor
-    EKSISTERENDE scoring (evaluate_class_ab/evaluate_class_c +
-    score_hour) uendret.
-
-    lead_h=0.0 for ALLE timer - dette er reanalyse (vi VET hva sjoen
-    var), ikke prognose. ensemble.py sin usikkerhet vokser med lead_h
-    for aa modellere at en PROGNOSE blir mindre paalitelig lenger fram
-    - det gjelder ikke her, og aa la lead_h vaere den store, VARIERENDE
-    verdien den ville hatt i en ekte kjoring (tid fra "naa" til okten,
-    ofte AAR) ville blaast opp usikkerheten meningslost og senket
-    p_surf/stars uten noen fysisk grunn.
-
-    bias: None (raa ERA5) eller dict {"hs": faktor, "tp": faktor} fra
-    quantify_bias() - se modulens docstring.
-    """
-    day_before = (dt.date.fromisoformat(day) - dt.timedelta(days=1)).isoformat()
-
-    wind_pt = (spot["lat"], spot["lon"])
+def _spot_wave_point(spot):
+    """Samme punkt-logikk agent.py sin run()/gamle build_hours_window()
+    brukte for aa hente en spots EGEN boelgeserie: gate for klasse C
+    (fjordspots - swell kommer inn via en delt terskel, se spots.yaml),
+    offshore_point ellers. IKKE brukt til aa regne regional_wp (den
+    kommer alltid fra Saltsteins offshore_point, se BIAS_REFERENCE_ID) -
+    kun til aa se hvilken ERA5-gridcelle HVER spots EGEN referansepunkt
+    lander i, se report_spot_grid_cells()."""
     if spot["klasse"] == "C":
-        wave_pt = (spot["gate"]["lat"], spot["gate"]["lon"])
-    else:
-        wave_pt = tuple(spot["offshore_point"])
+        return (spot["gate"]["lat"], spot["gate"]["lon"])
+    return tuple(spot["offshore_point"])
 
-    wind = fetch_era5_wind(*wind_pt, day_before, day)
-    waves = fetch_era5_waves(*wave_pt, day_before, day, model="era5_ocean")
 
-    sal_pt = tuple(saltstein_spot["offshore_point"])
-    sal_waves = waves if sal_pt == wave_pt else \
-        fetch_era5_waves(*sal_pt, day_before, day, model="era5_ocean")
+def fetch_grid_cell(lat, lon):
+    """Det FAKTISKE gridpunktet Open-Meteo brukte for (lat, lon) -
+    ligger paa toppniva i svaret (ikke i den timevise strukturen).
+    GRID_PROBE_DATE er vilkaarlig, se den sin egen kommentar."""
+    data = _get_json(WAVE_URL, {
+        "latitude": lat, "longitude": lon,
+        "start_date": GRID_PROBE_DATE, "end_date": GRID_PROBE_DATE,
+        "hourly": "wave_height",
+        "timezone": "UTC",
+        "models": "era5_ocean",
+    })
+    return (data.get("latitude"), data.get("longitude"))
 
+
+def report_spot_grid_cells(spots):
+    """
+    For hver spot: hvilken ERA5-Ocean-gridcelle treffer spottens EGEN
+    boelge-hentepunkt (_spot_wave_point())? Grupperer etterpaa paa
+    gridcelle - havner flere spots i SAMME celle, er ERA5-seriene deres
+    IKKE uavhengige datapunkter for noe som helst (se modulens
+    docstring). De fem klasse C-spotene deler AV DESIGN allerede samme
+    gate-koordinat (Faerder) - forventet, ingen overraskelse. A/B-
+    spotenes egne offshore_point kan kollidere UTEN aa vaere tilsiktet -
+    det er DET denne rapporten skal avsloere.
+    """
+    print(f"\n{'='*90}\nERA5-OCEAN GRIDCELLE PER SPOT (era5_ocean, probedato {GRID_PROBE_DATE})\n{'='*90}")
+    rows = []
+    for spot in spots:
+        lat, lon = _spot_wave_point(spot)
+        try:
+            grid = fetch_grid_cell(lat, lon)
+        except requests.RequestException as exc:
+            print(f"  {spot['id']:<16} klasse {spot['klasse']}  FEIL: henting feilet: {exc}")
+            continue
+        rows.append({"id": spot["id"], "klasse": spot["klasse"], "punkt": [lat, lon], "grid": list(grid)})
+        print(f"  {spot['id']:<16} klasse {spot['klasse']}  spurt {lat},{lon} -> gridcelle {grid[0]},{grid[1]}")
+
+    by_grid = {}
+    for r in rows:
+        by_grid.setdefault(tuple(r["grid"]), []).append(r["id"])
+
+    print(f"\n  Grupper per gridcelle (samme celle = IKKE uavhengige boelgedatapunkter):")
+    for grid, ids in by_grid.items():
+        merknad = "  <- FLERE SPOTS I SAMME CELLE" if len(ids) > 1 else ""
+        print(f"    {grid[0]},{grid[1]}: {', '.join(ids)}{merknad}")
+
+    return rows
+
+
+# ---------------------------------------------------------- regional energi
+
+
+def fetch_regional_wave_series(lat, lon, date, bias=None):
+    """
+    Regional boelgeeffekt (kW/m, physics.wave_power()) for HVER time i
+    ett doegn ved (lat, lon) - INGEN spot-fysikk, ingen vind, ingen
+    lookback-doegn (det trengtes kun for evaluate_class_c() sin
+    build_local_sea(), som ikke kjores her lenger). bias: None (raa
+    ERA5) eller {"hs": faktor, "tp": faktor} fra quantify_bias(), delt
+    inn FOER wave_power() regnes (samme rekkefolge som den gamle
+    build_hours_window() brukte).
+    """
+    waves = fetch_era5_waves(lat, lon, date, date, model="era5_ocean")
     if bias:
         waves = _apply_bias(waves, bias)
-        sal_waves = _apply_bias(sal_waves, bias)
-
-    regional_wp_by_time, regional_hs_by_time, regional_tp_by_time = {}, {}, {}
-    for ts, w in sal_waves.items():
+    out = {}
+    for ts, w in waves.items():
         hs, tp = w.get("hs"), w.get("tp")
         if hs is not None and tp is not None:
-            regional_wp_by_time[ts] = round(P.wave_power(hs, tp), 1)
-            regional_hs_by_time[ts] = hs
-            regional_tp_by_time[ts] = tp
-
-    times = sorted(set(wind) & set(waves))
-    if spot["klasse"] == "C":
-        computed = A.evaluate_class_c(spot, times, wind, waves)
-    else:
-        computed = A.evaluate_class_ab(spot, times, wind, waves)
-
-    hours = []
-    for ts, c in computed:
-        hours.append(A.score_hour(
-            spot, ts, wind.get(ts, {}), waves.get(ts, {}), None, c,
-            lead_h=0.0,
-            regional_wp=regional_wp_by_time.get(ts),
-            regional_hs=regional_hs_by_time.get(ts),
-            regional_tp=regional_tp_by_time.get(ts),
-        ))
-    return hours
+            out[ts] = {"hs": hs, "tp": tp, "wp": round(P.wave_power(hs, tp), 2)}
+    return out
 
 
-def pick_target_hour(hours, day, lo_hour, hi_hour):
-    """Beste (hoyest score()) time paa `day` innenfor [lo_hour, hi_hour]
+def pick_target_hour_regional(series, day, lo_hour, hi_hour):
+    """Timen med HOYEST regional_wp paa `day` innenfor [lo_hour, hi_hour]
     - for et EXACT klokkeslett (parse_time_window) er lo==hi, saa dette
     reduserer til aa plukke akkurat den ene timen. None hvis ingen
-    kandidattime finnes i det hele tatt (manglende data den dagen)."""
+    kandidattime finnes (manglende data den dagen). Returnerer
+    (tidsstempel, {"hs":, "tp":, "wp":}) eller None."""
     candidates = [
-        h for h in hours
-        if h["time"][:10] == day and lo_hour <= int(h["time"][11:13]) <= hi_hour
+        (ts, row) for ts, row in series.items()
+        if ts[:10] == day and lo_hour <= int(ts[11:13]) <= hi_hour
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda h: h["score"])
+    return max(candidates, key=lambda item: item[1]["wp"])
 
 
-def backtest_session(session, spots_by_id, bias=None):
-    spot = spots_by_id.get(session["spot"])
-    if spot is None:
+def regional_energy_for_session(session, spots_by_id, saltstein_pt, bias=None):
+    """
+    EN rad: observert kvalitet mot regional_wp den timen (kun det -
+    ingen spot-fysikk kjores, se modulens docstring). `spots_by_id`
+    brukes KUN til aa validere at 'spot' i CSV-en faktisk finnes (fanger
+    CSV-skrivefeil) - selve regional_wp er uavhengig av hvilken spot
+    okten gjaldt, se BIAS_REFERENCE_ID.
+    """
+    if session["spot"] not in spots_by_id:
         return {**session, "feil": f"ukjent spot-id '{session['spot']}'"}
     try:
         lo, hi, exact = parse_time_window(session["tid"])
@@ -474,19 +595,22 @@ def backtest_session(session, spots_by_id, bias=None):
         return {**session, "feil": str(exc)}
 
     try:
-        hours = build_hours_window(spot, session["dato"], spots_by_id[BIAS_REFERENCE_ID], bias)
+        series = fetch_regional_wave_series(*saltstein_pt, session["dato"], bias)
     except requests.RequestException as exc:
         return {**session, "feil": f"henting feilet: {exc}"}
 
-    target = pick_target_hour(hours, session["dato"], lo, hi)
+    target = pick_target_hour_regional(series, session["dato"], lo, hi)
     if target is None:
-        return {**session, "feil": "ingen data for gitt dato/vindu (Open-Meteo svarte, men uten treff)"}
+        return {**session, "feil": "ingen regional boelgedata for gitt dato/vindu (Open-Meteo svarte, men uten treff)"}
 
-    return {**session, "exact_time": exact, "hour": target}
+    ts, row = target
+    return {**session, "exact_time": exact, "valgt_tid_utc": ts,
+            "hs": row["hs"], "tp": row["tp"], "wp": row["wp"],
+            "forventet_stars": forventet_stars(int(session["kvalitet"]))}
 
 
-def backtest_all(sessions, spots_by_id, bias=None):
-    return [backtest_session(s, spots_by_id, bias) for s in sessions]
+def regional_energy_all(sessions, spots_by_id, saltstein_pt, bias=None):
+    return [regional_energy_for_session(s, spots_by_id, saltstein_pt, bias) for s in sessions]
 
 
 # --------------------------------------------------------------- rapport
@@ -495,18 +619,6 @@ def backtest_all(sessions, spots_by_id, bias=None):
 def load_sessions(path):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
-
-
-def _weakest_led(h):
-    """Gjenbruker EKSAKT samme min()-logikk som agent.explain() - se
-    den for den fulle forklaringssetningen. Egen liten wrapper her
-    fordi vi bare vil ha (navn, verdi), ikke hele setningen, i
-    tabellraden."""
-    return min(
-        [("storrelse", h["q_size"]), ("periode", h["q_period"]),
-         ("vind", h["q_wind"]), ("vannstand", h["q_water"])],
-        key=lambda x: x[1],
-    )
 
 
 def print_bias_report(bias, label):
@@ -524,31 +636,59 @@ def print_bias_report(bias, label):
               f"(kvartiler {b['p25']}-{b['p75']}, spenn {b['min']}-{b['max']}, n={b['n']})")
 
 
-def print_session_table(results, title):
-    print(f"\n{'='*100}\n{title}\n{'='*100}")
-    header = (f"{'dato':<11}{'spot':<16}{'kval':>5}  {'stars':>6}{'p_surf':>8}"
-              f"{'regional_wp':>13}  {'port':<10}{'svakeste ledd':<20}{'score':>7}")
+def print_regional_table(rows, title):
+    """
+    Sortert STIGENDE paa regional_wp - gjor "gulvet" (den laveste
+    regional_wp en positiv okt faktisk hadde) direkte synlig, som er
+    akkurat tallet en empirisk regional_wp_min-kalibrering trenger. Se
+    modulens docstring for forbeholdet om at datasettet KUN har positive
+    okter (kan vise et gulv, ikke bekrefte at lavere er daarlig).
+
+    Viser BAADE 'kvalitet' (0-5, sessions_historisk.csv sin skala) OG
+    'forventet_stars' (1-10, agent.py sin skala, via KVALITET_TIL_STARS)
+    side om side - ordre 2026-09-03, etter at tidligere rapporter
+    feilaktig sammenlignet de to skalaene direkte. To Pearson r-tall
+    rapporteres av samme grunn: mot raa kvalitet (den GAMLE, feilaktige
+    sammenligningen - beholdt for sporbarhet) og mot forventet_stars
+    (den RIKTIGE skalaen) - de to kan avvike siden mappingen er ulineaer.
+    """
+    print(f"\n{'='*90}\n{title}\n{'='*90}")
+    ok_rows = [r for r in rows if "feil" not in r]
+    header = (f"{'dato':<11}{'spot':<16}{'kval':>5}{'forv.stjerner':>14}{'tid':>12}  "
+              f"{'valgt (UTC)':<20}{'hs':>7}{'tp':>7}{'regional_wp':>13}")
     print(header)
-    n_zero = 0
-    for r in results:
+    pairs = []
+    for r in sorted(ok_rows, key=lambda r: r["wp"]):
+        fs = r["forventet_stars"]
+        print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}"
+              f"{('-' if fs is None else f'{fs:.1f}'):>14}{r['tid']:>12}  "
+              f"{r['valgt_tid_utc']:<20}{r['hs']:>7.2f}{r['tp']:>7.1f}{r['wp']:>13.1f}")
+        pairs.append((r["wp"], int(r["kvalitet"]), fs))
+    for r in rows:
         if "feil" in r:
             print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}  FEIL: {r['feil']}")
-            continue
-        h = r["hour"]
-        score = h["score"]
-        if score == 0.0:
-            n_zero += 1
-        port = ("bypasset" if h.get("regional_gate_bypassed") else
-                "STENGT" if h.get("regional_gate_closed") else "aapen")
-        led, led_v = _weakest_led(h)
-        print(f"{r['dato']:<11}{r['spot']:<16}{r['kvalitet']:>5}  "
-              f"{str(h.get('stars')):>6}{h.get('p_surf'):>8.0f}"
-              f"{str(h.get('regional_wp')):>13}  {port:<10}"
-              f"{led+f' ({led_v:.2f})':<20}{score:>7.1f}")
-    n_total = sum(1 for r in results if "feil" not in r)
-    print(f"\n  {n_zero}/{n_total} okter fikk score 0.0 (porten stengt og/eller under min_hs) - "
-          f"dager modellen ville vaert TAUS om, selv om de faktisk ble surfet.")
-    return n_zero, n_total
+
+    n = len(pairs)
+    if n:
+        wps = [p[0] for p in pairs]
+        print(f"\n  n={n}  regional_wp (kW/m): min={min(wps):.1f}  median={st.median(wps):.1f}  max={max(wps):.1f}")
+        print(f"  Gulvet blant disse {n} positive oktene: {min(wps):.1f} kW/m "
+              f"(alle var kvalitet {min(p[1] for p in pairs)}-{max(p[1] for p in pairs)} av 5, "
+              f"forventet {min(p[2] for p in pairs):.1f}-{max(p[2] for p in pairs):.1f} stjerner).")
+        if n >= 3:
+            try:
+                r_coef = st.correlation(wps, [p[1] for p in pairs])
+                print(f"  Pearson r (regional_wp vs. RAA KVALITET - feil skala, beholdt for sporbarhet): "
+                      f"{r_coef:.2f} (n={n})")
+            except st.StatisticsError:
+                pass
+            try:
+                r_coef_stars = st.correlation(wps, [p[2] for p in pairs])
+                print(f"  Pearson r (regional_wp vs. FORVENTET STARS - riktig skala): "
+                      f"{r_coef_stars:.2f} (n={n} - svakt datagrunnlag, KUN positive okter, se docstring)")
+            except st.StatisticsError:
+                pass
+    return pairs
 
 
 def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
@@ -557,6 +697,8 @@ def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
     spots_by_id = {s["id"]: s for s in spots}
     sessions = load_sessions(sessions_path)
     print(f"{len(sessions)} okter lest fra {sessions_path}")
+
+    grid_rows = report_spot_grid_cells(spots)
 
     session_dates_after_2023 = sorted({
         s["dato"] for s in sessions
@@ -582,18 +724,18 @@ def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
                   f"korreksjonsfaktoren settes til 1.0 (ingen korreksjon) for {var}.")
             bias_factor[var] = 1.0
 
-    raw = backtest_all(sessions, spots_by_id, bias=None)
-    corrected = backtest_all(sessions, spots_by_id, bias=bias_factor)
+    saltstein_pt = tuple(spots_by_id[BIAS_REFERENCE_ID]["offshore_point"])
+    raw = regional_energy_all(sessions, spots_by_id, saltstein_pt, bias=None)
+    corrected = regional_energy_all(sessions, spots_by_id, saltstein_pt, bias=bias_factor)
 
-    n_zero_raw, n_total = print_session_table(raw, "RAA ERA5 (ukorrigert)")
-    n_zero_corr, _ = print_session_table(corrected, f"SKJEVHETSKORRIGERT (Hs/{bias_factor['hs']:.2f}, Tp/{bias_factor['tp']:.2f})")
+    print_regional_table(raw, "REGIONAL ENERGI - RAA ERA5")
+    print_regional_table(corrected, f"REGIONAL ENERGI - SKJEVHETSKORRIGERT (Hs/{bias_factor['hs']:.2f}, Tp/{bias_factor['tp']:.2f})")
 
     print(f"\n{'='*78}\nOPPSUMMERING\n{'='*78}")
-    print(f"  Raa ERA5:            {n_zero_raw}/{n_total} okter fikk score 0.0")
-    print(f"  Skjevhetskorrigert:  {n_zero_corr}/{n_total} okter fikk score 0.0")
-    print(f"\n  Reanalyse, ikke prognose (se modulens docstring) - dette kan KUN vise")
-    print(f"  for HOYE terskler (alle elleve oktene var positive). Ingen terskler er")
-    print(f"  justert her.")
+    print(f"  Ingen spot-fysikk kjort (ERA5-Ocean er ikke paalitelig for lokal boelgehoyde")
+    print(f"  naer kysten her - se modulens docstring). KUN regional_wp mot observert kvalitet.")
+    print(f"  Reanalyse, ikke prognose. Alle elleve oktene var positive - dette kan vise et")
+    print(f"  GULV for regional_wp, ikke bekrefte at lavere betyr daarlig. Ingen terskler justert.")
 
     print(f"\n  HTTP: {_http_stats['n_calls']} kall totalt, "
           f"{_http_stats['n_retried']} maatte proeve paa nytt minst en gang "
@@ -603,6 +745,7 @@ def run_report(sessions_path, bias_sample_n, seed, skip_bias, manual_bias):
     report_path = OUT / "backtest_report.json"
     report_path.write_text(json.dumps({
         "bias": {k: v for k, v in bias.items() if k != "raw_pairs"} if not skip_bias else bias,
+        "grid_cells": grid_rows,
         "raw": raw, "corrected": corrected,
         "http_stats": dict(_http_stats),
     }, indent=2, default=str), encoding="utf-8")
