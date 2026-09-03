@@ -44,45 +44,6 @@ jobs:
       - name: Installer avhengigheter
         run: pip install requests
 
-  # Midlertidig tillegg (ordre 2026-09-02): egen diagnose_saltstein_20181218.py
-  # ligger allerede som .github/workflows/diagnose-saltstein.yml paa denne
-  # branchen, men et HELT NYTT workflow_dispatch-workflow maa vaere paa
-  # default branch (main) foer GitHub tillater aa dispatche det - se
-  # rapport til bruker. Denne jobben her kjorer SAMME script fra en fil
-  # (probe-marine-archive.yml) som allerede er registrert, kun for aa faa
-  # kjort diagnosen NAA uten aa maatte merge til main foerst. Kan fjernes
-  # naar diagnose-saltstein.yml er merget og selvstendig dispatchbar.
-  diagnose_saltstein:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Installer avhengigheter (hoved + geodata for geo_utils.py)
-        run: |
-          pip install -r requirements.txt
-          pip install -r requirements-geodata.txt
-
-      - name: Kjor diagnose_saltstein_20181218.py
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: python -u diagnose_saltstein_20181218.py | tee diagnose_output.txt
-
-      - name: Skriv resultatet til step summary
-        if: always()
-        run: |
-          {
-            echo "# Diagnose: Saltstein 2018-12-18"
-            echo
-            echo '```'
-            cat diagnose_output.txt 2>/dev/null || echo "(ingen utskrift - se loggen fra forrige steg)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Probe Open-Meteo Marine API mot historiske datoer
         env:
           PROBE_LAT: ${{ inputs.lat }}
