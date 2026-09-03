@@ -177,6 +177,17 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         P.wind_quality(ws, wfrom, spot["facing"]) if wfrom is not None else (0.5, "ukjent")
     )
     q_wind = P.apply_wind_weight(q_wind_raw, spot.get("wind_weight", 1.0))
+    # wind_floor (ordre 2026-09-03, se rapport til bruker): STRUKTURELT
+    # ulik wind_weight over - weight er HELNINGEN (hvor fort kvaliteten
+    # faller med vinkelavviket), floor er et eget GULV (at et kraftig
+    # dyptvannsrev som Saltstein aldri blir helt ubrukelig i paalandsvind,
+    # fordi boelgen jekker opp fra dypt vann uavhengig av vindretning) -
+    # se physics.apply_wind_floor()/apply_wind_weight() sine docstrings
+    # for hvorfor en ren eksponent ikke kan uttrykke begge samtidig.
+    # Standardverdi 0.10, IKKE 0.15 - 0.15 ville bundet utilsiktet for de
+    # fem spottene med wind_weight > 1.0 (0.15**1.25 ≈ 0.107 < 0.15, se
+    # rapport til bruker), og vi endrer én ting av gangen.
+    q_wind = P.apply_wind_floor(q_wind, spot.get("wind_floor", 0.10))
     q_water = P.water_level_quality(
         water_cm if water_cm is not None else spot["water_optimal_cm"],
         spot["water_optimal_cm"],
@@ -254,6 +265,18 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         "model_spread": ens["model_spread"],
         # resultat
         "hs_eff": round(hs, 2),
+        # ordre 2026-09-03 (se rapport til bruker): hs_eff er den RAA hoeyden,
+        # UTEN retningsvekting - se docstringen ved wf over. hs_vektet er
+        # tallet q_size (og dermed scoren) faktisk regner videre paa: hs * wf.
+        # klasse A/B: wf = window_factor(dir_eff, spot) - hs_vektet blir
+        # dermed lavere enn hs_eff naar boelgen kommer fra kanten av vinduet.
+        # klasse C: wf er hardkodet 1.0, IKKE fordi retning er ukjent/uten
+        # betydning, men fordi hs_eff for denne klassen allerede har gaatt
+        # gjennom gate sin retningsfiltrering (directional_energy_fraction()
+        # i propagate_through_gate(), se gate_energy_frac under) - en ny
+        # vekting her ville dobbeltfiltrert. hs_vektet == hs_eff for klasse C
+        # er derfor riktig, ikke en udekket kant-case.
+        "hs_vektet": round(hs * wf, 2),
         "tp_eff": round(tp, 1),
         "dir_eff": round(wdir, 0) if wdir is not None else None,
         # beskrivende, ikke en scorekomponent - se physics.wave_power()
@@ -685,9 +708,9 @@ def notify(spot, window, state, dry_run=False):
 
 
 def gather(spot, mock=None):
-    """Hent alle datakilder for ett spot. Returnerer (wind, waves, water, errors)."""
+    """Hent alle datakilder for ett spot. Returnerer (wind, waves, water, errors, grid)."""
     if mock is not None:
-        return mock["wind"], mock["waves"], mock.get("water", {}), []
+        return mock["wind"], mock["waves"], mock.get("water", {}), [], None
 
     import sources as S
 
@@ -703,12 +726,30 @@ def gather(spot, mock=None):
     if e:
         errors.append(e)
 
-    met_w, e = S.safe(S.met_waves, *wave_pt, label="met_waves")
+    # grid (ordre 2026-09-03, se rapport til bruker): MET sitt svar
+    # (WW3 4 km, primaerkilde for Hs/retning - se merknaden under) forteller
+    # hvilket gridpunkt den faktisk snappet foresporselen til, i
+    # data["geometry"]["coordinates"] - kastet foer bygging. Tre runder
+    # med gjetting rundt Saltstein/Hvasser sitt offshore_point kunne vaert
+    # avgjort direkte med dette i stedet for aa anta. Kun MET, ikke
+    # Open-Meteo (eget, mindre relevant rutenett siden MET vinner naar
+    # begge har data - se "MET er primaerkilde" under) - se grid_avstand_km
+    # i run() sitt resultat-dict for selve bruken.
+    met_grid = {}
+    met_w, e = S.safe(S.met_waves, *wave_pt, grid_out=met_grid, label="met_waves")
     if e:
         errors.append(e)
     om_w, e = S.safe(S.openmeteo_waves, *wave_pt, label="openmeteo")
     if e:
         errors.append(e)
+
+    grid = None
+    if met_grid.get("lat") is not None and met_grid.get("lon") is not None:
+        grid = {
+            "lat": met_grid["lat"],
+            "lon": met_grid["lon"],
+            "avstand_km": round(P.haversine_km(wave_pt[0], wave_pt[1], met_grid["lat"], met_grid["lon"]), 2),
+        }
 
     # MET er primaerkilde for Hs/retning, Open-Meteo fyller inn Tp
     waves = {}
@@ -769,7 +810,7 @@ def gather(spot, mock=None):
     if e:
         errors.append(e)
 
-    return wind, waves, water, errors
+    return wind, waves, water, errors, grid
 
 
 def run(args):
@@ -810,7 +851,7 @@ def run(args):
     regional_wp_by_time = {}
     regional_hs_by_time = {}
     regional_tp_by_time = {}
-    for spot, (wind, waves, water, errors) in zip(spots, gathered):
+    for spot, (wind, waves, water, errors, grid) in zip(spots, gathered):
         if spot["id"] != "saltstein":
             continue
         for ts, w in waves.items():
@@ -825,7 +866,7 @@ def run(args):
     # (se merknaden over regional_wp_by_time)
     regional_wp = []
 
-    for spot, (wind, waves, water, errors) in zip(spots, gathered):
+    for spot, (wind, waves, water, errors, grid) in zip(spots, gathered):
         if not wind:
             results.append({"id": spot["id"], "name": spot["name"],
                             "error": "ingen vinddata", "sources": errors})
@@ -873,6 +914,13 @@ def run(args):
             "kalibrert": spot.get("kalibrert", False),
             "boat": spot.get("boat", False),
             "drive_min": spot.get("drive_min"),
+            # gridpunktet MET faktisk brukte for boelgedataene (offshore_point
+            # for klasse A/B, gate for klasse C - se gather()) og avstanden dit
+            # fra det spurte punktet - ordre 2026-09-03, se rapport til bruker.
+            # None naar MET ikke svarte denne kjoringen.
+            "grid_lat": grid["lat"] if grid else None,
+            "grid_lon": grid["lon"] if grid else None,
+            "grid_avstand_km": grid["avstand_km"] if grid else None,
             "access_warning": spot.get("access_warning"),
             "max_score": max((h["score"] for h in hours), default=0),
             "best_stars": max((h["stars"] or 0 for h in hours), default=0) or None,
@@ -957,7 +1005,7 @@ def run(args):
 
 def print_explain(spot, hours):
     print(f"\n{'='*78}\n{spot['name']}  (klasse {spot['klasse']})\n{'='*78}")
-    keys = ["time", "score", "hs_eff", "tp_eff", "wind_speed", "wind_from",
+    keys = ["time", "score", "hs_eff", "hs_vektet", "tp_eff", "wind_speed", "wind_from",
             "wind_label", "local_hs", "prop_hs", "gate_hs", "gate_energy_frac",
             "local_fetch_km", "local_duration_h", "local_limited_by",
             "q_size", "q_period", "q_wind"]

@@ -47,6 +47,24 @@ def test_gruppehastighet_og_forsinkelse():
     assert approx(P.travel_time_h(33, 8.0), 1.47)
 
 
+def test_haversine_km_null_ved_samme_punkt():
+    assert P.haversine_km(58.93, 9.83, 58.93, 9.83) == 0.0
+
+
+def test_haversine_km_saltstein_offshore_point_til_spot():
+    """Kjent avstand fra tidligere rapport til bruker (regnet med
+    geo_utils sin UTM-projeksjon, se der) - haversine skal matche godt
+    innenfor noen titalls meter paa denne skalaen."""
+    d = P.haversine_km(58.965643, 9.848614, 58.930, 9.830)
+    assert approx(d, 4.11, tol=0.02)
+
+
+def test_haversine_km_symmetrisk():
+    a = P.haversine_km(58.93, 9.83, 59.03, 10.52)
+    b = P.haversine_km(59.03, 10.52, 58.93, 9.83)
+    assert a == pytest.approx(b)
+
+
 def test_retningsfiltrering_slipper_lite_gjennom():
     """S-sektoren opp fjorden skal ta en klar bit, men ikke alt."""
     frac = P.directional_energy_fraction(
@@ -166,6 +184,97 @@ def test_saltstein_trenger_no():
     assert 0.2 < q < 0.5, (q, label)
     # O (90) er cross-offshore og klart bedre
     assert P.wind_quality(8, 90, 225)[0] > q
+
+
+def test_wind_quality_er_glatt_cos_kurve_ikke_botter():
+    """Byttet ut (ordre 2026-09-03, se rapport til bruker) fra fem faste
+    boetter til q = 0.15 + 0.85*(1-cos(d))/2 - denne testen laaser selve
+    formelen, ikke bare grove terskler."""
+    for d in (0, 15, 45, 68.7, 90, 103.6, 135, 165, 180):
+        wind_from = 120 + d  # facing=120, vilkaarlig men entydig d
+        q, _ = P.wind_quality(8, wind_from, 120)
+        expected = 0.15 + 0.85 * (1 - math.cos(math.radians(d))) / 2
+        assert q == pytest.approx(expected), (d, q, expected)
+
+
+def test_wind_quality_ingen_hopp_ved_gamle_botteterskler():
+    """Kjernen i saken som utloeste byttet (Jomfruland, 2026-09-03): 68 og
+    71 grader laa paa hver sin side av 70-graders-terskelen og fikk 0.28
+    mot 0.50 - et sprang stort nok til aa avgjoere rangeringen mellom
+    spots. Sjekker alle fire gamle terskler (40/70/115/150) - differansen
+    over EN grad skal na vaere liten, ikke et sprang."""
+    facing = 120
+    for terskel in (40, 70, 115, 150):
+        q_under, _ = P.wind_quality(8, facing + terskel - 1, facing)
+        q_over, _ = P.wind_quality(8, facing + terskel + 1, facing)
+        assert abs(q_over - q_under) < 0.02, (terskel, q_under, q_over)
+
+
+def test_wind_quality_monotont_voksende_mot_fraland():
+    facing = 225
+    verdier = [P.wind_quality(8, facing + d, facing)[0] for d in (0, 30, 60, 90, 120, 150, 180)]
+    assert verdier == sorted(verdier)
+
+
+def test_wind_label_bruker_samme_terskler_som_foer_kun_navngiving():
+    """_wind_label() er en RENT tekstlig kategorisering (describe.py/
+    loggen) - selve q-verdien er uavhengig av den na, se wind_quality()
+    sin docstring."""
+    assert P._wind_label(0) == "onshore"
+    assert P._wind_label(39.9) == "onshore"
+    assert P._wind_label(40) == "cross-onshore"
+    assert P._wind_label(69.9) == "cross-onshore"
+    assert P._wind_label(70) == "cross-shore"
+    assert P._wind_label(114.9) == "cross-shore"
+    assert P._wind_label(115) == "cross-offshore"
+    assert P._wind_label(149.9) == "cross-offshore"
+    assert P._wind_label(150) == "offshore"
+    assert P._wind_label(180) == "offshore"
+
+
+def test_wind_quality_sterk_fralandsvind_river_opp_ansiktet_uendret():
+    """Tilleggsstraffen for kraftig (naer-)fralandsvind - uendret logikk,
+    virker fortsatt paa det kontinuerlige d-et."""
+    svak, _ = P.wind_quality(10, 225 + 130, 225)  # d=130, under 14 m/s
+    sterk, label = P.wind_quality(20, 225 + 130, 225)  # d=130, over 14 m/s
+    assert sterk < svak
+    assert "kraftig" in label
+
+
+def test_wind_quality_svak_paalandsvind_ikke_kritisk_uendret():
+    hard, _ = P.wind_quality(10, 225, 225)  # d=0, sterk vind
+    svak, label = P.wind_quality(3, 225, 225)  # d=0, svak vind
+    assert svak > hard
+    assert "svak" in label
+
+
+# ------------------------------------------------------------ vindgulv
+
+
+def test_apply_wind_floor_loefter_under_gulvet():
+    assert P.apply_wind_floor(0.20, 0.40) == 0.40
+
+
+def test_apply_wind_floor_roerer_ikke_verdier_over_gulvet():
+    assert P.apply_wind_floor(0.60, 0.40) == 0.60
+
+
+def test_apply_wind_floor_none_er_ingen_gulv():
+    assert P.apply_wind_floor(0.05, None) == 0.05
+
+
+def test_apply_wind_weight_og_apply_wind_floor_er_uavhengige_mekanismer():
+    """Kjernen i skillet (se rapport til bruker, ordre 2026-09-03):
+    apply_wind_weight() er HELNINGEN (paavirker hele kurven, ogsaa
+    mellomliggende verdier), apply_wind_floor() er et GULV (paavirker
+    KUN verdier under grensa). Sjekker at et gulv ikke endrer en verdi
+    som allerede er over det, mens weight endrer den uansett (med mindre
+    weight=1)."""
+    raw = 0.6
+    weighted = P.apply_wind_weight(raw, 0.5)
+    assert weighted != raw  # helningen roerer selv en midt-i-kurven-verdi
+    floored = P.apply_wind_floor(weighted, 0.10)
+    assert floored == weighted  # gulvet (0.10) er under - roerer ikke
 
 
 def test_storrelsesscore_har_hard_nedre_grense():

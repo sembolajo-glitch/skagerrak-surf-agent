@@ -113,8 +113,14 @@ def describe(spot, window, hours):
     ledd = {"størrelse": peak.get("q_size", 0), "periode": peak.get("q_period", 0),
             "vind": peak.get("q_wind", 0), "vannstand": peak.get("q_water", 0)}
     svakest = min(ledd.items(), key=lambda x: x[1])
+    # ordre 2026-09-03 (se rapport til bruker): hs_vektet, IKKE hs_eff - dette
+    # er tallet q_size faktisk regnet paa (raa hoeyde * retningsvekting, se
+    # agent.score_hour()). hs_eff alene ga et tall som ikke stemte med
+    # stjernene under (Jomfruland viste 1,5 m i teksten mens modellen scoret
+    # paa 1,2 m). Fallback til hs_eff kun for hours-dicter fra foer feltet
+    # fantes.
     out.append({"ikon": "result", "tekst":
-        f"Sum: {peak.get('hs_eff', 0):.1f} m @ {peak.get('tp_eff', 0):.1f} s gir "
+        f"Sum: {peak.get('hs_vektet', peak.get('hs_eff', 0)):.1f} m @ {peak.get('tp_eff', 0):.1f} s gir "
         f"{peak.get('stars')}/10 med {peak['p_surf']:.0f} % sannsynlighet "
         f"(spenn {peak.get('stars_p10')}\u2013{peak.get('stars_p90')} stjerner). "
         f"Svakeste ledd er {svakest[0]} ({svakest[1]:.2f})."})

@@ -92,7 +92,7 @@ Prompt du kan lime rett inn:
 >
 > **Vinduer:** under hvert kort, én rad per element i `windows` med `start`–`end` i lokal tid (dataene er UTC), `hours` varighet, `stars` med `stars_p10`–`stars_p90` som spennbånd, `p_surf` og `p_good` som to prosenttall, og hele `why`-strengen som forklaringstekst.
 >
-> **Detaljvisning ved klikk:** 72-timers diagram over `hours[]` med `stars` som linje, `p_surf` som skyggeområde bak, og `wind_speed` på sekundærakse. Under: tabell med `q_size`, `q_period`, `q_wind`, `q_water` per time, så man ser hvilket ledd som drar ned. For klasse C, vis også `local_hs` mot `prop_hs` som stablet areal — det viser om bølgen er lokal vindsjø eller swell utenfra. Vis `params` i en utslåbar boks nederst, så man ser hvilke terskler som faktisk ble brukt.
+> **Detaljvisning ved klikk:** 72-timers diagram over `hours[]` med `stars` som linje, `p_surf` som skyggeområde bak, og `wind_speed` på sekundærakse. Under: tabell med `hs_vektet`, `q_size`, `q_period`, `q_wind`, `q_water` per time, så man ser hvilket ledd som drar ned. Bruk `hs_vektet`, ikke `hs_eff` — det er tallet `q_size` faktisk er regnet fra (`hs_eff` × retningsvekting, 1:1 for klasse C siden gaten alt har retningsfiltrert), `hs_eff` alene er den raa hoeyden foer vekting. For klasse C, vis også `local_hs` mot `prop_hs` som stablet areal — det viser om bølgen er lokal vindsjø eller swell utenfra. Vis `params` i en utslåbar boks nederst, så man ser hvilke terskler som faktisk ble brukt.
 >
 > **Varselsbanner** øverst hvis `mode` er `"shadow"` eller `"mock"`: «Skyggemodus — ingen varsler sendes».
 

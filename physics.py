@@ -25,6 +25,28 @@ def ang_diff(a, b):
     return abs(((a - b + 180) % 360) - 180)
 
 
+EARTH_RADIUS_KM = 6371.0
+
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    """
+    Storsirkelavstand i km, ingen projeksjonsavhengighet (pyproj/shapely) -
+    til bruk i agent.py sin LETTE kjoretidsbane (forecast.yml), som
+    bevisst ikke drar inn geo_utils.py sine tyngre avhengigheter (se
+    requirements-geodata.txt sin topptekst: "Kun for fetch_geodata.py,
+    build_fetch.py og validate_geodata.py - engangs-/offline-skript, IKKE
+    brukt av forecast.yml"). Presist nok for avstander paa noen faa km til
+    noen hundre km (gridpunkt-avstander, offshore_point-sjekker) - IKKE
+    ment for centimeterpresisjonen UTM-projeksjonen i geo_utils.py gir til
+    straaleskyting mot kystkontur.
+    """
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
 def in_window(direction, window):
     """Er retningen innenfor [lo, hi]? Haandterer wrap over 0."""
     lo, hi = window
@@ -353,26 +375,57 @@ def swell_fraction(swell_hs, windsea_hs, hs_eff):
 # ------------------------------------------------------------- vindkvalitet
 
 
+def _wind_label(d):
+    """Menneskelesbar kategori for et vinkelavvik - KUN for tekst/visning
+    (describe.py sine punkter, wind_label i loggen) - se wind_quality() sin
+    docstring for hvorfor selve q-VERDIEN ikke lenger bruker disse
+    terskelen. Terskelverdiene (40/70/115/150) er bevisst de samme som de
+    gamle bøttegrensene var, ren kontinuitet i navngivningen, ingen
+    beregning avhenger av dem lenger."""
+    if d >= 150:
+        return "offshore"
+    if d >= 115:
+        return "cross-offshore"
+    if d >= 70:
+        return "cross-shore"
+    if d >= 40:
+        return "cross-onshore"
+    return "onshore"
+
+
 def wind_quality(wind_speed, wind_from, facing):
     """
     0-1. facing = retningen spotten ser mot (= paalandsvind).
     d = 0   -> rett paaland (daarlig)
     d = 180 -> rett fraland (bra)
+
+    Byttet ut (ordre 2026-09-03, se rapport til bruker) fra fem faste
+    bøtter (harde terskler ved 40/70/115/150 grader) til en glatt
+    cos-kurve: q = 0.15 + 0.85*(1-cos(d))/2 - 0.15 ved d=0 (rett paaland),
+    0.5 ved d=90, 1.0 ved d=180 (rett fraland), UTEN hopp ved noen vinkel.
+    Bøttene hadde et reelt, dokumentert problem: to naesten identiske
+    vinkelavvik paa hver sin side av en terskel (68 mot 71 grader) kunne
+    faa 0.28 mot 0.50 - et sprang stort nok til aa avgjore rangeringen
+    mellom spots i UI-en (se rapport til bruker, Jomfruland-saken
+    2026-09-03: 68.7 grader falt saa vidt i "cross-onshore" i stedet for
+    "cross-shore"). Vilkaarlige kanter er verre enn ingen kanter.
+
+    `_wind_label()` gir fortsatt en av de fem gamle kategorinavnene for
+    TEKST/visning (samme terskler som foer, kun navngiving - se der) -
+    selve q-verdien er uavhengig av den kategoriseringen na.
+
+    Simulert mot 47 446 historiske rader foer bygging: selve kurvebyttet
+    (uten wind_floor) endret 6.2 % av radene, median +0.8-0.9 poeng (0-100).
+    Hjelper spot med MODERATE vinkelavvik mest (der bøttegrensene traff
+    tilfeldig), naesten ingenting naer d=0 (cosinus er flat der) - IKKE
+    en fiks for et spot som staar naer rett paaland, se apply_wind_floor()
+    for den saken.
     """
     if wind_speed < 2.0:
         return 1.0, "glassy"
     d = ang_diff(wind_from, facing)
-
-    if d >= 150:
-        q, label = 1.0, "offshore"
-    elif d >= 115:
-        q, label = 0.85, "cross-offshore"
-    elif d >= 70:
-        q, label = 0.50, "cross-shore"
-    elif d >= 40:
-        q, label = 0.28, "cross-onshore"
-    else:
-        q, label = 0.15, "onshore"
+    q = 0.15 + 0.85 * (1.0 - math.cos(math.radians(d))) / 2.0
+    label = _wind_label(d)
 
     # sterk fralandsvind river opp ansiktet
     if d >= 115 and wind_speed > 14:
@@ -388,7 +441,15 @@ def wind_quality(wind_speed, wind_from, facing):
 
 def apply_wind_weight(q_wind, weight):
     """
-    Hvor hardt daarlig vind skal straffes, per spot.
+    Hvor hardt daarlig vind skal straffes, per spot - HELNINGEN, altsaa hvor
+    fort kvaliteten faller naar vinkelavviket oker. IKKE samme egenskap som
+    et gulv (se apply_wind_floor()) - en ren eksponent gaar alltid gjennom
+    de samme to ankerpunktene (verste og beste tilfelle er uendret av
+    weight), og kan bare loefte verste-tilfelle ved aa flate ut HELE kurven
+    i samme slag. Se rapport til bruker (2026-09-03) for hvorfor det ikke
+    er nok til aa uttrykke "et kraftig dyptvannsrev blir aldri helt
+    ubrukelig i paalandsvind" alene.
+
     weight < 1  -> spotten taaler chop (kraftig dyptvannsrev, f.eks. Saltstein)
     weight = 1  -> noytral
     weight > 1  -> vindfolsom (slak sandstrand som blir soppel med en gang)
@@ -396,6 +457,25 @@ def apply_wind_weight(q_wind, weight):
     if weight is None or weight == 1.0:
         return q_wind
     return max(0.0, min(1.0, q_wind ** weight))
+
+
+def apply_wind_floor(q_wind, floor):
+    """
+    GULVET - strukturelt ulik apply_wind_weight() (helningen). Et gulv
+    uttrykker at et kraftig dyptvannsrev (Saltstein: "surfes rutinemessig
+    i onshore chop", boelgen jekker opp fra dypt vann uavhengig av
+    vindretning) aldri blir helt ubrukelig i paalandsvind - en egen,
+    uavhengig minsteverdi, ikke en justering av helningen paa resten av
+    kurven. Se rapport til bruker (2026-09-03) for hvorfor en ren
+    eksponent (weight) ikke kan uttrykke dette selv: weight<1 loefter HELE
+    kurven, og et lite nok weight for aa naa et oensket gulv ved d=0 ville
+    ogsaa flate ut mellomliggende vinkelavvik spotten faktisk boer skille
+    mellom - floor beroerer KUN verste-tilfelle-enden.
+
+    floor=None behandles som 0.0 (ingen gulv - historisk oppforsel for
+    spots uten feltet, se spot.get("wind_floor", 0.10) hos kallerne).
+    """
+    return max(floor or 0.0, q_wind)
 
 
 def size_quality(hs, min_hs, ideal_hs, max_hs):

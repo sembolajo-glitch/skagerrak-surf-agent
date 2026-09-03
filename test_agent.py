@@ -367,6 +367,40 @@ def test_score_hour_retning_naer_180_grader_fra_senter_gir_null_q_size():
     assert h["q_size"] == 0.0
 
 
+# ----------------------------------------------------------- wind_floor
+
+
+def test_score_hour_wind_floor_binder_for_saltstein_i_dodrett_paalandsvind():
+    """spots.yaml setter wind_floor: 0.40 for saltstein (ordre 2026-09-03,
+    se rapport til bruker - dyptvannsrev, jekker opp uavhengig av
+    vindretning). Dodrett paalandsvind (d=0) gir raate 0.15, vektet
+    (weight=0.55) rundt 0.35 - UNDER gulvet paa 0.40, som derfor skal
+    bestemme q_wind i stedet for kurven."""
+    spot = _saltstein()
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=215, hs=2.0)
+    wind = dict(wind, wind_speed=10.0, wind_from_direction=float(spot["facing"]))  # d=0
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    vektet_uten_gulv = 0.15 ** spot["wind_weight"]
+    assert vektet_uten_gulv < spot["wind_floor"]  # forutsetning for at gulvet faktisk binder her
+    assert h["q_wind"] == pytest.approx(spot["wind_floor"])
+
+
+def test_score_hour_wind_floor_default_binder_ikke_for_spot_uten_override():
+    """Spot uten eksplisitt wind_floor bruker standardverdien 0.10 (se
+    defaults i spots.yaml) - langt under det en normal vindvekting
+    normalt gir, saa gulvet skal IKKE paavirke resultatet her (kjernen i
+    "ingenting endres for spots uten feltet")."""
+    spots, _ = A.load_spots()
+    spot = next(s for s in spots if s["id"] == "svenner")
+    assert spot["wind_floor"] == 0.10  # standardverdien fra defaults - ingen per-spot-override
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=190, hs=2.0)
+    wind = dict(wind, wind_speed=10.0, wind_from_direction=float(spot["facing"]))  # d=0
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    vektet_uten_gulv = 0.15 ** spot["wind_weight"]
+    assert vektet_uten_gulv > spot.get("wind_floor", 0.10)  # gulvet binder ikke
+    assert h["q_wind"] == pytest.approx(vektet_uten_gulv, abs=0.001)  # h["q_wind"] er avrundet til 3 desimaler
+
+
 # --------------------------------------- per-spot detaljfil (out/spots/<id>.json)
 
 
@@ -494,6 +528,86 @@ def test_append_shadow_log_tom_eksisterende_fil_regnes_som_ny(tmp_path, monkeypa
     assert len(lines) == 2
 
 
+# --------------------------------------------------------------- gather() grid
+
+
+def _fake_met_waves_med_grid(grid_lat, grid_lon):
+    """Fake sources.met_waves() som fyller grid_out slik det ekte svaret
+    ville gjort (se sources.met_waves() sin docstring) - kalt av gather()
+    med posisjonelle (lat, lon) og grid_out som keyword."""
+    def fn(lat, lon, grid_out=None):
+        if grid_out is not None:
+            grid_out["lat"] = grid_lat
+            grid_out["lon"] = grid_lon
+        return {}
+    return fn
+
+
+def test_gather_regner_grid_avstand_km_fra_faktisk_returnert_gridpunkt(monkeypatch):
+    """ordre 2026-09-03 (se rapport til bruker): gather() skal bruke det
+    FAKTISKE gridpunktet MET returnerer (via sources.met_waves() sin
+    grid_out) til aa regne avstanden fra det spurte punktet
+    (offshore_point for klasse A/B) - ikke gjette."""
+    import sources
+
+    spot = dict(_saltstein())
+    spot["offshore_point"] = [58.930, 9.830]
+    grid_lat, grid_lon = 58.95, 9.85
+
+    monkeypatch.setattr(sources, "met_waves", _fake_met_waves_med_grid(grid_lat, grid_lon))
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    wind, waves, water, errors, grid = A.gather(spot)
+
+    assert grid["lat"] == grid_lat
+    assert grid["lon"] == grid_lon
+    expected_km = A.P.haversine_km(58.930, 9.830, grid_lat, grid_lon)
+    assert grid["avstand_km"] == round(expected_km, 2)
+
+
+def test_gather_grid_none_naar_met_ikke_svarer(monkeypatch):
+    """MET feiler (eller returnerer uten geometry) denne kjoeringen -
+    grid skal vaere None, ikke krasje eller late som et gridpunkt fantes."""
+    import sources
+
+    spot = dict(_saltstein())
+    monkeypatch.setattr(sources, "met_waves", lambda lat, lon, grid_out=None: {})
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    _, _, _, _, grid = A.gather(spot)
+    assert grid is None
+
+
+def test_gather_bruker_gate_koordinat_for_klasse_c(monkeypatch):
+    """Klasse C har ikke offshore_point - grid_avstand_km skal regnes fra
+    gate sitt koordinat i stedet (samme punkt gather() faktisk spoerr
+    MET om for klasse C, se der)."""
+    import sources
+
+    spot = dict(_slagen())
+    grid_lat, grid_lon = spot["gate"]["lat"] + 0.02, spot["gate"]["lon"] + 0.02
+
+    monkeypatch.setattr(sources, "met_waves", _fake_met_waves_med_grid(grid_lat, grid_lon))
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    _, _, _, _, grid = A.gather(spot)
+    expected_km = A.P.haversine_km(spot["gate"]["lat"], spot["gate"]["lon"], grid_lat, grid_lon)
+    assert grid["avstand_km"] == round(expected_km, 2)
+
+
+def test_gather_mock_gir_grid_none():
+    mock = {"wind": {}, "waves": {}, "water": {}}
+    _, _, _, errors, grid = A.gather(_saltstein(), mock=mock)
+    assert grid is None
+    assert errors == []
+
+
 # --------------------------------------------------------------- model_rev
 
 
@@ -591,3 +705,73 @@ def test_append_shadow_log_skriver_model_rev_per_rad(tmp_path, monkeypatch):
     with (tmp_path / "shadow.csv").open() as f:
         rows = list(_csv.DictReader(f))
     assert rows[0]["model_rev"] == "rowtest01234"
+
+
+# --------------------------------------------------------------- hs_vektet
+#
+# ordre 2026-09-03 (se rapport til bruker): hs_vektet mangler - tallet
+# q_size faktisk regner paa (hs_eff * wf), i motsetning til hs_eff som er
+# raatallet UTEN retningsvekting. Symptomet var at "tabellen" (se
+# describe.py sin "Sum:"-linje og agent.py sin print_explain()) viste
+# hs_eff, ikke tallet scoren faktisk brukte.
+
+
+def test_hs_vektet_er_hs_eff_ganger_window_factor_for_klasse_ab():
+    """Klasse A/B, retning et stykke fra vindussenteret - wf skal da vaere
+    < 1.0 (cos^(2s) avtar monotont, se physics.window_factor()), og
+    hs_vektet skal vaere NOYAKTIG hs_eff * wf, ikke hs_eff selv."""
+    spot = _saltstein()  # swell_window (170, 260), senter 215
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=240, hs=2.0)
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+
+    wf = A.P.window_factor(computed["dir_eff"], spot)
+    assert 0.0 < wf < 1.0, wf  # forutsetning for at testen skiller de to feltene
+    assert h["hs_vektet"] == round(h["hs_eff"] * wf, 2)
+    assert h["hs_vektet"] < h["hs_eff"]
+
+
+def test_hs_vektet_hoyere_ved_vindussenter_enn_naer_kanten():
+    """wf (og dermed hs_vektet, siden hs_eff er lik i begge tilfeller) skal
+    vaere hoyest ved vindussenteret - cos^(2s) er hoyest praesist der og
+    avtar monotont mot kanten (se physics.window_factor()). IKKE wf ~ 1.0
+    ved senteret - directional_energy_fraction() returnerer andelen av en
+    spredt energifordeling som havner innenfor sektoren, som er < 1.0 selv
+    ved perfekt treff naar sektoren er smalere enn hele halvkula."""
+    spot = _saltstein()  # swell_window (170, 260), senter 215
+    ts_c, wind_c, waves_c, computed_c = _computed_med_retning(spot, wave_dir=215, hs=2.0)
+    h_senter = A.score_hour(spot, ts_c, wind_c, waves_c, None, computed_c)
+
+    ts_k, wind_k, waves_k, computed_k = _computed_med_retning(spot, wave_dir=250, hs=2.0)
+    h_kant = A.score_hour(spot, ts_k, wind_k, waves_k, None, computed_k)
+
+    assert h_senter["hs_eff"] == h_kant["hs_eff"] == 2.0
+    assert h_senter["hs_vektet"] > h_kant["hs_vektet"]
+
+
+def test_hs_vektet_lik_hs_eff_for_klasse_c_uansett_retning():
+    """Klasse C: wf er hardkodet 1.0 fordi hs_eff for denne klassen ALLEREDE
+    har gaatt gjennom gate sin retningsfiltrering (directional_energy_fraction()
+    i propagate_through_gate()) - en ny vekting her ville dobbeltfiltrert.
+    hs_vektet == hs_eff skal derfor holde uansett dir_eff, samme oppsett som
+    test_window_ok_er_none_for_klasse_c_uansett_retning()."""
+    spot = _slagen()  # swell_window [160, 200]
+    ts = "2026-11-14T09:00:00+00:00"
+    base_computed = {
+        "source": "local+gate", "hs_eff": 2.0, "tp_eff": 5.0,
+        "local_hs": 1.0, "local_tp": 6.0, "prop_hs": 1.0, "prop_tp": 6.0,
+        "swell_hs": 1.0, "windsea_hs": 1.0,
+        "local_wind_mean": 8.0, "local_fetch_km": 20.0, "local_duration_h": 4,
+        "local_dir": 180.0, "gate_hs": 0.0, "gate_tp": 0.0, "gate_dir": None,
+    }
+    for dir_eff in (180.0, 30.0):  # innenfor vinduet, og klart utenfor det
+        computed = dict(base_computed, dir_eff=dir_eff)
+        h = A.score_hour(spot, ts, {"wind_speed": 1.0}, {}, None, computed, regional_wp=10.0)
+        assert h["hs_vektet"] == h["hs_eff"], (dir_eff, h["hs_vektet"], h["hs_eff"])
+
+
+def test_hs_vektet_i_shadow_fields():
+    """hs_vektet skal vaere en del av shadow_schema.FIELDS, bakerst (se
+    APPEND-ONLY-kontrakten i shadow_schema.py) - ellers logges ikke feltet
+    til out/shadow.csv i det hele tatt."""
+    import shadow_schema
+    assert shadow_schema.FIELDS[-1] == "hs_vektet"
