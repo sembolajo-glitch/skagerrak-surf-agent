@@ -696,9 +696,9 @@ def notify(spot, window, state, dry_run=False):
 
 
 def gather(spot, mock=None):
-    """Hent alle datakilder for ett spot. Returnerer (wind, waves, water, errors)."""
+    """Hent alle datakilder for ett spot. Returnerer (wind, waves, water, errors, grid)."""
     if mock is not None:
-        return mock["wind"], mock["waves"], mock.get("water", {}), []
+        return mock["wind"], mock["waves"], mock.get("water", {}), [], None
 
     import sources as S
 
@@ -714,12 +714,30 @@ def gather(spot, mock=None):
     if e:
         errors.append(e)
 
-    met_w, e = S.safe(S.met_waves, *wave_pt, label="met_waves")
+    # grid (ordre 2026-09-03, se rapport til bruker): MET sitt svar
+    # (WW3 4 km, primaerkilde for Hs/retning - se merknaden under) forteller
+    # hvilket gridpunkt den faktisk snappet foresporselen til, i
+    # data["geometry"]["coordinates"] - kastet foer bygging. Tre runder
+    # med gjetting rundt Saltstein/Hvasser sitt offshore_point kunne vaert
+    # avgjort direkte med dette i stedet for aa anta. Kun MET, ikke
+    # Open-Meteo (eget, mindre relevant rutenett siden MET vinner naar
+    # begge har data - se "MET er primaerkilde" under) - se grid_avstand_km
+    # i run() sitt resultat-dict for selve bruken.
+    met_grid = {}
+    met_w, e = S.safe(S.met_waves, *wave_pt, grid_out=met_grid, label="met_waves")
     if e:
         errors.append(e)
     om_w, e = S.safe(S.openmeteo_waves, *wave_pt, label="openmeteo")
     if e:
         errors.append(e)
+
+    grid = None
+    if met_grid.get("lat") is not None and met_grid.get("lon") is not None:
+        grid = {
+            "lat": met_grid["lat"],
+            "lon": met_grid["lon"],
+            "avstand_km": round(P.haversine_km(wave_pt[0], wave_pt[1], met_grid["lat"], met_grid["lon"]), 2),
+        }
 
     # MET er primaerkilde for Hs/retning, Open-Meteo fyller inn Tp
     waves = {}
@@ -780,7 +798,7 @@ def gather(spot, mock=None):
     if e:
         errors.append(e)
 
-    return wind, waves, water, errors
+    return wind, waves, water, errors, grid
 
 
 def run(args):
@@ -821,7 +839,7 @@ def run(args):
     regional_wp_by_time = {}
     regional_hs_by_time = {}
     regional_tp_by_time = {}
-    for spot, (wind, waves, water, errors) in zip(spots, gathered):
+    for spot, (wind, waves, water, errors, grid) in zip(spots, gathered):
         if spot["id"] != "saltstein":
             continue
         for ts, w in waves.items():
@@ -836,7 +854,7 @@ def run(args):
     # (se merknaden over regional_wp_by_time)
     regional_wp = []
 
-    for spot, (wind, waves, water, errors) in zip(spots, gathered):
+    for spot, (wind, waves, water, errors, grid) in zip(spots, gathered):
         if not wind:
             results.append({"id": spot["id"], "name": spot["name"],
                             "error": "ingen vinddata", "sources": errors})
@@ -884,6 +902,13 @@ def run(args):
             "kalibrert": spot.get("kalibrert", False),
             "boat": spot.get("boat", False),
             "drive_min": spot.get("drive_min"),
+            # gridpunktet MET faktisk brukte for boelgedataene (offshore_point
+            # for klasse A/B, gate for klasse C - se gather()) og avstanden dit
+            # fra det spurte punktet - ordre 2026-09-03, se rapport til bruker.
+            # None naar MET ikke svarte denne kjoringen.
+            "grid_lat": grid["lat"] if grid else None,
+            "grid_lon": grid["lon"] if grid else None,
+            "grid_avstand_km": grid["avstand_km"] if grid else None,
             "access_warning": spot.get("access_warning"),
             "max_score": max((h["score"] for h in hours), default=0),
             "best_stars": max((h["stars"] or 0 for h in hours), default=0) or None,

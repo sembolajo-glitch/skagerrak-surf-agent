@@ -32,24 +32,40 @@ Per spot, ca. 4x4 km rundt spotkoordinatet:
     ene tabellen, ikke sammenligne absolutt fetch mellom spots
   - tekstboks med klasse, min/ideal/max_hs, wind_weight, transmission/
     sector_half_width (kun klasse C, fra gate), skjaergaard_indeks,
-    regional_wp_min/max, kalibrert, og de tre dybdetallene som ren tekst
-    (i tillegg til krysset paa selve kartet - et dybdemaal langt utenfor
-    4x4 km-vinduet ville ellers vaert usynlig, men skal fortsatt kunne
-    leses)
+    regional_wp_min/max, kalibrert, de tre dybdetallene, og MET sitt
+    faktiske gridpunkt (grid_lat/grid_lon/grid_avstand_km, se under) -
+    alt som ren tekst (i tillegg til krysset paa selve kartet for
+    dybdetallene - et dybdemaal langt utenfor 4x4 km-vinduet ville
+    ellers vaert usynlig, men skal fortsatt kunne leses)
 
-Fem automatiske sjekker (se compute_flags()), listet i roedt i tekstboksen
+Syv automatiske sjekker (se compute_flags()), listet i roedt i tekstboksen
 og speilet i fargen paa det aktuelle elementet paa selve kartet:
   1. peiling til offshore_point utenfor swell_window
   2. over 45 graders avvik mellom facing og dybdepeilingen
   3. dybdeprofil der d50 er naermere enn d20
   4. offshore_point naermere enn 500 m eller lenger enn 8 km unna
   5. spot-koordinat naermere enn 50 m fra kystkontur (sannsynligvis paa land)
+  6. MET sitt faktiske gridpunkt (fra forecast.json, se load_grid_info())
+     ligger mer enn 5 km fra det spurte punktet
+  7. offshore_point sitt gridpunkt ligger under 2 km fra spot-koordinatet -
+     sannsynligvis samme gridcelle som spottet selv ville truffet, altsaa
+     ingen reell funksjon (ordre 2026-09-03, se rapport til bruker: tre
+     runder med gjetting om nettopp dette rundt Saltstein/Hvasser sitt
+     offshore_point kunne vaert avgjort direkte med dette gridpunktet)
+
+Sjekk 6/7 leser grid_lat/grid_lon/grid_avstand_km fra en tidligere
+forecast.json (agent.py sin gather() logger dem na, fra MET sitt eget
+API-svar - se sources.met_waves()) - IKKE regnet ut her. Uten en
+forecast.json aa lese (se --forecast-json) hoppes disse to sjekkene
+bare over, resten av kartet tegnes som vanlig.
 
     python diagnose_spot.py
-    python diagnose_spot.py --data-dir data --spots-yaml spots.yaml --out-dir out/diagnose
+    python diagnose_spot.py --data-dir data --spots-yaml spots.yaml --out-dir out/diagnose \\
+        --forecast-json out/forecast.json
 """
 
 import argparse
+import json
 import math
 import sys
 from pathlib import Path
@@ -66,6 +82,7 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SPOTS_YAML = ROOT / "spots.yaml"
 DEFAULT_OUT_DIR = ROOT / "out" / "diagnose"
+DEFAULT_FORECAST_JSON = ROOT / "out" / "forecast.json"
 
 HALF_EXTENT_KM = 2.0          # ~4x4 km synlig vindu rundt hvert spot
 KM_PER_DEG_LAT = 111.32       # grov, jevnt over hele omraadet (9.3-11.2 O, 58.8-59.4 N)
@@ -197,11 +214,29 @@ def depth_search_cap_km(lon, lat, bearing, edge_tree, edge_lines, kyst_tree_utm,
 # --------------------------------------------------------------- flagg
 
 
-def compute_flags(spot, offshore_bearing, depth_bearing, offshore_dist_km, coast_dist_m):
-    """De fem automatiske sjekkene (se modulens docstring) - ren logikk,
+GRID_AVSTAND_MAX_KM = 5.0
+
+# MET/WW3 sin oppgitte opplosning er ~4 km (se sources.met_waves() sin
+# docstring) - halve cellebredden er en rimelig terskel for "det faktiske
+# gridpunktet ligger sannsynligvis i SAMME celle spottets eget koordinat
+# ville truffet". Se render_spot_body() for hvordan grid_spot_dist_km
+# regnes (fra det EKTE returnerte gridpunktet, ikke et gjettet snap).
+GRID_SAME_CELL_KM = 2.0
+
+
+def compute_flags(spot, offshore_bearing, depth_bearing, offshore_dist_km, coast_dist_m,
+                   grid_avstand_km=None, grid_spot_dist_km=None):
+    """De syv automatiske sjekkene (se modulens docstring) - ren logikk,
     ingen SVG/geometrifiler involvert, saa den kan testes isolert. Peilinger
     og avstander regnes av kalleren (render_spot_body()) fra de samme
-    geo_utils-funksjonene build_fetch.py selv bruker."""
+    geo_utils-funksjonene build_fetch.py selv bruker.
+
+    grid_avstand_km/grid_spot_dist_km (ordre 2026-09-03, se rapport til
+    bruker) kommer fra forecast.json, IKKE fra geodataene her - se
+    load_grid_info() og main() for hvordan de leses inn. None naar
+    forecast.json mangler eller ikke har data for dette spotet (MET
+    svarte ikke den kjoringen) - begge sjekkene hoppes da over, i stedet
+    for aa gjette."""
     flags = []
     window = tuple(spot["swell_window"])
     if offshore_bearing is not None and not P.in_window(offshore_bearing, window):
@@ -223,6 +258,12 @@ def compute_flags(spot, offshore_bearing, depth_bearing, offshore_dist_km, coast
             flags.append(f"offshore_point {offshore_dist_km:.1f} km unna (over 8 km)")
     if coast_dist_m is not None and coast_dist_m < 50:
         flags.append(f"spot-koordinat kun {coast_dist_m:.0f} m fra kystkontur - sannsynligvis paa land")
+    if grid_avstand_km is not None and grid_avstand_km > GRID_AVSTAND_MAX_KM:
+        flags.append(f"MET sitt gridpunkt ligger {grid_avstand_km:.1f} km fra det spurte "
+                      f"punktet (over {GRID_AVSTAND_MAX_KM:.0f} km)")
+    if grid_spot_dist_km is not None and grid_spot_dist_km < GRID_SAME_CELL_KM:
+        flags.append(f"offshore_point sitt gridpunkt er kun {grid_spot_dist_km:.1f} km fra "
+                      f"spot-koordinatet - sannsynligvis samme gridcelle, ingen funksjon")
     return flags
 
 
@@ -371,7 +412,20 @@ def render_spot_body(spot, ctx):
     coast_dist_km = G.nearest_distance_km(lon0, lat0, ctx["kyst_tree_utm"], ctx["kyst_lines_utm"])
     coast_dist_m = coast_dist_km * 1000.0 if coast_dist_km is not None else None
 
-    flags = compute_flags(spot, offshore_bearing, depth_bearing, offshore_dist_km, coast_dist_m)
+    # gridcelle (ordre 2026-09-03, se rapport til bruker) - fra forecast.json,
+    # se load_grid_info()/main(). grid_spot_dist_km regnes KUN for spot MED
+    # offshore_point (klasse C sitt wave_pt er gate, ikke ment aa vaere
+    # "samme som spottet" i utgangspunktet, saa sjekken gir ikke mening der).
+    grid = ctx.get("grid_by_id", {}).get(spot["id"])
+    grid_avstand_km = grid.get("grid_avstand_km") if grid else None
+    grid_lat = grid.get("grid_lat") if grid else None
+    grid_lon = grid.get("grid_lon") if grid else None
+    grid_spot_dist_km = None
+    if offshore and grid_lat is not None and grid_lon is not None:
+        grid_spot_dist_km = _utm_dist_km(lon0, lat0, grid_lon, grid_lat)
+
+    flags = compute_flags(spot, offshore_bearing, depth_bearing, offshore_dist_km, coast_dist_m,
+                           grid_avstand_km=grid_avstand_km, grid_spot_dist_km=grid_spot_dist_km)
     flag_cls = "flag" if flags else ""
 
     # -- swell_window-vifte
@@ -455,7 +509,7 @@ def render_spot_body(spot, ctx):
     # -- tittel + tekstboks
     title_txt = _esc(f'{spot.get("name", spot["id"])} ({spot["id"]})')
     parts.append(f'<text x="{MARGIN_PX}" y="24" class="title">{title_txt}</text>')
-    parts.append(_info_box_svg(spot, flags))
+    parts.append(_info_box_svg(spot, flags, grid_lat, grid_lon, grid_avstand_km))
 
     return "".join(parts), flags
 
@@ -464,7 +518,7 @@ def _fmt(v, unit="", digits=1):
     return "-" if v is None else f"{v:.{digits}f}{unit}"
 
 
-def _info_box_svg(spot, flags):
+def _info_box_svg(spot, flags, grid_lat=None, grid_lon=None, grid_avstand_km=None):
     klasse = spot.get("klasse", "?")
     gate = spot.get("gate")
     lines = [
@@ -483,6 +537,13 @@ def _info_box_svg(spot, flags):
     lines.append('dybde: ' + '  '.join(
         f'{t}m {_fmt(spot.get(f"dybde_{t}m_km"), digits=2)} ({spot.get(f"dybde_{t}m_status", "?")})'
         for t in (20, 30, 50)))
+    # MET-gridpunkt (ordre 2026-09-03, se rapport til bruker) - fra siste
+    # forecast.json paa data-grenen, IKKE regnet ut her (se load_grid_info()).
+    # "ukjent" naar forecast.json manglet/ikke hadde data for dette spotet -
+    # ikke tolket som 0 km unna.
+    grid_txt = ("ukjent (forecast.json mangler)" if grid_lat is None
+                else f'{grid_lat:.4f},{grid_lon:.4f} ({_fmt(grid_avstand_km, " km")} fra spurt punkt)')
+    lines.append(f'MET-grid: {grid_txt}')
 
     box_w = 320
     line_h = 15
@@ -560,6 +621,39 @@ def load_spots(spots_yaml):
     return spots
 
 
+def load_grid_info(forecast_json):
+    """{spot_id: {"grid_lat":..., "grid_lon":..., "grid_avstand_km":...}}
+    fra en tidligere forecast.json (ordre 2026-09-03, se rapport til
+    bruker) - IKKE regnet ut her, kun lest inn. Tolerant: manglende fil,
+    ugyldig JSON, eller et spot uten feltene (MET svarte ikke den
+    kjoringen - agent.py sin gather() setter da grid_lat/grid_lon/
+    grid_avstand_km til None, se der) gir tomt/manglende oppslag i
+    stedet for en feil - de to gridcelle-flaggene i compute_flags() blir
+    da bare hoppet over for det spotet, se ogsaa .github/workflows/
+    geodata.yml sitt "Hent siste forecast.json"-steg (tolerant paa
+    samme maate)."""
+    path = Path(forecast_json)
+    if not path.exists():
+        log(f"  ingen forecast.json funnet ({path}) - hopper over gridcelle-flaggene")
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        log(f"  klarte ikke lese {path} ({exc}) - hopper over gridcelle-flaggene")
+        return {}
+    out = {}
+    for s in payload.get("spots", []):
+        sid = s.get("id")
+        if sid and s.get("grid_lat") is not None and s.get("grid_lon") is not None:
+            out[sid] = {
+                "grid_lat": s["grid_lat"],
+                "grid_lon": s["grid_lon"],
+                "grid_avstand_km": s.get("grid_avstand_km"),
+            }
+    log(f"  {len(out)}/{len(payload.get('spots', []))} spot har gridpunkt i {path}")
+    return out
+
+
 def build_context(data_dir):
     kyst_path = Path(data_dir) / "kystkontur.geojson"
     dybde_path = Path(data_dir) / "dybdekurve.geojson"
@@ -603,10 +697,14 @@ def main():
     ap.add_argument("--data-dir", default=str(DATA_DIR))
     ap.add_argument("--spots-yaml", default=str(SPOTS_YAML))
     ap.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
+    ap.add_argument("--forecast-json", default=str(DEFAULT_FORECAST_JSON),
+                     help="forrige forecast.json, kun for grid_lat/grid_lon/grid_avstand_km "
+                          "(ordre 2026-09-03) - tolerant hvis den mangler, se load_grid_info()")
     args = ap.parse_args()
 
     spots = load_spots(args.spots_yaml)
     ctx = build_context(args.data_dir)
+    ctx["grid_by_id"] = load_grid_info(args.forecast_json)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

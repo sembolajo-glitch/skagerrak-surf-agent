@@ -1,5 +1,6 @@
 """Enhetstester for diagnose_spot.py - ingen nettverk, syntetisk geometri."""
 
+import json
 import math
 import xml.dom.minidom as minidom
 
@@ -160,6 +161,75 @@ def test_compute_flags_ingen_offshore_point_hopper_over_de_relevante_sjekkene():
     assert flags == []
 
 
+def test_compute_flags_grid_avstand_over_5km():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500, grid_avstand_km=6.2)
+    assert any("5" in f and "km" in f for f in flags)
+
+
+def test_compute_flags_grid_avstand_under_5km_ingen_flagg():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500, grid_avstand_km=4.9)
+    assert flags == []
+
+
+def test_compute_flags_grid_avstand_grensetilfelle_5km_ikke_flagget():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500, grid_avstand_km=5.0)
+    assert flags == []
+
+
+def test_compute_flags_grid_spot_dist_under_2km_samme_celle():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500, grid_spot_dist_km=1.1)
+    assert any("samme gridcelle" in f for f in flags)
+
+
+def test_compute_flags_grid_spot_dist_over_2km_ingen_flagg():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500, grid_spot_dist_km=3.0)
+    assert flags == []
+
+
+def test_compute_flags_grid_felter_none_hopper_over_begge_sjekkene():
+    spot = dict(BASE_SPOT)
+    flags = D.compute_flags(spot, offshore_bearing=180, depth_bearing=180,
+                             offshore_dist_km=2.0, coast_dist_m=500,
+                             grid_avstand_km=None, grid_spot_dist_km=None)
+    assert flags == []
+
+
+# ------------------------------------------------------------- load_grid_info
+
+
+def test_load_grid_info_manglende_fil_gir_tom_dict(tmp_path):
+    assert D.load_grid_info(tmp_path / "finnes_ikke.json") == {}
+
+
+def test_load_grid_info_ugyldig_json_gir_tom_dict(tmp_path):
+    p = tmp_path / "forecast.json"
+    p.write_text("{ ikke gyldig json", encoding="utf-8")
+    assert D.load_grid_info(p) == {}
+
+
+def test_load_grid_info_leser_grid_felter_per_spot(tmp_path):
+    p = tmp_path / "forecast.json"
+    p.write_text(json.dumps({"spots": [
+        {"id": "saltstein", "grid_lat": 58.95, "grid_lon": 9.85, "grid_avstand_km": 4.11},
+        {"id": "svenner", "grid_lat": None, "grid_lon": None, "grid_avstand_km": None},
+        {"id": "jomfruland_ost"},  # felt mangler helt (eldre forecast.json)
+    ]}), encoding="utf-8")
+
+    grid_by_id = D.load_grid_info(p)
+
+    assert grid_by_id == {"saltstein": {"grid_lat": 58.95, "grid_lon": 9.85, "grid_avstand_km": 4.11}}
+
+
 # --------------------------------------------------------------- dybdegrupper
 
 
@@ -247,6 +317,63 @@ def test_render_spot_body_flagger_element_faarger_roedt_ved_flagg():
     assert flags
     assert 'class="offshore-line flag"' in body
     assert 'class="offshore-dot flag"' in body
+
+
+def test_render_spot_body_grid_info_vises_i_tekstboksen():
+    lat0, lon0 = BASE_SPOT["lat"], BASE_SPOT["lon"]
+    spot = dict(BASE_SPOT, offshore_point=[lat0 - 0.03, lon0])
+    ctx = _tiny_ctx()
+    ctx["grid_by_id"] = {"test": {"grid_lat": lat0 - 0.03, "grid_lon": lon0, "grid_avstand_km": 1.2}}
+    body, flags = D.render_spot_body(spot, ctx)
+    doc = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {D.CANVAS_PX} {D.CANVAS_PX}">{body}</svg>'
+    minidom.parseString(doc)
+    assert "MET-grid" in body
+    assert "1.2" in body
+
+
+def test_render_spot_body_uten_grid_by_id_i_ctx_faller_tilbake_til_ukjent():
+    """_tiny_ctx() har ikke grid_by_id i det hele tatt - skal ikke krasje,
+    kun vise "ukjent"."""
+    spot = dict(BASE_SPOT)
+    ctx = _tiny_ctx()
+    body, flags = D.render_spot_body(spot, ctx)
+    assert "ukjent" in body
+
+
+def test_render_spot_body_flagger_grid_avstand_over_5km():
+    lat0, lon0 = BASE_SPOT["lat"], BASE_SPOT["lon"]
+    spot = dict(BASE_SPOT, offshore_point=[lat0 - 0.03, lon0])
+    ctx = _tiny_ctx()
+    ctx["grid_by_id"] = {"test": {"grid_lat": lat0 - 0.03, "grid_lon": lon0 + 0.1, "grid_avstand_km": 7.0}}
+    body, flags = D.render_spot_body(spot, ctx)
+    assert any("5" in f and "km" in f for f in flags)
+
+
+def test_render_spot_body_flagger_offshore_point_samme_gridcelle_som_spot():
+    """Gridpunktet ligger naer SPOTTETS eget koordinat (ikke offshore_point) -
+    under GRID_SAME_CELL_KM unna - offshore_point sin funksjon er da
+    reelt sett null."""
+    lat0, lon0 = BASE_SPOT["lat"], BASE_SPOT["lon"]
+    spot = dict(BASE_SPOT, offshore_point=[lat0 - 0.03, lon0])  # ~3.3 km unna
+    ctx = _tiny_ctx()
+    ctx["grid_by_id"] = {"test": {"grid_lat": lat0, "grid_lon": lon0, "grid_avstand_km": 0.1}}
+    body, flags = D.render_spot_body(spot, ctx)
+    assert any("samme gridcelle" in f for f in flags)
+
+
+def test_render_spot_body_grid_check_hoppes_over_for_klasse_c_uten_offshore_point():
+    """Klasse C har ikke offshore_point - grid_spot_dist_km-sjekken (som
+    krever offshore_point som referanse) skal ikke kunne trigges, selv om
+    grid_by_id har data for spotten."""
+    spot = dict(BASE_SPOT, klasse="C", gate={
+        "name": "G", "lat": 59.0, "lon": 10.3, "distance_km": 33, "bearing_deg": 180,
+        "sector_half_width": 20, "spread_s": 5, "transmission": 1.0,
+    })
+    spot.pop("offshore_point", None)
+    ctx = _tiny_ctx()
+    ctx["grid_by_id"] = {"test": {"grid_lat": spot["lat"], "grid_lon": spot["lon"], "grid_avstand_km": 0.1}}
+    body, flags = D.render_spot_body(spot, ctx)
+    assert not any("samme gridcelle" in f for f in flags)
 
 
 def test_render_spot_body_navn_med_spesialtegn_escapes():
@@ -353,8 +480,13 @@ spots:
 
     import sys
     old_argv = sys.argv
+    # --forecast-json peker eksplisitt paa en fil som IKKE finnes (isolert
+    # tmp_path) - uten dette ville testen brukt DEFAULT_FORECAST_JSON
+    # (repoets EGEN out/forecast.json, om en tilfeldigvis ligger der fra
+    # en tidligere kjoring) og blitt avhengig av ambient filsystem-tilstand.
     sys.argv = ["diagnose_spot.py", "--data-dir", str(data_dir),
-                "--spots-yaml", str(spots_yaml), "--out-dir", str(out_dir)]
+                "--spots-yaml", str(spots_yaml), "--out-dir", str(out_dir),
+                "--forecast-json", str(tmp_path / "finnes_ikke.json")]
     try:
         D.main()
     finally:
@@ -366,6 +498,52 @@ spots:
     minidom.parse(str(out_dir / "alfa.svg"))
     minidom.parse(str(out_dir / "bravo.svg"))
     minidom.parse(str(out_dir / "oversikt.svg"))
+
+
+def test_main_leser_grid_info_fra_forecast_json_og_flagger(tmp_path, capsys):
+    """Ende-til-ende: en forecast.json med grid_avstand_km > 5 for ett
+    spot skal gi et flagg i den genererte SVG-en."""
+    lat0, lon0 = 59.0, 10.0
+    data_dir = tmp_path / "data"
+    _write_fixture_geodata(data_dir, lat0, lon0)
+    spots_yaml = tmp_path / "spots.yaml"
+    spots_yaml.write_text(f"""
+defaults:
+  wind_weight: 1.0
+spots:
+  - id: alfa
+    name: Alfa
+    klasse: A
+    lat: {lat0}
+    lon: {lon0}
+    facing: 180
+    swell_window: [160, 200]
+    min_hs: 1.0
+    ideal_hs: 2.0
+    max_hs: 3.0
+    kalibrert: true
+    offshore_point: [{lat0 - 0.03}, {lon0}]
+""", encoding="utf-8")
+    forecast_json = tmp_path / "forecast.json"
+    forecast_json.write_text(json.dumps({"spots": [
+        {"id": "alfa", "grid_lat": lat0 - 0.03, "grid_lon": lon0 + 0.1, "grid_avstand_km": 8.4},
+    ]}), encoding="utf-8")
+    out_dir = tmp_path / "out"
+
+    import sys
+    old_argv = sys.argv
+    sys.argv = ["diagnose_spot.py", "--data-dir", str(data_dir),
+                "--spots-yaml", str(spots_yaml), "--out-dir", str(out_dir),
+                "--forecast-json", str(forecast_json)]
+    try:
+        D.main()
+    finally:
+        sys.argv = old_argv
+
+    svg = (out_dir / "alfa.svg").read_text(encoding="utf-8")
+    minidom.parseString(svg)
+    assert "8.4" in svg
+    assert "over 5" in svg
 
 
 def test_main_feiler_tydelig_uten_geodata(tmp_path):

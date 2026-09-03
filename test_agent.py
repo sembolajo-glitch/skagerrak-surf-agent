@@ -528,6 +528,86 @@ def test_append_shadow_log_tom_eksisterende_fil_regnes_som_ny(tmp_path, monkeypa
     assert len(lines) == 2
 
 
+# --------------------------------------------------------------- gather() grid
+
+
+def _fake_met_waves_med_grid(grid_lat, grid_lon):
+    """Fake sources.met_waves() som fyller grid_out slik det ekte svaret
+    ville gjort (se sources.met_waves() sin docstring) - kalt av gather()
+    med posisjonelle (lat, lon) og grid_out som keyword."""
+    def fn(lat, lon, grid_out=None):
+        if grid_out is not None:
+            grid_out["lat"] = grid_lat
+            grid_out["lon"] = grid_lon
+        return {}
+    return fn
+
+
+def test_gather_regner_grid_avstand_km_fra_faktisk_returnert_gridpunkt(monkeypatch):
+    """ordre 2026-09-03 (se rapport til bruker): gather() skal bruke det
+    FAKTISKE gridpunktet MET returnerer (via sources.met_waves() sin
+    grid_out) til aa regne avstanden fra det spurte punktet
+    (offshore_point for klasse A/B) - ikke gjette."""
+    import sources
+
+    spot = dict(_saltstein())
+    spot["offshore_point"] = [58.930, 9.830]
+    grid_lat, grid_lon = 58.95, 9.85
+
+    monkeypatch.setattr(sources, "met_waves", _fake_met_waves_med_grid(grid_lat, grid_lon))
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    wind, waves, water, errors, grid = A.gather(spot)
+
+    assert grid["lat"] == grid_lat
+    assert grid["lon"] == grid_lon
+    expected_km = A.P.haversine_km(58.930, 9.830, grid_lat, grid_lon)
+    assert grid["avstand_km"] == round(expected_km, 2)
+
+
+def test_gather_grid_none_naar_met_ikke_svarer(monkeypatch):
+    """MET feiler (eller returnerer uten geometry) denne kjoeringen -
+    grid skal vaere None, ikke krasje eller late som et gridpunkt fantes."""
+    import sources
+
+    spot = dict(_saltstein())
+    monkeypatch.setattr(sources, "met_waves", lambda lat, lon, grid_out=None: {})
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    _, _, _, _, grid = A.gather(spot)
+    assert grid is None
+
+
+def test_gather_bruker_gate_koordinat_for_klasse_c(monkeypatch):
+    """Klasse C har ikke offshore_point - grid_avstand_km skal regnes fra
+    gate sitt koordinat i stedet (samme punkt gather() faktisk spoerr
+    MET om for klasse C, se der)."""
+    import sources
+
+    spot = dict(_slagen())
+    grid_lat, grid_lon = spot["gate"]["lat"] + 0.02, spot["gate"]["lon"] + 0.02
+
+    monkeypatch.setattr(sources, "met_waves", _fake_met_waves_med_grid(grid_lat, grid_lon))
+    monkeypatch.setattr(sources, "met_wind", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "openmeteo_waves", lambda lat, lon: {})
+    monkeypatch.setattr(sources, "kartverket_water_level", lambda lat, lon: {})
+
+    _, _, _, _, grid = A.gather(spot)
+    expected_km = A.P.haversine_km(spot["gate"]["lat"], spot["gate"]["lon"], grid_lat, grid_lon)
+    assert grid["avstand_km"] == round(expected_km, 2)
+
+
+def test_gather_mock_gir_grid_none():
+    mock = {"wind": {}, "waves": {}, "water": {}}
+    _, _, _, errors, grid = A.gather(_saltstein(), mock=mock)
+    assert grid is None
+    assert errors == []
+
+
 # --------------------------------------------------------------- model_rev
 
 

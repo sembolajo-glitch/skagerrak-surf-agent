@@ -80,10 +80,26 @@ jobs:
         if: inputs.probe != true
         run: python build_fetch.py
 
+      # forecast.json sin siste kjoring (om den finnes) - KUN for
+      # grid_lat/grid_lon/grid_avstand_km (ordre 2026-09-03, se rapport til
+      # bruker) som diagnose_spot.py sine to nye gridcelle-flagg leser.
+      # Tolerant paa samme maate som alert_state.json/spotgrid.json i
+      # scripts/fetch_shadow_state.sh (IKKE shadow.csv sin strenge variant -
+      # forecast.json har ingen akkumulert historikk aa miste, kun siste
+      # kjoring) - manglende fil (data-grenen finnes ikke enna, eller
+      # forecast.yml har aldri kjort) er ikke en feil, diagnose_spot.py
+      # hopper bare over de to flaggene da.
+      - name: Hent siste forecast.json fra data-grenen (kun for gridcelle-flagg)
+        if: inputs.probe != true
+        run: |
+          mkdir -p out
+          git fetch --depth=1 origin data 2>/dev/null || true
+          git show origin/data:out/forecast.json > out/forecast.json 2>/dev/null || true
+
       # Ett diagnosekart (SVG) per spot - kystkontur/dybdekoter/offshore_point/
       # facing/dybdepeiling/swell_window/fetch_km-rose, pluss en oversiktsside
       # med alle spots side om side - rett fra spots.yaml sine (naa ferske,
-      # se steget over) felt og geodataene. Fem avvik markeres automatisk i
+      # se steget over) felt og geodataene. Syv avvik markeres automatisk i
       # roedt - se diagnose_spot.py sin docstring. Staar etter build_fetch.py
       # (trenger dybde_Xm_km/status/skjaergaard_indeks derfra), foer
       # build_spotgrid.py (uavhengig rekkefolge, men gruppert med de andre
