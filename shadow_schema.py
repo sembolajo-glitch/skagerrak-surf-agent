@@ -57,6 +57,14 @@ FIELDS = [
     # til out/spots/<id>.json, men manglet i shadow.csv - uten det kan
     # klasse C-beregningen ikke etterproeves fra loggen alene.
     "local_wind_mean",
+    # den retningsvektede hoeyden (ordre 2026-09-03, se rapport til bruker)
+    # - hs_eff er RAA, uten retningsvekting; hs_vektet = hs_eff * wf er
+    # tallet q_size faktisk er regnet fra (se score_hour() i agent.py).
+    # For klasse C er wf alltid 1.0 - hs_eff har alt gaatt gjennom gate sin
+    # retningsfiltrering, saa hs_vektet == hs_eff der. Uten dette feltet kan
+    # score_hour() sin faktiske hs-grunnlag ikke etterproeves fra loggen
+    # alene - kun hs_eff (foer vekting).
+    "hs_vektet",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra

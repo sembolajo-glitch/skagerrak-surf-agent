@@ -265,6 +265,18 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         "model_spread": ens["model_spread"],
         # resultat
         "hs_eff": round(hs, 2),
+        # ordre 2026-09-03 (se rapport til bruker): hs_eff er den RAA hoeyden,
+        # UTEN retningsvekting - se docstringen ved wf over. hs_vektet er
+        # tallet q_size (og dermed scoren) faktisk regner videre paa: hs * wf.
+        # klasse A/B: wf = window_factor(dir_eff, spot) - hs_vektet blir
+        # dermed lavere enn hs_eff naar boelgen kommer fra kanten av vinduet.
+        # klasse C: wf er hardkodet 1.0, IKKE fordi retning er ukjent/uten
+        # betydning, men fordi hs_eff for denne klassen allerede har gaatt
+        # gjennom gate sin retningsfiltrering (directional_energy_fraction()
+        # i propagate_through_gate(), se gate_energy_frac under) - en ny
+        # vekting her ville dobbeltfiltrert. hs_vektet == hs_eff for klasse C
+        # er derfor riktig, ikke en udekket kant-case.
+        "hs_vektet": round(hs * wf, 2),
         "tp_eff": round(tp, 1),
         "dir_eff": round(wdir, 0) if wdir is not None else None,
         # beskrivende, ikke en scorekomponent - se physics.wave_power()
@@ -993,7 +1005,7 @@ def run(args):
 
 def print_explain(spot, hours):
     print(f"\n{'='*78}\n{spot['name']}  (klasse {spot['klasse']})\n{'='*78}")
-    keys = ["time", "score", "hs_eff", "tp_eff", "wind_speed", "wind_from",
+    keys = ["time", "score", "hs_eff", "hs_vektet", "tp_eff", "wind_speed", "wind_from",
             "wind_label", "local_hs", "prop_hs", "gate_hs", "gate_energy_frac",
             "local_fetch_km", "local_duration_h", "local_limited_by",
             "q_size", "q_period", "q_wind"]

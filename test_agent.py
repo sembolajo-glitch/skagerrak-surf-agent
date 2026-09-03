@@ -705,3 +705,73 @@ def test_append_shadow_log_skriver_model_rev_per_rad(tmp_path, monkeypatch):
     with (tmp_path / "shadow.csv").open() as f:
         rows = list(_csv.DictReader(f))
     assert rows[0]["model_rev"] == "rowtest01234"
+
+
+# --------------------------------------------------------------- hs_vektet
+#
+# ordre 2026-09-03 (se rapport til bruker): hs_vektet mangler - tallet
+# q_size faktisk regner paa (hs_eff * wf), i motsetning til hs_eff som er
+# raatallet UTEN retningsvekting. Symptomet var at "tabellen" (se
+# describe.py sin "Sum:"-linje og agent.py sin print_explain()) viste
+# hs_eff, ikke tallet scoren faktisk brukte.
+
+
+def test_hs_vektet_er_hs_eff_ganger_window_factor_for_klasse_ab():
+    """Klasse A/B, retning et stykke fra vindussenteret - wf skal da vaere
+    < 1.0 (cos^(2s) avtar monotont, se physics.window_factor()), og
+    hs_vektet skal vaere NOYAKTIG hs_eff * wf, ikke hs_eff selv."""
+    spot = _saltstein()  # swell_window (170, 260), senter 215
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=240, hs=2.0)
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+
+    wf = A.P.window_factor(computed["dir_eff"], spot)
+    assert 0.0 < wf < 1.0, wf  # forutsetning for at testen skiller de to feltene
+    assert h["hs_vektet"] == round(h["hs_eff"] * wf, 2)
+    assert h["hs_vektet"] < h["hs_eff"]
+
+
+def test_hs_vektet_hoyere_ved_vindussenter_enn_naer_kanten():
+    """wf (og dermed hs_vektet, siden hs_eff er lik i begge tilfeller) skal
+    vaere hoyest ved vindussenteret - cos^(2s) er hoyest praesist der og
+    avtar monotont mot kanten (se physics.window_factor()). IKKE wf ~ 1.0
+    ved senteret - directional_energy_fraction() returnerer andelen av en
+    spredt energifordeling som havner innenfor sektoren, som er < 1.0 selv
+    ved perfekt treff naar sektoren er smalere enn hele halvkula."""
+    spot = _saltstein()  # swell_window (170, 260), senter 215
+    ts_c, wind_c, waves_c, computed_c = _computed_med_retning(spot, wave_dir=215, hs=2.0)
+    h_senter = A.score_hour(spot, ts_c, wind_c, waves_c, None, computed_c)
+
+    ts_k, wind_k, waves_k, computed_k = _computed_med_retning(spot, wave_dir=250, hs=2.0)
+    h_kant = A.score_hour(spot, ts_k, wind_k, waves_k, None, computed_k)
+
+    assert h_senter["hs_eff"] == h_kant["hs_eff"] == 2.0
+    assert h_senter["hs_vektet"] > h_kant["hs_vektet"]
+
+
+def test_hs_vektet_lik_hs_eff_for_klasse_c_uansett_retning():
+    """Klasse C: wf er hardkodet 1.0 fordi hs_eff for denne klassen ALLEREDE
+    har gaatt gjennom gate sin retningsfiltrering (directional_energy_fraction()
+    i propagate_through_gate()) - en ny vekting her ville dobbeltfiltrert.
+    hs_vektet == hs_eff skal derfor holde uansett dir_eff, samme oppsett som
+    test_window_ok_er_none_for_klasse_c_uansett_retning()."""
+    spot = _slagen()  # swell_window [160, 200]
+    ts = "2026-11-14T09:00:00+00:00"
+    base_computed = {
+        "source": "local+gate", "hs_eff": 2.0, "tp_eff": 5.0,
+        "local_hs": 1.0, "local_tp": 6.0, "prop_hs": 1.0, "prop_tp": 6.0,
+        "swell_hs": 1.0, "windsea_hs": 1.0,
+        "local_wind_mean": 8.0, "local_fetch_km": 20.0, "local_duration_h": 4,
+        "local_dir": 180.0, "gate_hs": 0.0, "gate_tp": 0.0, "gate_dir": None,
+    }
+    for dir_eff in (180.0, 30.0):  # innenfor vinduet, og klart utenfor det
+        computed = dict(base_computed, dir_eff=dir_eff)
+        h = A.score_hour(spot, ts, {"wind_speed": 1.0}, {}, None, computed, regional_wp=10.0)
+        assert h["hs_vektet"] == h["hs_eff"], (dir_eff, h["hs_vektet"], h["hs_eff"])
+
+
+def test_hs_vektet_i_shadow_fields():
+    """hs_vektet skal vaere en del av shadow_schema.FIELDS, bakerst (se
+    APPEND-ONLY-kontrakten i shadow_schema.py) - ellers logges ikke feltet
+    til out/shadow.csv i det hele tatt."""
+    import shadow_schema
+    assert shadow_schema.FIELDS[-1] == "hs_vektet"
