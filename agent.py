@@ -132,13 +132,34 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     wfrom = wind.get("wind_from_direction")
 
     # retningsvindu (klasse A/B - for klasse C er filtreringen alt gjort i gate)
+    #
+    # ordre 2026-09-03 (rettet reell bug, se rapport til bruker): wf ble FOR
+    # regnet her, men aldri brukt - kun window_ok (bare/utenfor) styrte
+    # q_size, med en haard 0/1-grense akkurat ved vinduskanten. ensemble.py
+    # sin evaluate() (per-medlem-scoringen som faktisk driver p_surf/stars)
+    # har ALDRI hatt denne haarde grensen - den ganger alltid hs med
+    # window_factor() sin glatte avtrapping (1.0 inne, glatt ned til 0.0
+    # 15 grader utenfor, se physics.window_factor()). Score/q_size (denne
+    # funksjonen, logget i shadow.csv) og stars/p_surf (ensemble.py) regnet
+    # dermed fra to ULIKE modeller av samme retningsvindu. Fikset ved aa
+    # skalere q_size sitt hs-grunnlag med wf her ogsaa, OG fjerne den haarde
+    # window_ok-nullstillingen - matcher ensemble.py sin struktur noeyaktig
+    # (den har aldri hatt en tilsvarende haard grense). window_ok beholdes
+    # KUN som et informativt returfelt (se retur-dict under), det styrer
+    # ikke lenger q_size.
+    #
+    # IKKE roert her: selve window_factor() sin FORM (flat 1.0 inne i
+    # vinduet, lineaer taper utenfor) - kun at den na faktisk BRUKES. En
+    # eventuell glatting av formen (myk vekting inne i vinduet, ikke bare
+    # flat) er en egen, separat endring - se physics.window_factor() sin
+    # docstring/rapport til bruker for hvorfor de to er holdt fra hverandre.
     if spot["klasse"] in ("A", "B") and wdir is not None:
         window_ok = P.in_window(wdir, spot["swell_window"])
-        wf = P.window_factor(wdir, spot) if hasattr(P, "window_factor") else 1.0
+        wf = P.window_factor(wdir, spot)
     else:
         window_ok, wf = True, 1.0
 
-    q_size = P.size_quality(hs, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
+    q_size = P.size_quality(hs * wf, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
     q_period = P.period_quality(tp, spot["min_tp"])
     q_wind_raw, wind_label = (
         P.wind_quality(ws, wfrom, spot["facing"]) if wfrom is not None else (0.5, "ukjent")
@@ -149,9 +170,6 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         spot["water_optimal_cm"],
         spot["water_sensitivity_cm"],
     )
-
-    if not window_ok:
-        q_size = 0.0
 
     # brattheit-justering (ordre 2026-09-02, se physics.gate_threshold_factor()):
     # regional_wp_min skaleres ned naar den gjenvaerende sjoen er ren/lang

@@ -232,6 +232,58 @@ def test_regional_gate_delvis_bypass_naer_paritet_klasse_c():
     assert h["q_size"] > 0.0
 
 
+# ---------------------------------------------- window_factor i q_size (klasse A/B)
+#
+# ordre 2026-09-03 (rettet reell bug, se rapport til bruker): score_hour()
+# regnet wf (physics.window_factor()) men brukte den aldri - kun window_ok
+# (haard 0/1-grense ved vinduskanten) styrte q_size, mens ensemble.py sin
+# per-medlem-scoring (som driver p_surf/stars) ALLTID har brukt window_factor()
+# sin glatte taper. Testene under dekker fiksen: wf ganges inn i q_size sitt
+# hs-grunnlag, og window_ok styrer ikke lenger en haard nullstilling.
+
+
+def _computed_med_retning(spot, wave_dir, hs=2.0, tp=7.0):
+    """Som _favorable_computed(), men med selvvalgt boelgeretning - for aa
+    teste oppforsel naer/utenfor swell_window sin kant."""
+    ts = "2026-11-14T09:00:00+00:00"
+    wind = {ts: {"wind_speed": 1.0, "wind_from_direction": 0.0}}
+    waves = {ts: {"hs": hs, "tp": tp, "wave_from_direction": wave_dir}}
+    computed = A.evaluate_class_ab(spot, [ts], wind, waves)
+    return ts, wind[ts], waves[ts], computed[0][1]
+
+
+def test_score_hour_retning_god_innenfor_vinduet_gir_full_q_size():
+    spot = _saltstein()  # swell_window (170, 260)
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=215)
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["window_ok"] is True
+    assert h["q_size"] > 0.0
+
+
+def test_score_hour_retning_like_utenfor_vinduet_gir_delvis_q_size_ikke_null():
+    """Kjernen i fiksen: 5 grader utenfor vindkanten skal IKKE lenger gi
+    q_size=0 (den gamle haarde window_ok-grensen) - window_factor() sin
+    taper skal gi en delvis, men positiv, verdi (matcher ensemble.py)."""
+    spot = _saltstein()
+    innenfor_ts, innenfor_wind, innenfor_waves, innenfor_computed = _computed_med_retning(spot, wave_dir=215)
+    h_innenfor = A.score_hour(spot, innenfor_ts, innenfor_wind, innenfor_waves, None, innenfor_computed)
+
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=265)  # 5 grader forbi 260
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["window_ok"] is False
+    assert 0.0 < h["q_size"] < h_innenfor["q_size"]
+
+
+def test_score_hour_retning_langt_utenfor_vinduet_gir_null_q_size():
+    """Utenfor window_factor() sin 15-graders taper skal q_size fortsatt
+    vaere 0 - fiksen fjerner den haarde KANT-grensen, ikke all filtrering."""
+    spot = _saltstein()
+    ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=290)  # 30 grader forbi 260
+    h = A.score_hour(spot, ts, wind, waves, None, computed)
+    assert h["window_ok"] is False
+    assert h["q_size"] == 0.0
+
+
 # ------------------------------------------------- append_shadow_log()
 
 
