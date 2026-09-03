@@ -1,16 +1,23 @@
 name: backtest-sessions
 
-# Kjor backtest_sessions.py (reanalyse mot sessions_historisk.csv) i
-# GitHub Actions - samme grunn som ab-test.yml/probe-marine-archive.yml:
-# verken denne oekten eller brukerens eget miljo naar Open-Meteo, saa
-# dette er den eneste plassen skriptet faktisk kan kjores og gi ekte
-# tall. Se backtest_sessions.py sin docstring for hele bakgrunnen
-# (reanalyse vs. prognose, modellskjevheten mellom era5_ocean og
-# standardmodellen, hvorfor ERA5 brukes for alle elleve oktene).
+# Kjor backtest_sessions.py (regional boelgeenergi fra ERA5-Ocean mot
+# sessions_historisk.csv sin observerte kvalitet) i GitHub Actions -
+# samme grunn som ab-test.yml/probe-marine-archive.yml: verken denne
+# oekten eller brukerens eget miljo naar Open-Meteo, saa dette er den
+# eneste plassen skriptet faktisk kan kjores og gi ekte tall. Se
+# backtest_sessions.py sin docstring for hele bakgrunnen - ordre
+# 2026-09-02 (gridcelle-diagnosen for Saltstein): ERA5-Ocean sitt
+# ~0,25-graders grid er for grovt for LOKAL boelgehoyde naer kysten her
+# (bekreftet - tre kandidatpunkter innenfor faa km av Saltstein traff
+# NOYAKTIG samme gridcelle, 49-53 km unna). Skriptet kjorer derfor
+# INGEN spot-fysikk lenger - kun regional_wp (samme fjerne, aapne
+# gridcelle som en rimelig REGIONAL energi-proxy) mot observert kvalitet,
+# pluss en rapport over hvilken gridcelle hver av de 14 spottene sitt
+# eget bolge-hentepunkt treffer (kollisjoner = ikke uavhengige data).
 #
 # KUN manuell trigger. Committer ingenting - "permissions: contents:
 # read" haandhever det. Resultatet havner baade i loggen (skriptet
-# printer selv) og som en markdown-tabell i GITHUB_STEP_SUMMARY (eget
+# printer selv) og som en markdown-rapport i GITHUB_STEP_SUMMARY (eget
 # steg, leser out/backtest_report.json), pluss selve JSON-en som
 # artifact for etterkontroll av raadataene.
 on:
@@ -86,19 +93,36 @@ jobs:
           if not os.path.exists(report_path):
               if summary_path:
                   with open(summary_path, "a", encoding="utf-8") as f:
-                      f.write("# Backtest: elleve historiske okter\n\n"
+                      f.write("# Regional boelgeenergi mot elleve historiske okter\n\n"
                               "**FEIL**: out/backtest_report.json ble ikke skrevet - "
                               "se loggen fra forrige steg for hva som feilet.\n")
               raise SystemExit(0)
 
-          import backtest_sessions as B
-
           report = json.load(open(report_path, encoding="utf-8"))
           bias = report["bias"]
-          lines = ["# Backtest: elleve historiske okter\n\n",
-                    "## Modellskjevhet (ERA5-Ocean / standardmodell)\n\n",
-                    "| variabel | median | kvartiler | spenn | n |\n",
-                    "|---|---|---|---|---|\n"]
+          lines = ["# Regional boelgeenergi mot elleve historiske okter\n\n",
+                    "Ingen spot-fysikk kjort - ERA5-Ocean sitt ~0,25-graders grid er for "
+                    "grovt for lokal boelgehoyde naer kysten her (se backtest_sessions.py "
+                    "sin docstring). KUN regional_wp (kW/m) mot observert kvalitet.\n\n",
+                    "## Gridcelle per spot\n\n",
+                    "| spot | klasse | spurt punkt | gridcelle |\n",
+                    "|---|---|---|---|\n"]
+          grid_cells = report.get("grid_cells", [])
+          for g in grid_cells:
+              lines.append(f"| {g['id']} | {g['klasse']} | {g['punkt'][0]},{g['punkt'][1]} | "
+                            f"{g['grid'][0]},{g['grid'][1]} |\n")
+          by_grid = {}
+          for g in grid_cells:
+              by_grid.setdefault(tuple(g["grid"]), []).append(g["id"])
+          kollisjoner = {grid: ids for grid, ids in by_grid.items() if len(ids) > 1}
+          if kollisjoner:
+              lines.append("\n**Gridcelle-kollisjoner** (samme celle = ikke uavhengige boelgedatapunkter):\n\n")
+              for grid, ids in kollisjoner.items():
+                  lines.append(f"- {grid[0]},{grid[1]}: {', '.join(ids)}\n")
+
+          lines.append("\n## Modellskjevhet (ERA5-Ocean / standardmodell)\n\n")
+          lines.append("| variabel | median | kvartiler | spenn | n |\n")
+          lines.append("|---|---|---|---|---|\n")
           for var in ("hs", "tp"):
               b = bias.get(var, {})
               if "p25" in b:
@@ -116,37 +140,30 @@ jobs:
 
           def render_table(rows, title):
               lines.append(f"\n## {title}\n\n")
-              lines.append("| dato | spot | kvalitet | stars | p_surf | hs_eff | tp_eff | regional_wp | port | svakeste ledd | score |\n")
-              lines.append("|---|---|---|---|---|---|---|---|---|---|---|\n")
-              n_zero = 0
+              lines.append("| dato | spot | kvalitet | tid | valgt (UTC) | hs | tp | regional_wp |\n")
+              lines.append("|---|---|---|---|---|---|---|---|\n")
+              ok_rows = [r for r in rows if "feil" not in r]
+              for r in sorted(ok_rows, key=lambda r: r["wp"]):
+                  lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {r['tid']} | "
+                                f"{r['valgt_tid_utc']} | {r['hs']:.2f} | {r['tp']:.1f} | {r['wp']:.1f} |\n")
               for r in rows:
                   if "feil" in r:
-                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | | | | |\n")
-                      continue
-                  h = r["hour"]
-                  score = h["score"]
-                  if score == 0.0:
-                      n_zero += 1
-                  port = ("bypasset" if h.get("regional_gate_bypassed") else
-                          "STENGT" if h.get("regional_gate_closed") else "aapen")
-                  led, led_v = B._weakest_led(h)
-                  lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | {h.get('stars')} | "
-                                f"{h.get('p_surf')} | {h.get('hs_eff')} | {h.get('tp_eff')} | "
-                                f"{h.get('regional_wp')} | {port} | "
-                                f"{led} ({led_v:.2f}) | {score} |\n")
-              n_total = sum(1 for r in rows if "feil" not in r)
-              lines.append(f"\n**{n_zero}/{n_total} okter fikk score 0.0.**\n")
-              return n_zero, n_total
+                      lines.append(f"| {r['dato']} | {r['spot']} | {r['kvalitet']} | FEIL: {r['feil']} | | | | |\n")
+              if ok_rows:
+                  wps = [r["wp"] for r in ok_rows]
+                  lines.append(f"\n**n={len(ok_rows)}, regional_wp: min={min(wps):.1f}, "
+                                f"median={sorted(wps)[len(wps)//2]:.1f}, max={max(wps):.1f} kW/m.**\n")
+              return ok_rows
 
-          n_zero_raw, n_total = render_table(report["raw"], "Raa ERA5 (ukorrigert)")
-          n_zero_corr, _ = render_table(report["corrected"], "Skjevhetskorrigert")
+          render_table(report["raw"], "Regional energi - raa ERA5")
+          render_table(report["corrected"], "Regional energi - skjevhetskorrigert")
 
           lines.append("\n## Oppsummering\n\n")
-          lines.append(f"- Raa ERA5: **{n_zero_raw}/{n_total}** okter fikk score 0.0\n")
-          lines.append(f"- Skjevhetskorrigert: **{n_zero_corr}/{n_total}** okter fikk score 0.0\n\n")
           lines.append("Reanalyse, ikke prognose (se backtest_sessions.py sin docstring). "
-                        "Kan KUN avsloere for hoye terskler - alle elleve oktene var positive, "
-                        "ingen bomturer i datasettet. Ingen terskler er justert av denne kjoringen.\n")
+                        "Alle elleve oktene var positive - tabellene over viser GULVET "
+                        "regional_wp positive okter faktisk hadde, ikke en bekreftelse "
+                        "paa at lavere regional_wp betyr daarlig surf. Ingen terskler er "
+                        "justert av denne kjoringen.\n")
 
           http = report.get("http_stats", {})
           if http:
