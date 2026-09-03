@@ -47,6 +47,32 @@ paret mot hver okts observerte kvalitet. Ingenting annet.
   to spotters punkter, er ERA5-seriene deres IKKE uavhengige
   datapunkter for noe som helst - se rapporten skriptet skriver ut.
 
+  MAALT (ordre 2026-09-02, faktisk kjoring - se rapport til bruker): kun
+  FIRE distinkte ERA5-gridceller dekker alle 14 spotene. AATTE spots
+  (svenner, verdens_ende, hvasser_sando + de fem klasse C-spotene) deler
+  EN celle. Kun oerekroken staar paa egen celle. 13 av 14 spots deler
+  celle med minst en annen - ERA5-Ocean kan derfor IKKE si noe om
+  FORSKJELLER mellom spots i denne regionen, verken lokalt eller
+  regionalt kalibrert. Kombinert med opplosningsfunnet over er dette
+  konklusjonen, ikke bare et forbehold: ERA5-Ocean via Open-Meteo er
+  STENGT som kilde for videre spot-spesifikk kalibrering her. Den ENE
+  gjenvaerende bruken er regional_wp som ETT tall for hele regionen (se
+  under for hva den maalingen faktisk ga) - og selv den maalingen kommer
+  fra en celle 49-53 km fra kysten, ikke fra Skagerrak-kysten selv.
+
+  KONKLUSJON PAA regional_wp (ordre 2026-09-02): gulvet blant de elleve
+  positive oktene var regional_wp=1,2 kW/m (raa ERA5, Saltstein kvalitet
+  5, 2018-12-18) mot den deaktiverte terskelen 12,2 - TI GANGER for hoy,
+  samme retning og storrelsesorden som feilfunnet som fikk porten slaatt
+  av i utgangspunktet. regional_wp_min/max i spots.yaml FORBLIR
+  deaktivert - dette bekrefter at det var riktig, det gir IKKE grunnlag
+  for et nytt tall. NESTE kalibreringsforsok maa bruke out/shadow.csv fra
+  faktisk drift (EWAM ~5 km/MET WW3 ~4 km, se sources.py - opploser
+  Skagerrak-kysten, ERA5-Ocean sitt grid gjor ikke det), IKKE ERA5. Dette
+  skriptet bygges ikke videre paa til det finnes et konkret behov for
+  REGIONAL (ikke spot-spesifikk) historikk lenger tilbake enn shadow.csv
+  daekker.
+
 VIDERE FORBEHOLD (uendret fra tidligere versjoner):
   - Reanalyse, ikke prognose: ERA5 er et etterpaaklokt beste-estimat
     for hva sjoen FAKTISK var, ikke hva en prognose ville sagt paa

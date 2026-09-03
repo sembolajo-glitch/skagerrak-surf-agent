@@ -159,6 +159,22 @@
 #                 i stedet for aa gjette paa nytt fra surf-forecast sin
 #                 skala.
 #
+#                 KONKLUSJON (ordre 2026-09-02, avsluttende runde - se
+#                 rapport til bruker): ERA5-Ocean (backtest_sessions.py
+#                 sin kilde) kan IKKE brukes til noen ny gjetning her -
+#                 se dens docstring for opplosningsfunnet (0,25 graders
+#                 grid, alle 14 spots faller i FIRE celler, aatte i EN).
+#                 Det ene tallet den likevel gir oss: gulvet blant elleve
+#                 positive okter var regional_wp=1,2 kW/m (Saltstein,
+#                 kvalitet 5, 2018-12-18) - mot den deaktiverte terskelen
+#                 12,2. TI GANGER for hoy, samme retning og storrelsesorden
+#                 som feilfunnet over. regional_wp_min FORBLIR deaktivert -
+#                 dette bekrefter at det var riktig aa sla den av, det gir
+#                 ikke et nytt tall aa sette den til. Neste kalibrerings-
+#                 forsok maa bruke out/shadow.csv fra faktisk drift (EWAM
+#                 ~5 km/MET WW3 ~4 km, se sources.py - opploser kysten,
+#                 ERA5-Ocean sitt 28 km-grid gjor ikke det), ikke ERA5.
+#
 #                 Resten av denne feltbeskrivelsen er HISTORIKK - hvordan
 #                 feltet var TENKT aa virke, og hvilke tall (na null/
 #                 utelatt paa alle spots) det stod paa foer det ble

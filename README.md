@@ -126,6 +126,8 @@ Har du et bølgeeffekt-/energitall fra en ekstern tjeneste (f.eks. surf-forecast
 
 Sannsynligheten trenger en egen sjekk: grupper alle varsler i 10 %-bøtter og se om 70 %-varslene traff omtrent 70 % av gangene. Det er en reliabilitetskurve, og den krever minst 50 varsler før den betyr noe.
 
+**ERA5-Ocean er stengt som kalibreringskilde (ordre 2026-09-02).** `backtest_sessions.py` ble bygget for å teste terskler mot elleve historiske økter via Open-Meteo sin ERA5-Ocean-reanalyse (eneste kilde med historikk før desember 2023), men grid-oppløsningen (~0,25°, ~28 km) er for grov for denne kysten: alle 14 spotene i `spots.yaml` faller i kun **fire** ERA5-gridceller, **åtte** av dem i én og samme celle. Kilden kan derfor verken si noe om lokal bølgehøyde ved en navngitt spot, eller om forskjeller mellom spots — bare et regionalt energitall (`regional_wp`), og selv det fra en celle 49–53 km ute i åpent Skagerrak, ikke fra kysten selv. Se `backtest_sessions.py` sin docstring for hele funnet. Det ene tallet forsøket ga: gulvet blant elleve positive økter var `regional_wp`=1,2 kW/m mot den (nå deaktiverte) terskelen 12,2 — ti ganger for høy, samme retning som feilfunnet som fikk porten slått av. `regional_wp_min`/`regional_wp_max` i `spots.yaml` forblir deaktivert (se kommentaren der). Neste kalibreringsforsøk på `regional_wp` må bruke `out/shadow.csv` fra faktisk drift — EWAM ~5 km / MET WW3 ~4 km, som faktisk oppløser kysten — ikke ERA5.
+
 ---
 
 ## Geodata fra Kartverket
