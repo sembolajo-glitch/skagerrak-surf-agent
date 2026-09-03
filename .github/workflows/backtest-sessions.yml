@@ -66,12 +66,13 @@ jobs:
           SKIP_BIAS: ${{ inputs.skip_bias_quantification }}
           BIAS_HS: ${{ inputs.bias_hs }}
           BIAS_TP: ${{ inputs.bias_tp }}
+          PYTHONUNBUFFERED: "1"
         run: |
           args=(--sessions-csv "$SESSIONS_CSV" --bias-sample-n "$BIAS_SAMPLE_N" --seed "$SEED")
           if [ "$SKIP_BIAS" = "true" ]; then
             args+=(--skip-bias-quantification --bias-hs "$BIAS_HS" --bias-tp "$BIAS_TP")
           fi
-          python backtest_sessions.py "${args[@]}"
+          python -u backtest_sessions.py "${args[@]}"
 
       - name: Skriv resultatet til step summary
         if: always()
