@@ -329,6 +329,46 @@ def test_append_shadow_log_reparerer_eksisterende_fil_uten_header(tmp_path, monk
     assert len(lines) == 3
 
 
+def test_append_shadow_log_reparerer_header_som_har_blitt_forbigatt_av_fields(tmp_path, monkeypatch):
+    """Simulerer funnet paa data-grenen 2026-09-03: en fil MED header, men
+    en gammel, kortere en - FIELDS i shadow_schema.py vokste (append-only)
+    etter at headeren sist ble skrevet, saa headeren ble et strikt prefiks
+    av dagens FIELDS i stedet for aa matche. csv.DictReader (og calibrate.py
+    sin) mapper posisjonelt mot headeren, saa de nyeste feltene ble
+    usynlige for enhver leser. Headerlinja skal byttes ut med en fersk,
+    full header - den gamle dataraden (skrevet med det korte feltsettet)
+    skal overleve uendret."""
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    path = tmp_path / "shadow.csv"
+    gammel_felt_lengde = len(A.shadow_schema.FIELDS) - 5  # for de 5 nyeste feltene
+    gammel_header = ",".join(A.shadow_schema.FIELDS[:gammel_felt_lengde])
+    gammel_rad = ",".join(["v"] * gammel_felt_lengde)
+    path.write_text(f"{gammel_header}\r\n{gammel_rad}\r\n")
+
+    A.append_shadow_log(_payload(spot_id="hvasser_sando"))
+
+    lines = path.read_text().splitlines()
+    assert lines[0] == ",".join(A.shadow_schema.FIELDS)  # full, fersk header
+    assert lines[1] == gammel_rad  # den gamle dataraden er urort
+    assert "hvasser_sando" in lines[2]  # den nye raden kom etter
+    assert len(lines) == 3
+
+
+def test_append_shadow_log_lar_uventet_header_vaere_urort(tmp_path, monkeypatch):
+    """En header som IKKE er et strikt prefiks av dagens FIELDS (feltnavn
+    endret/fjernet - strider mot append-only-kontrakten) skal ikke roeres.
+    Det er ikke noe trygt aa gjette seg til her."""
+    monkeypatch.setattr(A, "OUT", tmp_path)
+    path = tmp_path / "shadow.csv"
+    path.write_text("run_at,spot,helt_ukjent_felt\r\nv,v,v\r\n")
+
+    A.append_shadow_log(_payload())
+
+    lines = path.read_text().splitlines()
+    assert lines[0] == "run_at,spot,helt_ukjent_felt"  # urort
+    assert lines[1] == "v,v,v"
+
+
 def test_append_shadow_log_tom_eksisterende_fil_regnes_som_ny(tmp_path, monkeypatch):
     """0-byte fil (nettopp det git show-omdirigeringen produserer naar
     kilden mangler) skal oppfore seg som om filen ikke fantes - IKKE
