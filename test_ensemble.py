@@ -84,10 +84,23 @@ def _spot(**overrides):
 def test_evaluate_global_partisjon_senker_p_surf_ved_grensehoyde():
     """Kjernen i ordren: p_surf skal falle naar timen faktisk kommer fra
     den globale modellen (daarligere datagrunnlag), ikke bare fordi
-    varslingslengden er lang. Bruker en Hs like over min_hs, saa den
-    ekstra spredningen faktisk flytter noen medlemmer under terskelen."""
+    varslingslengden er lang. Bruker en Hs like over min_hs (etter
+    window_factor - se under), saa den ekstra spredningen faktisk flytter
+    noen medlemmer under terskelen.
+
+    model_dir=215 (ordre 2026-09-03, se rapport til bruker): PRESIS
+    vindussenteret til _spot() sitt swell_window (170,260) - siden
+    window_factor() byttet fra en flat 1.0-sone til cos^(2s), tapered
+    formen na OGSAA retningsjitteren mellom ensemblemedlemmene, ikke bare
+    hs/vind-usikkerheten testen faktisk vil isolere. 200 (15 grader fra
+    senteret) gjorde testen bare tilfeldig retningssensitiv - senteret er
+    der window_factor() sin egen helning er flatest (naer sitt eget
+    maksimum), saa den bidrar minst mulig EKSTRA varians her. model_hs
+    justert fra 1.3 til 1.45 av samme grunn - 1.3*window_factor(215) ligger
+    na rett UNDER min_hs i seg selv (for naer terskelen til aa vaere
+    "like over"), ikke fra retningsvalget."""
     spot = _spot()
-    base = {"model_hs": 1.3, "model_tp": 7.0, "model_dir": 200}
+    base = {"model_hs": 1.45, "model_tp": 7.0, "model_dir": 215}
     wind = {"wind_speed": 3.0, "wind_from_direction": 45}
 
     ewam = E.evaluate(spot, base, wind, lead_h=48, water_cm=None,

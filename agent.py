@@ -138,25 +138,37 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
     # q_size, med en haard 0/1-grense akkurat ved vinduskanten. ensemble.py
     # sin evaluate() (per-medlem-scoringen som faktisk driver p_surf/stars)
     # har ALDRI hatt denne haarde grensen - den ganger alltid hs med
-    # window_factor() sin glatte avtrapping (1.0 inne, glatt ned til 0.0
-    # 15 grader utenfor, se physics.window_factor()). Score/q_size (denne
-    # funksjonen, logget i shadow.csv) og stars/p_surf (ensemble.py) regnet
-    # dermed fra to ULIKE modeller av samme retningsvindu. Fikset ved aa
-    # skalere q_size sitt hs-grunnlag med wf her ogsaa, OG fjerne den haarde
+    # window_factor() sin avtrapping (se physics.window_factor() for
+    # DAGENS form - cos^(2s), byttet fra en flat/lineaer-taper-modell
+    # samme dag, se rapport til bruker). Score/q_size (denne funksjonen,
+    # logget i shadow.csv) og stars/p_surf (ensemble.py) regnet dermed fra
+    # to ULIKE modeller av samme retningsvindu. Fikset ved aa skalere
+    # q_size sitt hs-grunnlag med wf her ogsaa, OG fjerne den haarde
     # window_ok-nullstillingen - matcher ensemble.py sin struktur noeyaktig
     # (den har aldri hatt en tilsvarende haard grense). window_ok beholdes
     # KUN som et informativt returfelt (se retur-dict under), det styrer
     # ikke lenger q_size.
     #
-    # IKKE roert her: selve window_factor() sin FORM (flat 1.0 inne i
-    # vinduet, lineaer taper utenfor) - kun at den na faktisk BRUKES. En
-    # eventuell glatting av formen (myk vekting inne i vinduet, ikke bare
-    # flat) er en egen, separat endring - se physics.window_factor() sin
-    # docstring/rapport til bruker for hvorfor de to er holdt fra hverandre.
+    # window_ok = None for klasse C (ordre 2026-09-03, runde 2 - se rapport
+    # til bruker): var tidligere hardkodet True her UANSETT retning - et
+    # EKTE, reproduserbart funn (Baastoey odden: 10/80 timer med dir_eff
+    # klart utenfor spottens eget swell_window-felt, men window_ok=True
+    # likevel), fordi klasse C aldri har brukt swell_window/window_ok til
+    # retningsfiltrering i det hele tatt - den skjer i gate
+    # (physics.propagate_through_gate(), se gate_energy_frac i retur-
+    # dicten under for selve tallet). Feltnavnet lovet noe klasse C aldri
+    # leverte. Et felt som alltid er sant er verre enn ingen felt - None
+    # (ikke anvendelig for denne klassen) i stedet for en pastand.
     if spot["klasse"] in ("A", "B") and wdir is not None:
         window_ok = P.in_window(wdir, spot["swell_window"])
         wf = P.window_factor(wdir, spot)
+    elif spot["klasse"] == "C":
+        window_ok, wf = None, 1.0
     else:
+        # klasse A/B, men wdir mangler denne timen (ukjent retning) -
+        # uendret av begge ordrene over, samme forsiktige True/1.0-default
+        # som foer. IKKE samme situasjon som klasse C (der feltet aldri
+        # er anvendelig) - her er det bare denne ENE timens data som mangler.
         window_ok, wf = True, 1.0
 
     q_size = P.size_quality(hs * wf, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
@@ -259,6 +271,10 @@ def score_hour(spot, ts, wind, waves, water_cm, computed, lead_h=0.0, regional_w
         "q_wind_raw": round(q_wind_raw, 3),
         "wind_weight": spot.get("wind_weight", 1.0),
         "q_water": round(q_water, 3),
+        # klasse A/B: er dir_eff innenfor swell_window (informativt, styrer
+        # ikke lenger q_size - se docstringen over). klasse C: None - denne
+        # klassen filtrerer retning i gate, ikke via swell_window (se
+        # gate_energy_frac under), saa feltet er ikke anvendelig der.
         "window_ok": window_ok,
         # regional energi-port (se spot["regional_wp_min"/"regional_wp_max"]
         # i spots.yaml og docstringen over) - regional_wp er None naar den
@@ -904,13 +920,25 @@ def run(args):
         append_shadow_log(payload)
 
     # fullt hours-array per spot til egen fil - hovedfila (og dermed
-    # nedlastingen i frontenden) trenger den ikke, bare detaljvisningen gjor
+    # nedlastingen i frontenden) trenger den ikke, bare detaljvisningen gjor.
+    #
+    # name/klasse/kalibrert/params tas ogsaa med (ordre 2026-09-03, se
+    # rapport til bruker) - denne fila inneholdt tidligere KUN id/
+    # generated_at/hours, saa en klient som leser den alene (som chatten i
+    # appen tydeligvis gjor for detaljvisningen) hadde ingen kalibrert-
+    # nokkel aa lese i det hele tatt og falt stille tilbake til False -
+    # feil FIL, ikke feil verdi (den sto riktig hele tiden i forecast.json
+    # sitt "spots"-array, se resultatet over). Detaljfila var for tynn til
+    # aa tolkes alene uten aa krysse den mot hovedfila.
     for spot in payload["spots"]:
         hours = spot.pop("hours", None)
         if hours is None:
             continue
         (SPOTS_OUT / f"{spot['id']}.json").write_text(json.dumps(
-            {"id": spot["id"], "generated_at": payload["generated_at"], "hours": hours},
+            {"id": spot["id"], "generated_at": payload["generated_at"],
+             "name": spot["name"], "klasse": spot["klasse"],
+             "kalibrert": spot["kalibrert"], "params": spot["params"],
+             "hours": hours},
             indent=2, ensure_ascii=False))
 
     (OUT / "forecast.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False))

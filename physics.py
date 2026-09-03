@@ -33,17 +33,53 @@ def in_window(direction, window):
     return direction >= lo or direction <= hi
 
 
-def window_factor(direction, spot, taper=15.0):
+def window_factor(direction, spot):
     """
-    1.0 inne i spotens swellvindu, glatt nedtrapping over `taper` grader
-    utenfor, 0 lenger ute. Unngaar at scoren hopper mellom 0 og full verdi
-    naar modellretningen vaker rundt kanten av vinduet.
+    Retningsvekt for klasse A/B - amplitudefaktor (IKKE energiandel) paa
+    hs, brukt av agent.py sin score_hour() og ensemble.py sin evaluate().
+
+    Byttet ut (ordre 2026-09-03, se rapport til bruker) fra en flat
+    1.0-inne/lineaer-taper-15-grader-utenfor-modell til SAMME cos^(2s)-
+    spredning directional_energy_fraction() allerede bruker for klasse C
+    sin gate (physics.propagate_through_gate()) - EN retningsmodell i
+    hele systemet i stedet for to. Sektoren er spotens swell_window
+    (senter = midtpunkt, halvbredde = halve vinduet, wrap over 0
+    haandtert som i in_window()); s er spot["spread_s"] - samme
+    feltnavn og standardverdi-monster (5) som gate.spread_s for klasse C,
+    se spots.yaml sin topptekst ved det feltet.
+
+    sqrt(), ikke selve energiandelen: directional_energy_fraction()
+    returnerer hvor stor ANDEL AV ENERGIEN (Hs^2-skala) som havner
+    innenfor sektoren - hs skal skaleres med amplitude, altsaa
+    sqrt(energiandel), noyaktig samme mønster som
+    propagate_through_gate() bruker (`hs = gate_hs * math.sqrt(energy)`).
+
+    Simulert mot 45 234 historiske rader i shadow.csv foer denne byttet
+    (se rapport til bruker): 10,8 % av klasse A/B-radene endrer score,
+    median -4,1 poeng (0-100-skala), ingen rad krysser til/fra null -
+    mye mildere enn en cos^1-variant som ble vurdert og forkastet (drepte
+    64 % av alt som scoret positivt).
+
+    INGEN hard grense her lenger: i motsetning til den gamle modellen har
+    cos^(2s) ikke noe punkt der vekten er eksakt 0.0 (bortsett fra noyaktig
+    180 grader fra sektorsenteret) - retningsavvik gir alltid en glatt,
+    kontinuerlig avtagende vekt, aldri et hardt kutt. window_ok (se
+    agent.py) er uendret av dette - den er fortsatt en hard in/ut-flagg,
+    kun informativ, styrer ikke lenger q_size (se den fiksen fra 2026-09-03).
+
+    KJENT BEGRENSNING (ordre 2026-09-03, se rapport til bruker): cos^(2s)
+    beskriver spredning i det INNKOMMENDE boelgespekteret, ikke refraksjon
+    over bunnen. Ekte refraksjon boyer boelgene mot land og reduserer det
+    effektive vinkelavviket i grunt vann - denne modellen overvurderer
+    derfor retningstapet for spots med slak bunn helt inn, og undervurderer
+    det for spots med dypt vann helt inn. Kjent forenkling, ikke en feil.
     """
     lo, hi = spot["swell_window"]
-    if in_window(direction, (lo, hi)):
-        return 1.0
-    d = min(ang_diff(direction, lo), ang_diff(direction, hi))
-    return max(0.0, 1.0 - d / taper)
+    width = (hi - lo) if hi >= lo else (hi + 360 - lo)
+    center = (lo + width / 2.0) % 360
+    s = spot.get("spread_s", 5)
+    frac = directional_energy_fraction(direction, center, width / 2.0, s=s)
+    return math.sqrt(frac)
 
 
 def fetch_for_direction(fetch_table, direction):

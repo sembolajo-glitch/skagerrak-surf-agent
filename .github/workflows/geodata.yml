@@ -1,17 +1,21 @@
 name: geodata
 
 # Engangsjobb: hent Kystkontur/Dybdekurve fra Kartverket (Geonorge WFS,
-# CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km (build_fetch.py) og
-# out/spotgrid.json (build_spotgrid.py). KUN manuell trigger - aldri paa
-# tidsplan. Ruerer ikke forecast.yml eller main: kystkontur/dybdekurve +
-# spots.yaml havner paa en egen gren (geodata-resultat) for gjennomsyn foer
-# eventuell merge, mens spotgrid.json - som er statisk og kun endres her -
-# ogsaa dyttes til data-grenen saa forecast.yml sin "Hent tilstand fra
-# data-grenen" runder den tilbake inn i out/ (og dermed upload-pages-
-# artifact) uten aa regne den ut paa nytt hver dag, se forecast.yml.
+# CC BY 4.0) og beregn fetch_km_72/dybde_Xm_km (build_fetch.py),
+# diagnosekart per spot (diagnose_spot.py) og out/spotgrid.json
+# (build_spotgrid.py). KUN manuell trigger - aldri paa tidsplan. Ruerer
+# ikke forecast.yml eller main: kystkontur/dybdekurve + spots.yaml havner
+# paa en egen gren (geodata-resultat) for gjennomsyn foer eventuell merge,
+# mens spotgrid.json - som er statisk og kun endres her - ogsaa dyttes til
+# data-grenen saa forecast.yml sin "Hent tilstand fra data-grenen" runder
+# den tilbake inn i out/ (og dermed upload-pages-artifact) uten aa regne
+# den ut paa nytt hver dag, se forecast.yml. diagnose_spot.py sine SVG-er
+# havner KUN som artifact (diagnose-spot) - ren visualisering, ingenting
+# derfra committes noe sted.
 # Input "probe" bytter til fetch_geodata.py --probe (diagnostiser bbox/
-# akse/CRS mot layerne) og hopper over build_fetch.py, build_spotgrid.py
-# og commit-stegene - artifact-opplastingen av data/_raw/ kjorer uansett.
+# akse/CRS mot layerne) og hopper over build_fetch.py, diagnose_spot.py,
+# build_spotgrid.py og commit-stegene - artifact-opplastingen av
+# data/_raw/ kjorer uansett.
 on:
   workflow_dispatch:
     inputs:
@@ -75,6 +79,18 @@ jobs:
       - name: Beregn fetch og dybdeprofil (build_fetch.py)
         if: inputs.probe != true
         run: python build_fetch.py
+
+      # Ett diagnosekart (SVG) per spot - kystkontur/dybdekoter/offshore_point/
+      # facing/dybdepeiling/swell_window/fetch_km-rose, pluss en oversiktsside
+      # med alle spots side om side - rett fra spots.yaml sine (naa ferske,
+      # se steget over) felt og geodataene. Fem avvik markeres automatisk i
+      # roedt - se diagnose_spot.py sin docstring. Staar etter build_fetch.py
+      # (trenger dybde_Xm_km/status/skjaergaard_indeks derfra), foer
+      # build_spotgrid.py (uavhengig rekkefolge, men gruppert med de andre
+      # "beregn/tegn fra geodata"-stegene).
+      - name: Tegn diagnosekart (diagnose_spot.py)
+        if: inputs.probe != true
+        run: python diagnose_spot.py
 
       # Statisk rutenett over kandidat-surfpunkter (d20/d30/d50, apen
       # sektor/retning) - se build_spotgrid.py sin docstring. Trenger bare
@@ -150,6 +166,15 @@ jobs:
         with:
           name: geodata-raw
           path: data/_raw/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Last opp diagnosekart som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose-spot
+          path: out/diagnose/
           if-no-files-found: warn
           retention-days: 14
 

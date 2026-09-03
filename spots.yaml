@@ -6,7 +6,35 @@
 #
 #  facing:        retningen brytningen SER MOT = retningen palandsvind
 #                 kommer fra. Slagen facing=120 -> vika apner mot OSO.
-#  swell_window:  [lo, hi] meteorologiske grader, sektoren som gir bolger
+#  swell_window:  [lo, hi] meteorologiske grader, sektoren som gir bolger.
+#                 STOPP (ordre 2026-09-03, se rapport til bruker) - IKKE
+#                 forsok aa utlede/etterproeve denne mot kystkontur.geojson
+#                 via straalekasting igjen, verken enkelt- eller
+#                 kjeglekasting (build_fetch.compute_fetch_72_kjegle()) fra
+#                 spottens eget koordinat. Forsokt: samme feilklasse som
+#                 STOPP-notatet for fetch_km_72* i build_fetch.py sin
+#                 topptekst - en straale (eller kjegle av dem) smetter
+#                 gjennom et trangt, men LANGT sund/kanal og rapporterer
+#                 "apent" 50-225 grader unna faktisk swell-retning. Bekreftet
+#                 paa flere kjente spot: rakke (facing 170, "N/NNV fralands"
+#                 i notes) fikk beregnet sektor sentrert paa 345 grader;
+#                 skallevold og larkollen samme mønster (>100 graders avvik,
+#                 rett imot egne notes); portoer fikk INGEN aapen retning i
+#                 det hele tatt >20 km. Kjeglekasting (21 delstraaler ±10°,
+#                 80-persentil) - som allerede fikser enkeltskjaer - IKKE
+#                 nok her, fordi selve sundet/kanalen ofte er bredere enn
+#                 ±10°. swell_window forblir et manuelt/skjonnsbasert felt,
+#                 satt fra lokalkunnskap (facing, notes) - ikke fra geodata.
+#  spread_s:      KUN klasse A/B (klasse C har sitt eget gate.spread_s,
+#                 se der) - cos^(2s) retningsspredning rundt modellens
+#                 dir_eff, brukt av physics.window_factor() til aa vekte
+#                 hs mot swell_window (ordre 2026-09-03, erstattet en
+#                 flat/lineaer-taper-modell - se rapport til bruker og
+#                 window_factor() sin egen docstring for hele
+#                 begrunnelsen/simuleringen). Senter = midtpunkt av
+#                 swell_window, halvbredde = halve vinduet. Samme
+#                 feltnavn og standardverdi (5) som gate.spread_s - LAV s
+#                 = bredere spredning = mer slipper inn.
 #  offshore_point: [lat, lon], kun klasse A/B. TO FORMAAL PAA SAMME FELT
 #                 (ordre 2026-09-02, se rapport til bruker om Hvasser) -
 #                 IKKE flytt uten aa vite at begge endres:
@@ -247,6 +275,7 @@ spots:
     wind_weight: 0.55          # kraftig dyptvannsrev - surfes rutinemessig i onshore chop
     facing: 225
     swell_window: [170, 260]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.2
     ideal_hs: 2.5
     max_hs: 4.5
@@ -301,6 +330,7 @@ spots:
     wind_weight: 0.6          # samme type rev, enda mer eksponert
     facing: 180
     swell_window: [130, 250]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.1
     ideal_hs: 2.2
     max_hs: 4.0
@@ -343,6 +373,7 @@ spots:
     wind_weight: 0.9          # lang strand, mer vindfolsom enn et rev
     facing: 135
     swell_window: [100, 230]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.3
     ideal_hs: 2.5
     max_hs: 4.5
@@ -373,6 +404,7 @@ spots:
     wind_weight: 0.7          # berg og viker gir le-lommer
     facing: 170
     swell_window: [155, 225]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.7
     ideal_hs: 2.6
     max_hs: 4.5
@@ -402,6 +434,7 @@ spots:
                              # av build_fetch.py naar spotten regnes for forste gang.
     facing: 175
     swell_window: [140, 240]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.5
     ideal_hs: 2.5
     max_hs: 4.0
@@ -445,6 +478,7 @@ spots:
     wind_weight: 0.7
     facing: 190
     swell_window: [160, 240]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.5
     ideal_hs: 2.5
     max_hs: 4.2
@@ -473,6 +507,7 @@ spots:
     wind_weight: 0.7
     facing: 200
     swell_window: [165, 240]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 2.0
     ideal_hs: 3.0
     max_hs: 5.0
@@ -526,6 +561,7 @@ spots:
     wind_weight: 1.0
     facing: 100
     swell_window: [110, 200]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.3
     ideal_hs: 2.0
     max_hs: 3.5
@@ -567,6 +603,7 @@ spots:
     wind_weight: 1.1          # slak sand - blir soppel raskt
     facing: 195
     swell_window: [155, 220]
+    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 2.2
     ideal_hs: 3.0
     max_hs: 5.0
