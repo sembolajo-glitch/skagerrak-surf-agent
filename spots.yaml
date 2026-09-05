@@ -468,14 +468,33 @@ spots:
       på stranda - de nye koordinatene ville ligget 284 m fra hverandre,
       altså samme bølge. Norskerennas kant kommer nær VESTOVER (Norgeskart
       viser 100-meterskoten under 400 m der) - MEN det er ikke retningen
-      swellen ankommer fra. Målt langs swellretningen (peiling 214,6° mot
-      offshore_point, ordre 2026-09-02): 20 m på 10,21 km, 30 m på 8,05 km,
-      50 m på 6,35 km - grunt i seks kilometer, ikke dypt rett utenfor.
-      MEN den brytbare sonen mellom tørrfallet og 15-meterskoten er smal,
-      kanskje 50-100 m. Tørrfall (+4.7, +1.8, +6.2) ligger rett innenfor.
-      Uverifisert - rekognoser fra land på en 2 m-dag før du regner
-      med noe. Flyfoto viser lyst grunt vann mot Fugløyrogn i nord, men
-      det er en tørrfallende steinrygg, ikke et rev.
+      swellen ankommer fra. Flyfoto viser lyst grunt vann mot Fugløyrogn i
+      nord, men det er en tørrfallende steinrygg, ikke et rev.
+
+      Den tidligere "målt langs swellretningen (peiling 214,6°): 20 m på
+      10,21 km, 30 m på 8,05 km, 50 m på 6,35 km"-profilen som sto her
+      (ordre 2026-09-02) er SLETTET (ordre 2026-09-05, se rapport til
+      bruker) - motbevist på to uavhengige måter: (1) manuell oppmåling i
+      Norgeskart 5. sept 2026 gir 30 m på 412 m, tjue ganger nærmere: (2)
+      profilen var ikke-monoton (50 m nærmere land enn 20 m er umulig
+      langs én rett stråle) - signaturen på en stråle som løper langs
+      kysten i stedet for ut fra den, ikke en reell måling. Stod som
+      "uverifisert" i seks dager, plausibel nok til at noen kunne lagt
+      den inn i dybde_20m_km/_30m_km/_50m_km uten å sjekke.
+
+      Målt i stedet (Norgeskart, 5. sept 2026 - manuell oppmåling, IKKE
+      build_fetch.py - de feltene eies fortsatt av build_fetch.py og skal
+      fylles derfra når nettverkstilgang finnes): transekt fra selve
+      brekket, peiling 203°, lengde 412,24 m. 20 m ved 290 m, 30 m ved
+      412 m (endepunktet). Kystnormal ca. 250° - 47° avvik fra
+      transekten, altså IKKE samme retning som swellen (peiling 214,6°
+      mot offshore_point) eller facing (175°) - nok et eksempel på at
+      denne odden ikke har én entydig "rett ut"-retning, se
+      offshore_point-merknaden under. Midlere helning 0-30 m: ca. 1:14 -
+      brattere enn seks-kilometer-profilen over antydet, men fortsatt en
+      reell grunn tilnærming, ikke et stup. 0-5 m-båndet, der selve
+      bruddet skjer, er FORTSATT umålt - denne transekten dekker 0-30 m,
+      ikke bunnen av brytsonen.
 
     # fetch_km_72*/dybde_*-feltene fra det gamle molen-punktet er IKKE
     # tatt med her - de var maalt (build_fetch.py) mot de gamle
