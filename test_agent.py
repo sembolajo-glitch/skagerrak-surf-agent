@@ -770,8 +770,11 @@ def test_hs_vektet_lik_hs_eff_for_klasse_c_uansett_retning():
 
 
 def test_hs_vektet_i_shadow_fields():
-    """hs_vektet skal vaere en del av shadow_schema.FIELDS, bakerst (se
-    APPEND-ONLY-kontrakten i shadow_schema.py) - ellers logges ikke feltet
-    til out/shadow.csv i det hele tatt."""
+    """hs_vektet skal vaere en del av shadow_schema.FIELDS (se APPEND-ONLY-
+    kontrakten i shadow_schema.py) - ellers logges ikke feltet til
+    out/shadow.csv i det hele tatt. IKKE lenger bakerst - water_cm ble
+    lagt til etter (ordre 2026-09-05, se rapport til bruker og
+    test_water_cm_lagt_til_bakerst_2026_09_05() i test_shadow_schema.py),
+    saa denne testen sjekker kun medlemskap, ikke posisjon."""
     import shadow_schema
-    assert shadow_schema.FIELDS[-1] == "hs_vektet"
+    assert "hs_vektet" in shadow_schema.FIELDS

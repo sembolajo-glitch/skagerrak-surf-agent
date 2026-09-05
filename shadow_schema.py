@@ -65,6 +65,15 @@ FIELDS = [
     # score_hour() sin faktiske hs-grunnlag ikke etterproeves fra loggen
     # alene - kun hs_eff (foer vekting).
     "hs_vektet",
+    # vannstand i cm (ordre 2026-09-05, se rapport til bruker - okten
+    # 5. sept 2026 kunne ikke sjekkes mot vannstand fordi feltet ikke var
+    # logget). Verdien fantes ALLEREDE i pipelinen - score_hour() sitt
+    # returdict har hatt "water_cm" siden foer denne endringen (se
+    # agent.py, water_cm-parameteren kommer fra sources.kartverket_water_level()
+    # via gather()) - den naadde bare aldri shadow.csv fordi feltet ikke
+    # stod i FIELDS. Ingen ny integrasjon, kun logging av et tall som
+    # alt ble regnet ut og skrevet til out/spots/<id>.json hver kjoring.
+    "water_cm",
 ]
 
 # Tidligere versjoner av FIELDS, i vekstrekkefolge - REKONSTRUERT fra
@@ -97,4 +106,21 @@ FIELDS_HISTORY = [
      "q_wind", "q_water", "local_hs", "prop_hs", "gate_hs", "gate_tp",
      "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
      "swell_hs", "windsea_hs", "swell_andel", "partisjon_kilde"],
+    # sjekkpunkt lagt til 2026-09-05 (se rapport til bruker) - FIELDS slik
+    # den sto RETT FOER "water_cm" ble lagt til bakerst. Ikke rekonstruert
+    # fra en enkelt commit-SHA som de tre over (for mange smaa tillegg
+    # mellom 60c6be5 og na til aa liste hver for seg) - selve poenget med
+    # aa legge til dette sjekkpunktet NAA er at
+    # test_hver_historisk_liste_er_et_strengt_prefiks_av_fields() da faar
+    # noe FERSKT aa sjekke fremtidige felt mot (de tre gamle listene over
+    # daekker bare de forste 26 posisjonene - et felt satt inn feil sted
+    # blant posisjon 27-36 ville ha sluppet gjennom dem uoppdaget).
+    ["run_at", "spot", "time", "score", "hs_eff", "tp_eff", "dir_eff",
+     "wind_speed", "wind_from", "wind_label", "q_size", "q_period",
+     "q_wind", "q_water", "local_hs", "prop_hs", "gate_hs", "gate_tp",
+     "gate_energy_frac", "local_fetch_km", "local_duration_h", "source",
+     "swell_hs", "windsea_hs", "swell_andel", "partisjon_kilde",
+     "regional_wp", "regional_gate_closed", "regional_gate_bypassed",
+     "model_rev", "bypass_weight", "log_energy_margin", "steepness",
+     "gate_factor", "local_wind_mean", "hs_vektet"],
 ]

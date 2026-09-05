@@ -213,3 +213,42 @@ def test_blank_model_rev_regnes_som_pre_instrumentering():
     None og tom streng."""
     r = _row(70, model_rev="")
     assert (r.get("model_rev") or "pre-instrumentering") == "pre-instrumentering"
+
+
+# ---------------------------------------------- sessions.csv parser (5. sept)
+#
+# ordre 2026-09-05 (se rapport til bruker): sessions.csv er gitignored -
+# den lokale fila kan ikke leses i CI, saa denne testen bygger de samme
+# radene inline i stedet for aa avhenge av at fila finnes paa disk. Dekker
+# tidskorreksjonen for Saltstein (12:31Z, ikke 08:00Z) og den nye
+# Molen-raden (12:02Z) fra oppfolgingen etter okten 5. sept 2026.
+
+
+def test_sessions_csv_radene_5_sept_parser(tmp_path, monkeypatch):
+    text = (
+        "time,spot,rating,hs_observed_m,tp_observed_s,ekstern_wp,notes\n"
+        '2026-09-05T12:31Z,saltstein,4,,,,"storste sett naer close-out"\n'
+        '2026-09-05T12:02Z,molen_odden,0,,,,"tydelig plungende bolge, '
+        'brot naer land, ikke surfbar sone"\n'
+        '2026-09-05T08:00Z,bastoy_odden,0,0,,,"Helt flatt - BEKREFTET '
+        'SANN NEGATIV"\n'
+    )
+    sessions_file = tmp_path / "sessions.csv"
+    sessions_file.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(C, "SESSIONS", sessions_file)
+
+    rows = C.load_sessions()
+    assert len(rows) == 3
+    by_spot = {r["spot"]: r for r in rows}
+
+    assert by_spot["saltstein"]["time"] == "2026-09-05T12:31Z"
+    assert by_spot["saltstein"]["rating"] == "4"
+    assert "close-out" in by_spot["saltstein"]["notes"]
+
+    assert by_spot["molen_odden"]["time"] == "2026-09-05T12:02Z"
+    assert by_spot["molen_odden"]["rating"] == "0"
+    assert "ikke surfbar sone" in by_spot["molen_odden"]["notes"]
+
+    # Bastoey uendret fra forrige runde - samme tidspunkt/rating som foer
+    assert by_spot["bastoy_odden"]["time"] == "2026-09-05T08:00Z"
+    assert by_spot["bastoy_odden"]["rating"] == "0"
