@@ -16,16 +16,21 @@ diagnose_spot.py sitt (kun visuelle, ikke-blokkerende) rodt flagg.
 import agent as A
 
 # Kjente, allerede dokumenterte unntak - IKKE en generell tillatelse.
-# Begge kommer fra build_fetch.py sitt eget kjente forbehold (se
-# compute_depth_profile() sin docstring): naermeste treff langs straalen
-# kan vaere en liten, LUKKET dybdering (en isolert grop/pinnacle) i
-# stedet for den brede kystnaere isobaten - straalen ser ingen forskjell
-# paa de to. Oppdaget her (ikke fikset her - utenfor scope for denne
-# PR-en, som gjelder Molen/Saltstein), se rapport til bruker. Fjern en
-# id fra denne lista i samme commit som den faktisk rettes opp -
+# Fjern en id fra denne lista i samme commit som den faktisk rettes opp -
 # test_ingen_andre_ukjente_avvik() under tvinger lista til aa holde seg
-# noyaktig i sync med virkeligheten.
-KJENTE_IKKE_MONOTONE_UNNTAK = {"orekroken", "sletteroyene"}
+# noyaktig i sync med virkeligheten, og
+# test_allowlist_refererer_kun_til_eksisterende_spots() feiler hvis en
+# oppforing peker paa et spot som ikke lenger finnes (se orekroken,
+# ordre 2026-09-06 - slettet, men blir IKKE fjernet automatisk her -
+# feilen skal vaere synlig, ikke tyst reparert).
+#
+# ordre 2026-09-06 (se rapport til bruker): orekroken er slettet (fjernet
+# herfra i samme commit). sletteroyene sitt gamle brudd (20 m paa 13,03 km,
+# 50 m paa 11,88 km) gjaldt et koordinat 5,84 km unna det naavaerende -
+# build_fetch.py sin nye maaling for det RETTEDE koordinatet er monoton
+# (se spots.yaml sin egen notes for sletteroyene), saa den er OGSAA
+# fjernet herfra.
+KJENTE_IKKE_MONOTONE_UNNTAK = set()
 
 
 def _ikke_monotone_par(spot):
@@ -76,18 +81,40 @@ def test_ingen_andre_ukjente_avvik():
     assert faktiske == KJENTE_IKKE_MONOTONE_UNNTAK
 
 
-def test_molen_odden_har_ingen_maskinlesbar_dybdeprofil_ennaa():
-    """ordre 2026-09-05 (se rapport til bruker): den nye, faktisk maalte
-    profilen (20 m/290 m, 30 m/412 m langs peiling 203 grader) skal IKKE
-    skrives inn i dybde_20m_km/_30m_km/_50m_km - de feltene eies av
-    build_fetch.py. Den nye maalingen star i notes med kilde og dato
-    inntil build_fetch.py kan kjores paa nytt. Denne testen dokumenterer
-    det bevisste valget - feiler den, er trolig noen paa vei til aa
-    bryte den avtalen."""
+def test_manuelle_transekter_havner_i_notes_ikke_i_dybde_feltene():
+    """ordre 2026-09-05/06 (se rapport til bruker): manuelle Norgeskart-
+    transekter (Molen sin 20 m/290 m + 30 m/412 m langs peiling 203, og
+    Sletteroeyene sin 7/10/59/100 m langs peiling 196) skal IKKE skrives
+    inn i dybde_20m_km/_30m_km/_50m_km - de feltene eies av build_fetch.py
+    og bruker uansett andre maaldyp (20/30/50 m) enn transektene (som
+    dekker andre dyp, f.eks. 0-30 m for Molen). Feltene har begge fatt
+    EKTE build_fetch.py-tall i denne commiten (ordre 2026-09-06) - denne
+    testen sjekker bare at de IKKE ble forvekslet med de manuelle
+    malingene i notes."""
     spots, _ = A.load_spots()
-    molen = next(s for s in spots if s["id"] == "molen_odden")
-    assert molen.get("dybde_20m_km") is None
-    assert molen.get("dybde_30m_km") is None
-    assert molen.get("dybde_50m_km") is None
+    by_id = {s["id"]: s for s in spots}
+
+    molen = by_id["molen_odden"]
+    # build_fetch.py sitt eget tall (0.25), IKKE den manuelle transektens
+    # 20 m/290 m = 0.29
+    assert molen.get("dybde_20m_km") == 0.25
     assert "412" in molen.get("notes", "")
     assert "build_fetch.py" in molen.get("notes", "")
+
+    sletteroyene = by_id["sletteroyene"]
+    # build_fetch.py sitt eget tall (1.0), IKKE den manuelle transektens
+    # egne maaldyp (7/10/59/100 m - ikke engang samme kotesett)
+    assert sletteroyene.get("dybde_20m_km") == 1.0
+    assert "2,02 km" in sletteroyene.get("notes", "")
+    assert "build_fetch.py" in sletteroyene.get("notes", "")
+
+
+def test_allowlist_refererer_kun_til_eksisterende_spots():
+    """ordre 2026-09-06 (se rapport til bruker): en allowlist-oppforing
+    som peker paa et spot som ikke lenger finnes (f.eks. fordi spotet ble
+    slettet uten aa fjerne oppforingen) skal feile hoeyt - IKKE forsvinne
+    stille inn i "ingen brudd funnet noensinne igjen"."""
+    spots, _ = A.load_spots()
+    kjente_ider = {s["id"] for s in spots}
+    ukjente = KJENTE_IKKE_MONOTONE_UNNTAK - kjente_ider
+    assert not ukjente, f"allowlist peker paa spot(ter) som ikke finnes: {ukjente}"
