@@ -825,9 +825,12 @@ def test_saltstein_hs_0_8_gir_positiv_q_size_var_null_foer():
 
 def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
     """Regresjon: KUN saltstein sin trippel/kalibrert-status skal ha
-    endret seg. De andre 13 spottene sine min_hs/ideal_hs/max_hs (og
+    endret seg. De andre 12 spottene sine min_hs/ideal_hs/max_hs (og
     dermed q_size for enhver gitt hs) skal vaere byte-for-byte identiske
-    med foer denne endringen."""
+    med foer denne endringen.
+
+    ordre 2026-09-06: orekroken er slettet - fjernet fra denne lista
+    (var 13 spots, na 12)."""
     forventet = {
         "svenner": (1.1, 2.2, 4.0),
         "jomfruland_ost": (1.3, 2.5, 4.5),
@@ -836,7 +839,6 @@ def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
         "portor": (1.5, 2.5, 4.2),
         "verdens_ende": (2.0, 3.0, 5.0),
         "hvasser_sando": (1.3, 2.0, 3.5),
-        "orekroken": (2.2, 3.0, 5.0),
         "slagen": (1.6, 2.4, 3.4),
         "skallevold": (1.9, 2.7, 3.6),
         "sletteroyene": (1.5, 2.3, 3.5),
