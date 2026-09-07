@@ -16,12 +16,12 @@ Per spot, ca. 4x4 km rundt spotkoordinatet:
   - offshore_point (aapen sirkel + linje + avstand i km), klasse A/B
   - facing som en pil, merket med gradtall
   - dybdeprofil-peilingen (build_fetch.depth_bearing_for_spot()) som en
-    stiplet pil, merket med kilde (offshore_point/gate/facing)
+    stiplet pil, merket med kilde (dybde_peiling/offshore_point/gate/facing)
   - kryss der dybdestraalen traff 20/30/50 m-koten, med avstand paaskrevet.
-    Status "ingen_kote"/"data_slutt": straalen tegnes til der soeket ga
-    opp i stedet (se depth_search_cap_km() - build_fetch.py sin egen
-    effective_cap er ikke eksponert, saa den er rederivert her KUN for
-    tegningen, samme to bestanddeler som build_fetch.compute_depth_profile()
+    Status "ingen_kote"/"data_slutt"/"blokkert_av_land": straalen tegnes
+    til der soeket ga opp i stedet (se depth_search_cap_km() - build_fetch.py
+    sin egen effective_cap er ikke eksponert, saa den er rederivert her KUN
+    for tegningen, samme to bestanddeler som build_fetch.compute_depth_profile()
     selv bruker)
   - swell_window som en gjennomsiktig vifte
   - fetch_km/local_fetch_km (16-punkts kompasstabell) som en liten,
@@ -489,7 +489,7 @@ def render_spot_body(spot, ctx):
                          f'</g>')
             parts.append(f'<text x="{tx + perp_dx:.1f}" y="{ty + perp_dy:.1f}" class="label-small">'
                          f'{target}m {value:.2f} km</text>')
-        elif status in ("ingen_kote", "data_slutt"):
+        elif status in ("ingen_kote", "data_slutt", "blokkert_av_land"):
             cap_km = depth_search_cap_km(lon0, lat0, depth_bearing, ctx["edge_tree"], ctx["edge_lines"],
                                           ctx["kyst_tree_utm"], ctx["kyst_lines_utm"], label=f"{spot['id']}/{target}m")
             tdx, tdy = _bearing_offset_px(depth_bearing, cap_km * px_per_km)

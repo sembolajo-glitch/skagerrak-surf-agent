@@ -108,37 +108,49 @@ def test_manuelle_transekter_havner_i_notes_ikke_i_dybde_feltene():
     assert "2,02 km" in sletteroyene.get("notes", "")
     assert "build_fetch.py" in sletteroyene.get("notes", "")
 
-    # ordre 2026-09-07: Skallevold sin manuelle transekt (145 grader,
-    # 3,46 km) IKKE skrevet inn - build_fetch.py sitt eget tall (0.78,
-    # langs gate-peilingen 177, en ANNEN straale) star i feltet.
+    # ordre 2026-09-07 (systemisk dybde_peiling-fiks): Skallevold sin
+    # manuelle transekt (145 grader, 3,46 km) er na SELVE peilingen
+    # build_fetch.py skyter langs (dybde_peiling: 145 i spots.yaml,
+    # forran gate-fallbacken) - de to maalingene er dermed for forste
+    # gang samme straale, ikke to uavhengige. Tallet i feltet (0.43) er
+    # likevel build_fetch.py sitt eget, ikke transektens (som ikke maaler
+    # 20/30/50 m spesifikt).
     skallevold = by_id["skallevold"]
-    assert skallevold.get("dybde_20m_km") == 0.78
+    assert skallevold.get("dybde_20m_km") == 0.43
     assert "3,46 km" in skallevold.get("notes", "")
     assert "build_fetch.py" in skallevold.get("notes", "")
 
-    # ordre 2026-09-07: Tristein sin manuelle transekt (peiling 151,
-    # 1,15 km til ca. 100 m) IKKE skrevet inn - build_fetch.py sitt eget
-    # tall (langs offshore_point-peilingen, ca. 239 grader etter at
-    # brukeren rettet koordinatet, se notes) star i feltet.
+    # ordre 2026-09-07 (systemisk dybde_peiling-fiks): Tristein sin
+    # manuelle transekt (peiling 151, 1,15 km til ca. 100 m) er na SELVE
+    # peilingen build_fetch.py skyter langs (dybde_peiling: 151, forran
+    # offshore_point-fallbacken).
     tristein = by_id["tristein"]
-    assert tristein.get("dybde_20m_km") == 0.16
+    assert tristein.get("dybde_20m_km") == 0.21
     assert "1,15 km" in tristein.get("notes", "")
 
 
 def test_skallevold_nytt_koordinat_gir_monoton_profil():
-    """ordre 2026-09-07 (se rapport til bruker): Skallevold flyttet 2,1 km
-    - build_fetch.py sin gate-peiling (ca. 177 grader, IKKE facing=115
-    eller den manuelle transektens 145 grader - se depth_bearing_for_spot())
-    fant 20 m paa 0,78 km, men verken 30 eller 50 m (substansiell kystlinje
-    stoppet soeket foerst) - en triviell, men reell, monoton profil."""
+    """ordre 2026-09-07 (se rapport til bruker): Skallevold flyttet 2,1 km.
+    Opprinnelig (samme commit) fant build_fetch.py sin gate-peiling
+    (ca. 177 grader, IKKE facing=115 eller den manuelle transektens 145
+    grader) 20 m paa 0,78 km, men verken 30 eller 50 m. Senere samme dag
+    (ordre 2026-09-07, systemisk dybde_peiling-fiks) ble et eksplisitt
+    `dybde_peiling: 145` lagt til - na SAMME peiling som transekten, ikke
+    gate-peilingen - og profilen ble regnet paa nytt: 20 m paa 0,43 km,
+    50 m paa 1,36 km (30 m: data_slutt, IKKE ingen_kote - nedlastet
+    utsnitt tok slutt foer eventuell kote ble funnet langs akkurat denne
+    peilingen). Fortsatt monoton (0,43 < 1,36, 30 m ukjent)."""
     spots, _ = A.load_spots()
     skallevold = next(s for s in spots if s["id"] == "skallevold")
     assert skallevold["lat"] == 59.2896150
     assert skallevold["lon"] == 10.5069350
-    assert skallevold["dybde_20m_km"] == 0.78
+    assert skallevold["dybde_peiling"] == 145
+    assert skallevold["dybde_20m_km"] == 0.43
     assert skallevold["dybde_20m_status"] == "maalt"
     assert skallevold["dybde_30m_km"] is None
-    assert skallevold["dybde_30m_status"] == "ingen_kote"
+    assert skallevold["dybde_30m_status"] == "data_slutt"
+    assert skallevold["dybde_50m_km"] == 1.36
+    assert skallevold["dybde_50m_status"] == "maalt"
 
 
 def test_verdens_ende_er_slettet_tristein_er_nytt_spot():

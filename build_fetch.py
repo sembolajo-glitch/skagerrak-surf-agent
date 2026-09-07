@@ -128,6 +128,33 @@ For hvert spot i spots.yaml:
     disse to uten en egen "er dette en liten lukket ring"-sjekk, som
     verken bug (a) eller (b) sin fiks daekker.
 
+    TO FLERE FUNN (ordre 2026-09-07, se rapport til bruker - fulgte av
+    PR #35 sin oppdagelse at Skallevold sin gate-peiling, 177 grader,
+    ikke traff naer den manuelt maalte Norgeskart-transekten paa 145
+    grader): en systemisk mangel, ikke en enkeltspot-feil.
+
+      c) INGEN av de tre geometriske fallbackene (offshore_point/gate/
+         facing) kan garantere aa treffe den SAMME straalen som en
+         allerede innsamlet manuell transekt - de er alle uavhengige
+         geometriske anslag, ikke forpliktet til aa sammenfalle med et
+         menneskes faktiske maaling. Flere spots (Moelen odden,
+         Sletteroeyene, Skallevold, Tristein) har manuelt maalte
+         Norgeskart-transekter liggende i `notes`, men disse paavirket
+         ingenting - straalen ble skutt langs en helt annen, uvalidert
+         retning. Fikset med et nytt, valgfritt felt `dybde_peiling`:
+         naar satt, brukes DENNE peilingen ubetinget, foran alle tre
+         fallbackene - se depth_bearing_for_spot() sin nye prioritet 0.
+         Kun fylt inn for spots med en faktisk manuell transekt aa
+         forankre i (se spots.yaml) - resten faller fortsatt igjennom
+         til den geometriske gjettingen, synlig i STEG 3-loggen.
+
+      d) "ingen_kote" dekket tidligere BAADE "soekt hele rekkevidden,
+         reelt fravaer" OG "en substansiell kystlinje stanset soeket foer
+         koten ble naadd" - to fysisk helt ulike utfall (et paalitelig
+         nei, mot et ukjent svar) med samme statustekst. Skilt ut som en
+         egen status, "blokkert_av_land", med avstanden til blokkeringen
+         logget - se compute_depth_profile() sin docstring.
+
 Eksisterende 16-punkts fetch-tabeller (`fetch_km` / `local_fetch_km`)
 BEHOLDES uendret - agent.py/physics.py bruker dem fortsatt. En kopi
 legges ved siden av som `fetch_km_manuell` slik at de to kan sammenlignes.
@@ -487,6 +514,17 @@ def depth_bearing_for_spot(spot):
     hvorfor `facing` alene ikke duger paa en odde).
 
     Prioritet:
+      0. `dybde_peiling` - eksplisitt, manuelt satt peiling (ordre
+         2026-09-07, se rapport til bruker om Skallevold: gate-peilingen
+         der (177 grader) er en helt ANNEN straale enn den manuelt maalte
+         Norgeskart-transekten (145 grader) - straalekastingen har ingen
+         maate aa vite at en menneskelig maaling allerede finnes langs en
+         bestemt, verifisert retning). Naar feltet er satt i spot-
+         konfigen, brukes det UBETINGET foran all geometrisk gjetting
+         under - det representerer et menneske som faktisk har sett paa
+         kartet, ikke en av de tre geometriske fallbackene. Spots UTEN
+         feltet faller igjennom til dagens logikk, synlig i STEG 3-
+         loggen ved at kilden IKKE er "dybde_peiling".
       1. `offshore_point` - peilingen fra spotens (lat, lon) til punktet.
          Ment aa ligge i aapent vann, mot der swellen faktisk kommer fra -
          klasse A/B sitt eget, spot-spesifikke anslag.
@@ -507,13 +545,17 @@ def depth_bearing_for_spot(spot):
          retningen - se rapporten til brukeren om Skallevold/Larkollen
          (ordre 2026-09-02, som loeste den ANDRE saken om Moelen odden
          paa samme maate for klasse A/B).
-      3. `facing` - siste utvei naar hverken offshore_point eller gate
-         finnes.
+      3. `facing` - siste utvei naar hverken dybde_peiling, offshore_point
+         eller gate finnes.
 
-    Returnerer (bearing_deg, kilde), der kilde er "offshore_point",
-    "gate" eller "facing" - main() logger denne per spot i STEG 3-
-    utskriften, se rapporten til brukeren for hvorfor det er verdt aa se.
+    Returnerer (bearing_deg, kilde), der kilde er "dybde_peiling",
+    "offshore_point", "gate" eller "facing" - main() logger denne per spot
+    i STEG 3-utskriften, se rapporten til brukeren for hvorfor det er
+    verdt aa se.
     """
+    peiling = spot.get("dybde_peiling")
+    if peiling is not None:
+        return peiling, "dybde_peiling"
     offshore = spot.get("offshore_point")
     if offshore:
         off_lat, off_lon = offshore[0], offshore[1]
@@ -542,15 +584,29 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
     inn peilingen mot offshore_point naar den finnes, ellers mot gate naar
     SPOTTEN har en, ellers facing som siste utvei.
 
-      "maalt"       reell treff innenfor den gyldige rekkevidden - stol paa den.
-      "ingen_kote"  soekt hele den gyldige rekkevidden (DEPTH_MAX_KM,
-                    eller kortere hvis en substansiell kystkryssing eller
-                    bbox-kanten var naermere - se under) uten treff. Et
-                    paalitelig NEI, ikke mangel paa data.
-      "data_slutt"  det nedlastede utsnittet tok slutt FOER noe ble
-                    funnet, og det - ikke DEPTH_MAX_KM eller en
-                    kystkryssing - var det som stanset soeket. Vet IKKE
-                    hva som er lenger ute; ikke tolk som "ingen kote".
+      "maalt"            reell treff innenfor den gyldige rekkevidden - stol paa den.
+      "ingen_kote"       soekt hele den gyldige rekkevidden (DEPTH_MAX_KM)
+                         uten treff, og VERKEN bbox-kanten eller en
+                         substansiell kystkryssing var det som stanset
+                         soeket foerst - et paalitelig NEI, ikke mangel
+                         paa data.
+      "data_slutt"       det nedlastede utsnittet tok slutt FOER noe ble
+                         funnet, og det - ikke DEPTH_MAX_KM eller en
+                         kystkryssing - var det som stanset soeket. Vet
+                         IKKE hva som er lenger ute; ikke tolk som
+                         "ingen kote".
+      "blokkert_av_land" (ordre 2026-09-07, se rapport til bruker) en
+                         SUBSTANSIELL kystkryssing (se
+                         substantial_land_crossing_km()) var det naermeste
+                         av de tre grensene og stanset soeket foer koten
+                         (om den i det hele tatt finnes) ble naadd.
+                         FUNDAMENTALT ulikt "ingen_kote": her er svaret
+                         "vet ikke, straalen gikk i land foerst", ikke
+                         "koten finnes ikke langs denne retningen". Tidligere
+                         (foer denne statusen fantes) ble dette tilfellet
+                         ogsaa merket "ingen_kote", og de to - "koten finnes
+                         ikke" og "straalen naadde aldri saa langt" - kunne
+                         ikke skilles fra hverandre uten aa lese loggen.
 
     Returnerer {target: (verdi_km_eller_None, status)}.
 
@@ -585,8 +641,12 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
         if d < effective_cap:
             out[target] = (round(d, 2), "maalt")
         elif land_km is not None and land_km <= edge_km and land_km <= DEPTH_MAX_KM:
-            # substansiell kystlinje var det naermeste - reell grense, paalitelig nei
-            out[target] = (None, "ingen_kote")
+            # substansiell kystlinje var det naermeste - straalen gikk i
+            # land foer koten (om den finnes) ble naadd. IKKE et
+            # paalitelig nei lenger (se "blokkert_av_land" i docstringen
+            # over, ordre 2026-09-07) - bare at DENNE straalen aldri kom
+            # forbi kysten.
+            out[target] = (None, "blokkert_av_land")
         elif edge_km < DEPTH_MAX_KM and edge_km <= (land_km if land_km is not None else DEPTH_MAX_KM):
             # bbox-utsnittet tok slutt foerst - usikkert, ikke en reell null
             out[target] = (None, "data_slutt")
@@ -594,6 +654,12 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
             # DEPTH_MAX_KM selv var den strammeste grensa - soekt hele den
             # tiltenkte rekkevidden, reell null
             out[target] = (None, "ingen_kote")
+
+    blocked = [t for t in DEPTH_TARGETS_M if out[t][1] == "blokkert_av_land"]
+    if blocked:
+        log(f"    {label + ': ' if label else ''}dybdesoek blokkert av substansiell "
+            f"kystlinje ved {land_km:.2f} km (koter ikke naadd: "
+            + ", ".join(f"{t}m" for t in blocked) + ")")
     return out
 
 
@@ -778,7 +844,7 @@ def main():
             f"storst {worst_delta:+7.1f} km ({worst_label})   {n_skipped}/16 hoppet over")
 
     log("\n" + "=" * 70)
-    log("STEG 3 - dybdeprofil langs offshore_point/gate-peiling (fallback: facing)")
+    log("STEG 3 - dybdeprofil langs dybde_peiling/offshore_point/gate-peiling (fallback: facing)")
     log("=" * 70)
     for spot in doc["spots"]:
         lon, lat, facing = spot["lon"], spot["lat"], spot["facing"]
