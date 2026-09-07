@@ -188,6 +188,26 @@ DEPTH_TARGETS_M = (20, 30, 50)
 DEPTH_MAX_KM = 100.0
 DEPTH_TOLERANCE_M = 0.5
 
+# Klasse C (indre Oslofjord) drives av lokal kortperiodisk vindsjo + en
+# gate-propagert komponent (evaluate_class_c() i agent.py), IKKE en modell
+# som leser dybdeprofilen direkte slik klasse A/B gjor (evaluate_class_ab()).
+# Bunnkontakt: dyp vann-boelgelengde L0 = 1,56*Tp^2 (Tp i sekunder, L0 i
+# meter), og en boelge foler bunnen fra dyp L0/2. Alle fem klasse C-spotene
+# sitt min_tp ligger paa 4,5 s (se spots.yaml) - avrundet opp til den
+# representative "5 s vindsjo" ordren selv bruker: L0 = 1,56*5^2 = 39 m,
+# L0/2 = 19,5 m ~ 20 m. DEPTH_TARGETS_M sitt eget 20 m-maal er dermed
+# allerede den relevante bunnkontakt-grensa for denne klassen (og 4,5 s
+# gir 15,8 m - enda strengere, samme konklusjon). 30 og 50 m ligger
+# UTENFOR alt som paavirker en vindsjo saa kort - se
+# KLASSE_C_RELEVANTE_DYBDER, brukt i main() sitt STEG 3 (ordre 2026-09-07,
+# se rapport til bruker: "blokkert_av_land betyr ulike ting for ulike
+# klasser" - for klasse A/B mot aapent hav er statusen et symptom paa feil
+# peiling; for klasse C, der SELVE dybden aldri var relevant utenfor 20 m,
+# er den bare geografi - Vestfjorden/indre Oslofjord er 12-15 km brede, saa
+# ENHVER peiling treffer motsatt side til slutt, langt utenfor der dybden
+# faktisk paavirker boelgen).
+KLASSE_C_RELEVANTE_DYBDER = (20,)
+
 # Et kystlinjestykke maa vaere minst saa langt for aa kappe dybdesoeket -
 # se substantial_land_crossing_km(). Et skjaer/fragment kortere enn dette
 # stopper ikke soeket, akkurat som det ikke stopper en reell boelge
@@ -569,9 +589,11 @@ def depth_bearing_for_spot(spot):
 
 
 def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
-                           kyst_tree, kyst_lines, label=None):
+                           kyst_tree, kyst_lines, label=None, targets=DEPTH_TARGETS_M):
     """
-    For hver maaldybde: avstand langs `bearing` til koten, med en status
+    For hver maaldybde i `targets` (default DEPTH_TARGETS_M - se
+    KLASSE_C_RELEVANTE_DYBDER for hvorfor en kaller kan begrense dette,
+    ordre 2026-09-07): avstand langs `bearing` til koten, med en status
     ved siden av som forteller hvor mye aa stole paa verdien.
 
     `bearing` er IKKE noedvendigvis spotens `facing`-felt (ordre
@@ -607,8 +629,16 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
                          ogsaa merket "ingen_kote", og de to - "koten finnes
                          ikke" og "straalen naadde aldri saa langt" - kunne
                          ikke skilles fra hverandre uten aa lese loggen.
+      "ikke_relevant_klasse_c" IKKE satt av denne funksjonen selv - satt av
+                         kalleren (main() sitt STEG 3) for maaldybder
+                         UTENFOR `targets`-lista naar en klasse C-spot sin
+                         fysikk aldri bryr seg om dem (se
+                         KLASSE_C_RELEVANTE_DYBDER). Nevnt her for
+                         fullstendighet - se den konstantens docstring for
+                         begrunnelsen (L0 = 1,56*Tp^2, bunnkontakt fra L0/2).
 
-    Returnerer {target: (verdi_km_eller_None, status)}.
+    Returnerer {target: (verdi_km_eller_None, status)} - KUN for maaldybdene
+    i `targets` (default alle tre, DEPTH_TARGETS_M).
 
     Soeket kappes ved MIN(DEPTH_MAX_KM, avstand til bbox-kanten,
     avstand til naermeste substansielle kystkryssing) - se
@@ -632,7 +662,7 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
     effective_cap = min(DEPTH_MAX_KM, edge_km, land_km if land_km is not None else DEPTH_MAX_KM)
 
     out = {}
-    for target in DEPTH_TARGETS_M:
+    for target in targets:
         if target not in depth_trees:
             out[target] = (None, "ingen_kote")
             continue
@@ -655,7 +685,7 @@ def compute_depth_profile(lon, lat, bearing, depth_trees, edge_tree, edge_lines,
             # tiltenkte rekkevidden, reell null
             out[target] = (None, "ingen_kote")
 
-    blocked = [t for t in DEPTH_TARGETS_M if out[t][1] == "blokkert_av_land"]
+    blocked = [t for t in targets if out[t][1] == "blokkert_av_land"]
     if blocked:
         log(f"    {label + ': ' if label else ''}dybdesoek blokkert av substansiell "
             f"kystlinje ved {land_km:.2f} km (koter ikke naadd: "
@@ -849,18 +879,26 @@ def main():
     for spot in doc["spots"]:
         lon, lat, facing = spot["lon"], spot["lat"], spot["facing"]
         bearing, bearing_source = depth_bearing_for_spot(spot)
+        # klasse C (ordre 2026-09-07, se rapport til bruker og
+        # KLASSE_C_RELEVANTE_DYBDER sin docstring): 30/50 m ligger utenfor
+        # det som paavirker denne klassens kortperiodiske vindsjo - IKKE
+        # let etter dem i det hele tatt, ikke bare skjul et resultat.
+        targets = KLASSE_C_RELEVANTE_DYBDER if spot["klasse"] == "C" else DEPTH_TARGETS_M
         profile = compute_depth_profile(lon, lat, bearing, depth_trees,
                                          edge_tree, edge_lines, kyst_tree, kyst_lines,
-                                         label=spot["id"])
+                                         label=spot["id"], targets=targets)
         for target in DEPTH_TARGETS_M:
-            value, status = profile[target]
+            if target in profile:
+                value, status = profile[target]
+            else:
+                value, status = None, "ikke_relevant_klasse_c"
             spot[f"dybde_{target}m_km"] = value
             spot[f"dybde_{target}m_status"] = status
         bearing_note = (f"bearing={bearing:.1f} (facing, ingen offshore_point/gate)"
                          if bearing_source == "facing"
                          else f"bearing={bearing:.1f} ({bearing_source})")
         log(f"  {spot['id']:<16} facing={facing:<4} {bearing_note:<38} "
-            + "  ".join(f"{t}m={profile[t][0]}({profile[t][1]})" for t in DEPTH_TARGETS_M))
+            + "  ".join(f"{t}m={spot[f'dybde_{t}m_km']}({spot[f'dybde_{t}m_status']})" for t in DEPTH_TARGETS_M))
 
         # fetch_km_72*/dybde_*-feltene over er nettopp regnet fra spotens
         # GJELDENDE (lat, lon) - se compute_fetch_72()/compute_depth_profile()
