@@ -40,3 +40,12 @@ def test_fields_history_er_selv_strengt_voksende():
 def test_fields_er_minst_saa_lang_som_nyeste_historiske_liste():
     if S.FIELDS_HISTORY:
         assert len(S.FIELDS) >= len(S.FIELDS_HISTORY[-1])
+
+
+def test_water_cm_lagt_til_bakerst_2026_09_05():
+    """ordre 2026-09-05 (se rapport til bruker): vannstand kunne ikke
+    sjekkes for okten 5. sept fordi feltet ikke var logget, selv om
+    verdien allerede fantes i score_hour() sitt returdict. Lagt til
+    bakerst i FIELDS - denne testen gjor kravet eksplisitt, utover den
+    generiske prefiks-sjekken over."""
+    assert S.FIELDS[-1] == "water_cm"
