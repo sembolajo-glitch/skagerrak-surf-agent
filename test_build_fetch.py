@@ -248,6 +248,17 @@ def test_group_by_depth_ingen_treff_utelates():
     assert groups == {}
 
 
+def test_depth_bearing_for_spot_dybde_peiling_foran_alt():
+    """ordre 2026-09-07 (se rapport til bruker): dybde_peiling, naar satt,
+    skal brukes UBETINGET foran offshore_point/gate/facing - en manuelt
+    Norgeskart-maalt peiling som allerede finnes skal ikke kunne
+    overstyres av en geometrisk gjetting."""
+    spot = {"lat": 59.0, "lon": 10.0, "facing": 190, "dybde_peiling": 145,
+            "offshore_point": [58.98, 9.99], "gate": {"lat": 59.03, "lon": 10.52}}
+    bearing, source = B.depth_bearing_for_spot(spot)
+    assert (bearing, source) == (145, "dybde_peiling")
+
+
 def test_depth_bearing_for_spot_bruker_offshore_point():
     """Peiling mot offshore_point, IKKE facing, naar feltet finnes -
     se rapporten om Moelen odden (27 grader avvik mellom de to)."""
@@ -367,7 +378,12 @@ def test_compute_depth_profile_bbox_kant_gir_data_slutt_ikke_ingen_kote():
 def test_compute_depth_profile_substansiell_kystkryssing_kapper_soeket():
     """Kjernen i fiksen: en 30 m-kote som ligger BAK (lenger unna enn) en
     substansiell kystkryssing skal IKKE rapporteres - den kan hoere til en
-    helt annen, adskilt bukt (se Skallevold/Sletteroeyene-rapporten)."""
+    helt annen, adskilt bukt (se Skallevold/Sletteroeyene-rapporten).
+
+    ordre 2026-09-07 (se rapport til bruker): status er "blokkert_av_land",
+    IKKE "ingen_kote" - de to var tidligere samme statustekst for to fysisk
+    ulike utfall (et paalitelig nei, mot "straalen naadde aldri saa langt").
+    Se compute_depth_profile() sin docstring."""
     lon0, lat0 = 10.0, 59.0
     ox, oy = G.to_utm(lon0, lat0)
     # solid kystlinje (200 m) 3 km unna
@@ -380,7 +396,7 @@ def test_compute_depth_profile_substansiell_kystkryssing_kapper_soeket():
     profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,
                                        edge_tree=None, edge_lines=[],
                                        kyst_tree=kyst_tree, kyst_lines=[coast])
-    assert profile[30] == (None, "ingen_kote")
+    assert profile[30] == (None, "blokkert_av_land")
 
 
 def test_compute_depth_profile_lite_skjaer_stopper_ikke_soeket():

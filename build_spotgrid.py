@@ -30,9 +30,9 @@ For hvert rutepunkt som ligger i SJOEN og er naermere enn NEAR_LAND_MAX_KM
                   IKKE status per retning (droppet med vilje for
                   filstoerrelse - se rapport til bruker 2026-09-02).
                   Alle 8 er derfor implisitt "maalt eller null", uten aa
-                  skille "ingen_kote" fra "data_slutt" slik spots.yaml
-                  sine dybde_Xm_status-felt gjoer - se build_fetch.py
-                  hvis den skillelinja trengs.
+                  skille "ingen_kote"/"data_slutt"/"blokkert_av_land"
+                  slik spots.yaml sine dybde_Xm_status-felt gjoer - se
+                  build_fetch.py hvis den skillelinja trengs.
   as (apen_sektor)  bredden i grader paa den aapne sektoren mellom
                   SECTOR_LO_DEG og SECTOR_HI_DEG (135-250, SO til VSV -
                   den generelle retningen mot aapent Skagerrak for denne
@@ -170,8 +170,8 @@ def depth_profiles_8dir(lon, lat, depth_trees, edge_tree, edge_lines, kyst_tree,
     """
     {20: [8 verdier], 30: [...], 50: [...]} - avstand (km, eller None) til
     hver maaldybde i DEPTH_BEARINGS_DEG sine 8 faste retninger. Status
-    (maalt/ingen_kote/data_slutt) droppes med vilje her - se modulens
-    docstring.
+    (maalt/ingen_kote/data_slutt/blokkert_av_land) droppes med vilje her -
+    se modulens docstring.
     """
     out = {t: [] for t in DEPTH_TARGETS_M}
     for bearing in DEPTH_BEARINGS_DEG:

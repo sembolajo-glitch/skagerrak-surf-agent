@@ -431,7 +431,7 @@ spots:
     dybde_50m_km: 1.35
     fetch_km_72_endelig: [0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.4, 20.8, 21.3, 21.3, 30.2, 35.6, 78.8, 72.1, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 19.0, 0.9, 0.6, 0.4, 0.3, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
     fetch_km_72_kjegle: [0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.3, 20.7, 21.1, 21.6, 22.8, 30.2, 53.9, 78.5, 79.0, 80.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 15.7, 14.8, 14.3, 0.6, 0.4, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-    skjaergaard_indeks: 3.6
+    skjaergaard_indeks: 3.59
     dybde_20m_status: maalt
     dybde_30m_status: maalt
     dybde_50m_status: maalt
@@ -460,9 +460,9 @@ spots:
     fetch_km_72_endelig: [60.0, 60.0, 6.0, 5.4, 5.0, 4.7, 3.9, 3.7, 4.2, 7.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 0.7, 0.7, 0.9, 1.0, 1.3, 1.3, 16.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0]
     fetch_km_72_kjegle: [60.0, 60.0, 7.4, 6.3, 5.8, 5.3, 5.1, 4.5, 4.2, 4.2, 3.3, 2.9, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.4, 0.4, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 0.7, 0.8, 0.9, 1.2, 1.3, 1.3, 16.6, 16.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0]
     skjaergaard_indeks: 0.71
-    dybde_20m_status: ingen_kote
-    dybde_30m_status: ingen_kote
-    dybde_50m_status: ingen_kote
+    dybde_20m_status: blokkert_av_land
+    dybde_30m_status: blokkert_av_land
+    dybde_50m_status: blokkert_av_land
   - id: molen_odden
     name: Mølen odden
     klasse: A
@@ -498,6 +498,15 @@ spots:
                            # konvertert i denne PR-en, se rapport til bruker.
 
     facing: 175
+    dybde_peiling: 203    # LAGT TIL (ordre 2026-09-07, se rapport til bruker) -
+                           # samme peiling som den manuelle Norgeskart-transekten
+                           # i notes under (412 m, 20 m paa 290 m, 30 m paa 412 m).
+                           # depth_bearing_for_spot() sin prioritet 0 - se
+                           # build_fetch.py. Endrer IKKE noe her: offshore_point
+                           # under peker allerede langs samme maalte 203 grader,
+                           # saa dette gjor den eksisterende peilingen eksplisitt
+                           # og uavhengig av offshore_point i stedet for aa
+                           # tilfeldigvis sammenfalle med den.
     swell_window: [140, 240]
     spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 1.5
@@ -576,6 +585,17 @@ spots:
       (se offshore_point-merknaden under) - forrige punkt (0,71 km ute)
       lå fortsatt godt inne i shoalingsonen.
 
+      Systemisk fiks (ordre 2026-09-07, se rapport til bruker): lagt til
+      et eksplisitt `dybde_peiling: 203` (se over), samme tall som
+      offshore_point allerede ga - denne spotten var altså IKKE rammet av
+      selve bugen (gate/offshore_point tilfeldigvis pekte samme vei som
+      transekten fra før), men feltet gjør det eksplisitt og uavhengig av
+      offshore_point i stedet for et sammenfall. Ny kjøring: 0,25/0,32/
+      0,37 km - 50 m endret seg 10 m (0,38 -> 0,37), avrundingsstøy fra at
+      dybde_peiling (203,0°) ikke er BYTE-identisk med
+      bearing_between()-verdien offshore_point ga (203,0° avrundet, reelt
+      en brøkdel av en grad annerledes) - ikke en reell endring.
+
     # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km under er REGNET PAA NYTT
     # (ordre 2026-09-06, se rapport til bruker) mot det nye koordinatet
     # over, med build_fetch.py mot ekte Kartverket-geodata (kystkontur/
@@ -594,7 +614,7 @@ spots:
     dybde_20m_status: maalt
     dybde_30m_km: 0.32
     dybde_30m_status: maalt
-    dybde_50m_km: 0.38
+    dybde_50m_km: 0.37
 
     dybde_50m_status: maalt
   - id: portor
@@ -623,9 +643,9 @@ spots:
     fetch_km_72_endelig: [0.2, 0.2, 0.2, 0.3, 0.2, 0.3, 0.4, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.3, 0.3, 0.5, 0.4, 0.0, 0.0, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.2, 0.6, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
     fetch_km_72_kjegle: [0.2, 0.2, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.2, 0.2, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
     skjaergaard_indeks: 0.03
-    dybde_20m_status: ingen_kote
-    dybde_30m_status: ingen_kote
-    dybde_50m_status: ingen_kote
+    dybde_20m_status: blokkert_av_land
+    dybde_30m_status: blokkert_av_land
+    dybde_50m_status: blokkert_av_land
   - id: tristein
     name: Tristein
     klasse: A
@@ -646,17 +666,36 @@ spots:
                                         # kompromiss, geometrien bekrefter na at senteret
                                         # selv er aapent). build_fetch.py sin egen
                                         # bearing_between() gir 238,7 (avrundingsforskjell,
-                                        # ikke reell uenighet). Ekte maalt
-                                        # (compute_depth_profile(), samme kjoring som
-                                        # dybde_Xm_km under): 20 m paa 0,16 km, 50 m paa
-                                        # 0,71 km - 1,5 km gir god margin forbi begge.
-                                        # 30 m: data_slutt langs noeyaktig denne peilingen
-                                        # (nedlastet utsnitt tok slutt foer koten ble
-                                        # funnet) - se dybde_30m_status under.
+                                        # ikke reell uenighet).
+                                        #
+                                        # OPPDATERT (ordre 2026-09-07, se rapport til
+                                        # bruker - systemisk dybde_peiling-fiks): tallene
+                                        # som stod her ("20 m paa 0,16 km, 50 m paa
+                                        # 0,71 km") var maalt LANGS DENNE peilingen (~239).
+                                        # dybde_Xm_km under bruker na i stedet det nye
+                                        # dybde_peiling-feltet (151 grader, den manuelle
+                                        # transekten - se notes) med hoyeste prioritet i
+                                        # depth_bearing_for_spot(), saa tallene under
+                                        # (0,21/-/0,54) er IKKE lenger langs denne
+                                        # offshore_point-peilingen. 1,5 km er fortsatt god
+                                        # margin forbi begge de nye tallene, men de to
+                                        # peilingene (151 og ~239) maaler na to reelt
+                                        # ULIKE straaler - se test_offshore_point.py sin
+                                        # docstring for hvorfor kravet der (avstand > 1 km
+                                        # OG > dybde_50m_km) fortsatt er meningsfullt som
+                                        # en retningsuavhengig sunnhetssjekk, selv om de to
+                                        # tallene ikke lenger kommer fra samme straale.
     wind_weight: 1.0            # ikke tunet - ingen surfeerfaring aa kalibrere mot enda
     facing: 259                  # normalen paa revlinja (169+90), ikke 280 (revlinjas andre
                                   # normal, 349-180=169+90=... se notes: trend 169/349,
                                   # normal 259/79 - 259 er siden som vender mot aapent hav)
+    dybde_peiling: 151    # LAGT TIL (ordre 2026-09-07, se rapport til bruker) -
+                           # samme peiling som den manuelle Norgeskart-transekten
+                           # i notes under (1,15 km til ca. 100 m). FOR denne
+                           # endringen brukte depth_bearing_for_spot() offshore_
+                           # point-peilingen (ca. 239 grader, vindussenteret) -
+                           # en HELT ANNEN straale. Se rapporten til bruker for
+                           # hva dette faktisk endret.
     swell_window: [210, 270]     # senter 240 - midt i det oppgitte 235-245-omraadet.
                                   # Forrige runde skjov senteret til 235/nedre kant til
                                   # 205 pga. en da-antatt kystlinje naer 235 langs det
@@ -695,14 +734,20 @@ spots:
       geometrisk selvmotsigelse som ble rapportert, ikke tildekket, i
       forrige commit). Det nye koordinatet er verifisert mot ekte
       kystkontur.geojson: aapent hav i hele 140-259 graders-sektoren.
-      build_fetch.py sin egen dybdeprofil langs offshore_point-peilingen
-      (~239 grader, se offshore_point over) gir 20 m paa 0,16 km og 50 m
-      paa 0,71 km (30 m: data_slutt, se dybde_30m_status under - IKKE det
-      samme som "ingen kote finnes", bare at det nedlastede utsnittet tok
-      slutt foer koten evt. ble funnet). Dette er en ANNEN straale enn den
-      manuelle 151-graders-transekten over (som fant 100 m paa 1,15 km) -
-      rapportert som to uavhengige maalinger, ikke reconcilert, samme
-      prinsipp som for Skallevold.
+
+      Systemisk fiks (ordre 2026-09-07, se rapport til bruker): frem til
+      na maalte dybdeprofilen langs offshore_point-peilingen (~239 grader),
+      IKKE langs den manuelle 151-graders-transekten over, sjolv om
+      transekten laa der hele tiden - depth_bearing_for_spot() hadde ingen
+      maate aa vite at en manuell maaling fantes langs en bestemt retning.
+      Lagt til et nytt `dybde_peiling: 151`-felt (se over) som na styrer
+      dybde_Xm_km/_status UBETINGET - straalen gaar dermed langs SAMME
+      peiling som transekten. Nytt resultat: 20 m paa 0,21 km, 50 m paa
+      0,54 km (30 m: data_slutt - nedlastet utsnitt tok slutt foer koten
+      evt. ble funnet, IKKE det samme som "koten finnes ikke"). Begge
+      tallene er mindre enn transektens eget endepunkt (100 m ved 1,15 km,
+      som de MAA vaere - 50 m er grunnere enn 100 m og skal derfor ligge
+      naermere land) - ingen selvmotsigelse mellom de to maalingene.
 
       Den korte hylla (20 m bare 50-100 m ute) gir for lite avstand til at
       kammen rekker aa refraktere seg parallell med revet. Donning fra SV
@@ -736,11 +781,11 @@ spots:
     fetch_km_72_endelig: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 21.2, 20.5, 23.9, 28.9, 29.7, 18.1, 20.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 75.7, 56.8, 16.9, 28.1, 20.5, 17.8, 16.5, 13.2, 12.9, 13.0, 6.7, 7.3, 4.9, 4.6, 6.4, 5.7, 7.0, 6.1, 7.0, 12.8, 8.3, 2.7, 19.2]
     fetch_km_72_kjegle: [2.9, 0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 20.6, 21.2, 24.2, 28.2, 28.2, 28.2, 28.3, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 69.5, 65.9, 58.3, 28.1, 26.9, 21.2, 17.8, 14.7, 14.4, 13.0, 12.9, 7.4, 7.2, 6.5, 6.5, 6.5, 6.8, 7.1, 9.2, 9.2, 10.6, 8.8, 8.1]
     skjaergaard_indeks: 3.65
-    dybde_20m_km: 0.16
+    dybde_20m_km: 0.21
     dybde_20m_status: maalt
     dybde_30m_km:
     dybde_30m_status: data_slutt
-    dybde_50m_km: 0.71
+    dybde_50m_km: 0.54
     dybde_50m_status: maalt
   - id: hvasser_sando
     name: Hvasser / Sandø østside
@@ -863,7 +908,7 @@ spots:
     fetch_km_72_kjegle: [6.8, 12.6, 12.8, 13.0, 13.7, 13.2, 13.3, 13.1, 10.8, 10.6, 9.6, 9.3, 9.0, 8.3, 8.1, 7.9, 7.8, 8.6, 8.6, 8.6, 8.6, 9.1, 11.3, 13.0, 13.0, 13.0, 13.7, 28.3, 28.5, 29.0, 35.6, 60.0, 145.0, 15.8, 13.2, 13.3, 11.3, 10.9, 8.8, 7.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.4, 0.2, 0.2, 0.1, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 6.0, 7.1, 7.6, 8.0, 9.3, 9.9, 9.9, 9.9, 6.8]
     skjaergaard_indeks: 1.52
     dybde_20m_status: maalt
-    dybde_30m_status: ingen_kote
+    dybde_30m_status: blokkert_av_land
     dybde_50m_status: maalt
   - id: skallevold
     name: Skallevold
@@ -880,6 +925,14 @@ spots:
                            # kan gi.
     wind_weight: 1.25          # sandvik, mest vindfolsom av de kjente
     facing: 115
+    dybde_peiling: 145    # LAGT TIL (ordre 2026-09-07, se rapport til bruker) -
+                           # samme peiling som den manuelle Norgeskart-transekten
+                           # i notes under. FOR denne endringen brukte
+                           # depth_bearing_for_spot() gate-peilingen (ca. 177
+                           # grader, se notes) - en HELT ANNEN straale enn
+                           # transekten, som ikke paavirket dybde_Xm_km i det
+                           # hele tatt. Se rapporten til bruker for hva dette
+                           # faktisk endret (build_fetch.py kjort paa nytt).
     swell_window: [172, 198]
     min_hs: 1.9
     ideal_hs: 2.7
@@ -904,29 +957,32 @@ spots:
 
       Manuell transekt (Norgeskart, 2026-09-07): peiling 145°, lengde
       3,46 km, når ca. 100 m. IKKE skrevet inn i dybde_20m_km/_30m_km/
-      _50m_km - de eies av build_fetch.py, som er kjørt på nytt for det
-      nye punktet i denne commiten (se rapport til bruker for hvordan
-      resultatet forholder seg til denne transekten - de er målt langs
-      TO ulike peilinger, se under).
+      _50m_km - de eies av build_fetch.py.
 
-      depth_bearing_for_spot() (build_fetch.py) bruker verken facing
-      (115°) eller denne transekten (145°) for Skallevold - klasse C
-      uten offshore_point bruker gate-peilingen (geometrisk fra spot til
-      Færder-punktet, IKKE det lagrede gate.bearing_deg=185), som for
-      dette punktet er ca. 177°. Tre ulike retninger i spill: facing
-      styrer kun vindkvalitet, gate-peilingen styrer dybdeprofilen
-      build_fetch.py faktisk regner, og den manuelle transekten er en
-      uavhengig, tredje måling - ikke direkte sammenlignbar med noen av
-      de to andre.
+      depth_bearing_for_spot() (build_fetch.py) brukte OPPRINNELIG verken
+      facing (115°) eller denne transekten (145°) for Skallevold - klasse
+      C uten offshore_point falt tilbake på gate-peilingen (geometrisk fra
+      spot til Færder-punktet, IKKE det lagrede gate.bearing_deg=185), som
+      for dette punktet er ca. 177°. Resultatet langs 177° AVVEK MYE fra
+      denne transekten: build_fetch.py fant 20 m på kun 0,78 km, men
+      verken 30 eller 50 m innenfor rekkevidde - en substansiell kystlinje
+      (sannsynligvis Bolærne/Rauer-området) stoppet søket ved 4,65 km før
+      noen av de dypere kotene ble nådd. Rapportert i forrige commit, ikke
+      overskrevet blindt.
 
-      Resultatet langs 177° AVVIKER MYE fra den manuelle transekten (som
-      fant 100 m på 3,46 km langs 145°): build_fetch.py finner 20 m på
-      kun 0,78 km, men verken 30 eller 50 m innenfor rekkevidde - en
-      substansiell kystlinje (sannsynligvis Bolærne/Rauer-området) stopper
-      søket ved 4,65 km før noen av de dypere kotene nås. Rapportert, ikke
-      overskrevet blindt - de to målingene beskriver rett og slett to
-      forskjellige stråler fra samme punkt, og build_fetch.py sin er den
-      koden faktisk bruker.
+      Systemisk fiks (ordre 2026-09-07, se rapport til bruker): dette var
+      ETT AV FLERE spots der en allerede innsamlet manuell transekt lå i
+      notes uten å påvirke noe - straalen ble skutt langs en helt annen,
+      uvalidert retning (her: gate-peilingen). Lagt til et nytt
+      `dybde_peiling: 145`-felt (se over) som nå styrer dybde_Xm_km/
+      _status UBETINGET, foran gate-fallbacken - straalen går dermed
+      langs SAMME peiling som transekten. Nytt resultat: 20 m på 0,43 km,
+      50 m på 1,36 km (30 m: data_slutt - nedlastet utsnitt tok slutt før
+      koten evt. ble funnet, IKKE det samme som "koten finnes ikke").
+      Begge tallene er mindre enn transektens eget endepunkt (100 m ved
+      3,46 km, som de MÅ være - 50 m er grunnere enn 100 m og skal derfor
+      ligge nærmere land) - ingen selvmotsigelse mellom de to målingene
+      denne gangen, i motsetning til forrige runde sin 177-gradersmåling.
 
     fetch_km_72: [4.0, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 9.0, 8.4, 10.4, 10.3, 8.7, 8.9, 9.7, 9.6, 13.5, 13.2, 11.8, 11.5, 11.9, 12.9, 29.3, 27.7, 33.8, 300.0, 41.3, 300.0, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.7, 0.8, 0.9, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 18.9, 6.1, 3.9, 13.9]
     fetch_km_72_effektiv: [3.9, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 8.4, 9.0, 9.0, 8.9, 9.7, 9.6, 9.6, 9.7, 11.8, 11.8, 11.9, 11.9, 11.9, 12.9, 27.7, 29.3, 33.8, 41.3, 41.3, 41.3, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.9, 0.8, 0.8, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 3.9, 6.1, 6.1, 4.0]
@@ -934,12 +990,12 @@ spots:
     fetch_km_72_endelig: [4.0, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 9.0, 8.4, 10.4, 10.3, 8.7, 8.9, 9.7, 9.6, 13.5, 13.2, 11.8, 11.5, 11.9, 12.9, 29.3, 27.7, 33.8, 60.0, 41.3, 60.0, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.7, 0.8, 0.9, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 18.9, 6.1, 3.9, 13.9]
     fetch_km_72_kjegle: [4.0, 3.9, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 1.2, 9.0, 9.4, 10.3, 10.3, 10.3, 10.3, 10.3, 13.1, 13.3, 13.2, 13.2, 13.2, 12.6, 13.6, 22.4, 27.4, 28.4, 33.8, 35.7, 35.7, 25.9, 9.6, 8.6, 8.2, 7.8, 5.2, 4.7, 3.4, 0.9, 0.9, 0.9, 0.9, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 7.9, 7.9, 13.9, 12.7, 5.1]
     skjaergaard_indeks: 1.81
-    dybde_20m_km: 0.78
+    dybde_20m_km: 0.43
     dybde_20m_status: maalt
     dybde_30m_km:
-    dybde_30m_status: ingen_kote
-    dybde_50m_km:
-    dybde_50m_status: ingen_kote
+    dybde_30m_status: data_slutt
+    dybde_50m_km: 1.36
+    dybde_50m_status: maalt
   - id: sletteroyene
     name: Sletterøyene
     klasse: C
@@ -962,12 +1018,31 @@ spots:
                             # et fysisk skjonn) - trenger en ny manuell
                             # vurdering fra noen med kartverktoyet foran seg.
                             # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km ER
-                            # regnet paa nytt for det nye punktet i denne
-                            # commiten (build_fetch.py, ekte geodata) - kun
-                            # feltene under (fetch_km, gate.transmission)
-                            # gjenstaar.
+                            # regnet paa nytt for det nye punktet (build_fetch.py,
+                            # ekte geodata) - kun feltene under (fetch_km,
+                            # gate.transmission) gjenstaar.
+                            #
+                            # GJENOPPRETTET (ordre 2026-09-07): build_fetch.py
+                            # fjerner automatisk dette flagget hver gang spotten
+                            # kjores gjennom (se main() i build_fetch.py: en
+                            # side effekt av at STEG 2/3 sine geodata-felt IGJEN
+                            # ble regnet paa nytt denne runden, for aa legge til
+                            # dybde_peiling under - se der). Det fjerner ikke
+                            # grunnen til at fetch_km/gate.transmission fortsatt
+                            # er ubekreftede skjonn - satt tilbake manuelt for aa
+                            # ikke miste det signalet.
     wind_weight: 1.0          # revbunn taaler mer enn Slagen
     facing: 200
+    dybde_peiling: 196    # LAGT TIL (ordre 2026-09-07, se rapport til bruker) -
+                           # samme peiling som den manuelle Norgeskart-transekten
+                           # i notes under (2,02 km, ca. 59 m paa 1,72 km, ca.
+                           # 100 m paa 2,02 km). FOR denne endringen brukte
+                           # depth_bearing_for_spot() gate-peilingen (ca. 193
+                           # grader, tett paa, men ikke identisk) - se rapporten
+                           # til bruker for hva dette faktisk endret. MERK: 30 m-
+                           # verdien build_fetch.py fant langs 196 grader
+                           # (27,04 km, se notes under) ble IKKE skrevet inn -
+                           # se notes for hvorfor.
     swell_window: [172, 208]
     min_hs: 1.5
     ideal_hs: 2.3
@@ -1030,11 +1105,30 @@ spots:
 
       Den tidligere ikke-monotone dybdeprofilen (20 m paa 13,03 km, 50 m
       paa 11,88 km - se test_spots_yaml.py sin allowlist) gjaldt KUN det
-      gamle punktet. build_fetch.py sin nye maaling for dette punktet
-      (20 m paa 1,0 km, 50 m paa 1,51 km) er monoton - bruddet er borte,
-      ikke fordi det ble fjernet/skjult, men fordi det faktisk var
-      knyttet til den gamle, feilplasserte straalen. 30 m fant ingen
-      kote innenfor soekeomraadet (ingen_kote).
+      gamle punktet. build_fetch.py sin maaling for dette punktet langs
+      gate-peilingen (20 m paa 1,0 km, 50 m paa 1,51 km) var monoton -
+      bruddet var borte, ikke fordi det ble fjernet/skjult, men fordi det
+      faktisk var knyttet til den gamle, feilplasserte straalen.
+
+      Systemisk fiks (ordre 2026-09-07, se rapport til bruker): lagt til
+      `dybde_peiling: 196` (se over) - samme peiling som den manuelle
+      transekten, i stedet for gate-peilingen (193°, naer identisk, men
+      ikke samme straale). 20 m og 50 m endret seg knapt (1,0 -> 1,0 km,
+      1,51 -> 1,49 km), men 30 m hoppet til 27,04 km - LENGRE UTE enn 50 m
+      (1,49 km), en ny ikke-monoton profil langs akkurat denne straalen.
+      Ogsaa svaert langt fra transektens eget forventede omraade (30 m maa
+      ligge grunnere enn den maalte 59 m/1,72 km, altsaa et sted under
+      1,72 km - ikke 27 km unna). Mest sannsynlig: dybdekurve.geojson
+      mangler en digitalisert 30 m-kote i naerheten langs denne noeyaktige
+      peilingen, saa straalen fortsatte til en fjern, urelatert 30 m-kote
+      langt ute i Skagerrak - geometrisk et gyldig treff, fysisk
+      meningslost (samme feilklasse som begrunner
+      substantial_land_crossing_km(), men her uten noen kystlinje aa
+      kappe mot). IKKE skrevet inn i dybde_30m_km (se ordre til bruker:
+      "ikke skriv beregnede verdier inn hvis de avviker mye fra den
+      manuelle maalingen") - feltet star fortsatt tomt/"ingen_kote", som
+      foer denne runden. 20 m og 50 m ER skrevet inn (begge stemmer godt
+      med baade forrige maaling og transektens egen 59 m/100 m-profil).
 
     # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km under er REGNET PAA NYTT
     # (ordre 2026-09-06, se rapport til bruker) mot det nye punktet, med
@@ -1052,7 +1146,7 @@ spots:
     dybde_20m_status: maalt
     dybde_30m_km:
     dybde_30m_status: ingen_kote
-    dybde_50m_km: 1.51
+    dybde_50m_km: 1.49
     dybde_50m_status: maalt
   - id: bastoy_odden
     name: Bastøy odden
@@ -1136,6 +1230,6 @@ spots:
     fetch_km_72_endelig: [60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 3.5, 2.7, 2.6, 2.5, 2.2, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 2.0, 2.0, 2.2, 2.6, 2.7, 3.4, 1.0, 0.9, 1.3, 1.3, 1.6, 1.7, 1.5, 1.5, 1.3, 1.2, 1.2, 1.3, 1.4, 1.3, 1.3, 1.3, 1.3, 1.2, 1.3, 1.5, 1.4, 1.4, 1.4, 1.4, 1.5, 1.9, 1.8, 1.9, 2.2, 2.4, 2.4, 2.6, 2.6, 2.8, 10.5, 13.2]
     fetch_km_72_kjegle: [60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 3.1, 2.7, 2.7, 2.6, 2.5, 2.4, 2.0, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 2.0, 2.0, 2.3, 2.6, 2.8, 3.2, 3.2, 3.2, 1.3, 1.3, 1.6, 1.6, 1.6, 1.6, 1.5, 1.4, 1.3, 1.4, 1.4, 1.4, 1.4, 1.3, 1.3, 1.3, 1.3, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.8, 1.9, 1.9, 2.3, 2.4, 2.4, 2.5, 2.6, 8.4, 11.6, 14.1, 14.4]
     skjaergaard_indeks: 0.52
-    dybde_20m_status: ingen_kote
-    dybde_30m_status: ingen_kote
-    dybde_50m_status: ingen_kote
+    dybde_20m_status: blokkert_av_land
+    dybde_30m_status: blokkert_av_land
+    dybde_50m_status: blokkert_av_land
