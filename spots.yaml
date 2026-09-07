@@ -301,15 +301,16 @@ spots:
     # med physics.size_quality() sin kurveform (symmetrisk stigning/fall
     # rundt idealet paa log-skala).
     #
-    # AAPENT: max_hs=4.5 er na den UTESTEDE enden - ovre arm spenner
-    # 2,6 m (1,9->4,5) mot nedre arms 1,1 m (0,8->1,9), saa fallet over
-    # idealet er svaert slakt (3,2 m scorer fortsatt 6,2 stjerner, se
-    # rapport til bruker). Vi vet ikke om Saltstein holder seg surfbar
-    # ved 3 m eller om spottet i praksis lukker - trenger oektdata foer
-    # max_hs justeres, IKKE endret her.
+    # max_hs senket fra 4.5 til 2.2 (ordre 2026-09-07, se rapport til
+    # bruker) - den AAPNE enden fra ordren over er na lukket med oektdata:
+    # fotogrammetri mot en surfer i klipp IMG_1252 (5. sept, hs_eff 1,4)
+    # ga 2,3-2,8 m bolgevegg med naer-closeout paa de storste settene.
+    # 2,2 er derfor rett UNDER det faktisk observerte brytepunktet, ikke
+    # et gjettet tak - egen commit, se kalibrert-merknaden under for
+    # hvorfor.
     min_hs: 0.8
     ideal_hs: 1.9
-    max_hs: 4.5
+    max_hs: 2.2
     min_tp: 6.0
     water_optimal_cm: -10
     water_sensitivity_cm: 60
@@ -322,6 +323,11 @@ spots:
     # holder gamle og nye Saltstein-rader fra hverandre automatisk -
     # se test_calibrate.py sin test_ulike_model_rev_gir_egne_seksjoner_i_rapporten
     # (bruker allerede saltstein som eksempel).
+    #
+    # FORBLIR false etter max_hs-endringen 2026-09-07 - trippelen er na
+    # 0.8/1.9/2.2, en TREDJE kurve, fortsatt ikke kalibrert mot noen
+    # okter. Egen commit her ogsaa, av samme grunn: nytt model_rev, ny
+    # epoke i calibrate.py.
     kalibrert: false
     regional_wp_min:               # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
                                     # regional_wp_min/max i toppteksten. Stod paa 12.2,

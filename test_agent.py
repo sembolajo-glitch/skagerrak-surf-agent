@@ -796,10 +796,14 @@ def test_hs_vektet_i_shadow_fields():
 
 
 def test_saltstein_ny_hs_trippel_og_kalibrert_false():
+    """ordre 2026-09-07 (se rapport til bruker): max_hs senket videre fra
+    4.5 til 2.2 - fotogrammetri mot IMG_1252 (5. sept, hs_eff 1,4) ga
+    2,3-2,8 m brytehoyde med naer-closeout. Tredje trippel for Saltstein
+    (etter 1.2/2.5/4.5 og 0.8/1.9/4.5), fortsatt ukalibrert."""
     spot = _with_regional_wp("saltstein")  # ekte spot fra spots.yaml, uendret
     assert spot["min_hs"] == 0.8
     assert spot["ideal_hs"] == 1.9
-    assert spot["max_hs"] == 4.5
+    assert spot["max_hs"] == 2.2
     assert spot["min_hs"] < spot["ideal_hs"] < spot["max_hs"]  # monotonitet
     assert spot["kalibrert"] is False
 
