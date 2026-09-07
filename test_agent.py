@@ -122,7 +122,9 @@ def test_spot_uten_terskler_porter_aldri():
     """Et spot uten regional_wp_min/max satt (de aller fleste) skal
     aldri lukkes av porten, uansett hvor ekstrem regional_wp er."""
     spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "orekroken")
+    # ordre 2026-09-06: var orekroken - spotet er slettet (se rapport til
+    # bruker), svenner har samme egenskap (ingen regional_wp_min/max satt)
+    spot = next(s for s in spots if s["id"] == "svenner")
     assert spot.get("regional_wp_min") is None
     assert spot.get("regional_wp_max") is None
     ts, wind, waves, computed = _favorable_computed(spot)

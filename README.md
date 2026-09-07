@@ -315,6 +315,10 @@ slått sammen inn i `molen_odden` (58.975217/9.812139, 284 m unna –
 ordre 2026-09-02). Ikke kjørt på nytt for det nye punktet ennå – se
 `molen_odden` sin `notes` i spots.yaml.
 
+`orekroken`-raden er en historisk måling – spotet selv er slettet
+(ordre 2026-09-06, se rapport til bruker) og finnes ikke lenger i
+spots.yaml. Tallet står som referanse, ikke som gjeldende data.
+
 To grupper: for `svenner` og `portor` gjør skjærene nesten ingen forskjell
 (kysten der er enten sammenhengende eller reelt åpen langs hele kjeglen).
 For `verdens_ende`, `orekroken` og `jomfruland_ost` er avviket stort nok
