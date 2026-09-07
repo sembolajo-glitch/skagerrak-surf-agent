@@ -796,10 +796,14 @@ def test_hs_vektet_i_shadow_fields():
 
 
 def test_saltstein_ny_hs_trippel_og_kalibrert_false():
+    """ordre 2026-09-07 (se rapport til bruker): max_hs senket videre fra
+    4.5 til 2.2 - fotogrammetri mot IMG_1252 (5. sept, hs_eff 1,4) ga
+    2,3-2,8 m brytehoyde med naer-closeout. Tredje trippel for Saltstein
+    (etter 1.2/2.5/4.5 og 0.8/1.9/4.5), fortsatt ukalibrert."""
     spot = _with_regional_wp("saltstein")  # ekte spot fra spots.yaml, uendret
     assert spot["min_hs"] == 0.8
     assert spot["ideal_hs"] == 1.9
-    assert spot["max_hs"] == 4.5
+    assert spot["max_hs"] == 2.2
     assert spot["min_hs"] < spot["ideal_hs"] < spot["max_hs"]  # monotonitet
     assert spot["kalibrert"] is False
 
@@ -825,9 +829,12 @@ def test_saltstein_hs_0_8_gir_positiv_q_size_var_null_foer():
 
 def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
     """Regresjon: KUN saltstein sin trippel/kalibrert-status skal ha
-    endret seg. De andre 13 spottene sine min_hs/ideal_hs/max_hs (og
+    endret seg. De andre 12 spottene sine min_hs/ideal_hs/max_hs (og
     dermed q_size for enhver gitt hs) skal vaere byte-for-byte identiske
-    med foer denne endringen."""
+    med foer denne endringen.
+
+    ordre 2026-09-06: orekroken er slettet - fjernet fra denne lista
+    (var 13 spots, na 12)."""
     forventet = {
         "svenner": (1.1, 2.2, 4.0),
         "jomfruland_ost": (1.3, 2.5, 4.5),
@@ -836,7 +843,6 @@ def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
         "portor": (1.5, 2.5, 4.2),
         "verdens_ende": (2.0, 3.0, 5.0),
         "hvasser_sando": (1.3, 2.0, 3.5),
-        "orekroken": (2.2, 3.0, 5.0),
         "slagen": (1.6, 2.4, 3.4),
         "skallevold": (1.9, 2.7, 3.6),
         "sletteroyene": (1.5, 2.3, 3.5),

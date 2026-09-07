@@ -301,15 +301,16 @@ spots:
     # med physics.size_quality() sin kurveform (symmetrisk stigning/fall
     # rundt idealet paa log-skala).
     #
-    # AAPENT: max_hs=4.5 er na den UTESTEDE enden - ovre arm spenner
-    # 2,6 m (1,9->4,5) mot nedre arms 1,1 m (0,8->1,9), saa fallet over
-    # idealet er svaert slakt (3,2 m scorer fortsatt 6,2 stjerner, se
-    # rapport til bruker). Vi vet ikke om Saltstein holder seg surfbar
-    # ved 3 m eller om spottet i praksis lukker - trenger oektdata foer
-    # max_hs justeres, IKKE endret her.
+    # max_hs senket fra 4.5 til 2.2 (ordre 2026-09-07, se rapport til
+    # bruker) - den AAPNE enden fra ordren over er na lukket med oektdata:
+    # fotogrammetri mot en surfer i klipp IMG_1252 (5. sept, hs_eff 1,4)
+    # ga 2,3-2,8 m bolgevegg med naer-closeout paa de storste settene.
+    # 2,2 er derfor rett UNDER det faktisk observerte brytepunktet, ikke
+    # et gjettet tak - egen commit, se kalibrert-merknaden under for
+    # hvorfor.
     min_hs: 0.8
     ideal_hs: 1.9
-    max_hs: 4.5
+    max_hs: 2.2
     min_tp: 6.0
     water_optimal_cm: -10
     water_sensitivity_cm: 60
@@ -322,6 +323,11 @@ spots:
     # holder gamle og nye Saltstein-rader fra hverandre automatisk -
     # se test_calibrate.py sin test_ulike_model_rev_gir_egne_seksjoner_i_rapporten
     # (bruker allerede saltstein som eksempel).
+    #
+    # FORBLIR false etter max_hs-endringen 2026-09-07 - trippelen er na
+    # 0.8/1.9/2.2, en TREDJE kurve, fortsatt ikke kalibrert mot noen
+    # okter. Egen commit her ogsaa, av samme grunn: nytt model_rev, ny
+    # epoke i calibrate.py.
     kalibrert: false
     regional_wp_min:               # DEAKTIVERT (ordre 2026-09-02) - se merknad ved
                                     # regional_wp_min/max i toppteksten. Stod paa 12.2,
@@ -499,22 +505,34 @@ spots:
     max_hs: 4.0
     min_tp: 6.0
     wind_weight: 0.75
-    offshore_point: [58.96627, 9.808186]  # FLYTTET (ordre 2026-09-06, se rapport til
-                                        # bruker): forrige punkt (58.970/9.805, 0,71 km
-                                        # ute) laa dypt inne i shoalingsonen - 30 m alt
-                                        # paa 412 m betyr en 10 s dønning har bunnkontakt
-                                        # fra 78 m dyp, saa verdien MET/Open-Meteo leser
-                                        # der er allerede refraktert, og modellen
-                                        # refrakterer den en gang til (se rapport til
-                                        # bruker, forrige PR). Nytt punkt: 1,1 km langs
-                                        # peiling 203 (den MAALTE transekten - IKKE 214,6
-                                        # fra det slettede notatet) fra spotkoordinatet -
-                                        # ekte maalt (compute_depth_profile() mot samme
-                                        # geodata som resten av denne commiten): 50 m-
-                                        # koten er 0,38 km ute langs 203, 100 m-koten
-                                        # 0,60 km ute. 1,1 km (ikke avrundet 1,0 - se
-                                        # test_offshore_point.py sitt >1 km-krav) gir god
-                                        # margin forbi begge.
+    offshore_point: [58.94226, 9.78844]  # FLYTTET IGJEN (ordre 2026-09-07, se rapport
+                                        # til bruker): forrige flytting (1,1 km, ordre
+                                        # 2026-09-06) fjernet dybde-/shoalingproblemet
+                                        # (klart forbi 50/100-meterskoten), men LOSTE
+                                        # IKKE hovedsaken - en ekte produksjonskjoring
+                                        # (forecast.json paa data-grenen, 2026-09-07)
+                                        # viser punktet fortsatt snapper til SAMME
+                                        # MET-gridnode som foer (58.967/9.803,
+                                        # grid_avstand_km 0,29-0,40 i begge tilfeller).
+                                        # Dybde og gridcelle er to ulike skalaer: 50/100 m-
+                                        # kotene er kun 0,37/0,60 km ute (bratt kant), mens
+                                        # MET sitt grid er ~4 km (avstanden mellom
+                                        # Saltstein sin gridnode og Molens gamle, se
+                                        # forrige PR sin dekomponering) - et punkt som
+                                        # klarer det forste kravet klarer ikke automatisk
+                                        # det andre. Nytt punkt: 4,0 km langs SAMME
+                                        # maalte peiling 203 (fortsatt ikke 214,6 fra det
+                                        # slettede notatet) - lengst av kandidatene
+                                        # 1,5-5,0 km fra spotkoordinatet som ble sjekket
+                                        # mot avstand til begge kjente gridnoder (naermest
+                                        # jevnbyrdig avstand til begge her, som er det
+                                        # beste tilgjengelige tegnet paa en cellegrense
+                                        # uten aa kunne sporre MET sitt grid direkte).
+                                        # Ingen kystkryssing paa straalen (sjekket mot
+                                        # ekte kystkontur.geojson ut til 10 km) - fortsatt
+                                        # rent aapent vann. IKKE live-verifisert her
+                                        # (samme nettverksblokkering som foer) - avgjores
+                                        # av grid_lat/grid_lon i neste produksjonskjoring.
     drive_min: 120
     notes: >
       Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet

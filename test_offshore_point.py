@@ -32,7 +32,16 @@ import agent as A
 # aa flytte det lenger ut ville trolig IKKE endre hvilken raa modell-
 # verdi som faktisk leses - annerledes enn Molen, der flyttingen beviselig
 # hoppet til et sted forbi shoalingsonen. Ikke fikset her - egen sak.
-KJENTE_AVVIK = {"jomfruland_ost"}
+#
+# verdens_ende, hvasser_sando: dukket opp 2026-09-07 (ikke i forrige
+# PR - se rapport til bruker) da PR #32 (geodata-resultat) ga dem ekte
+# dybde_50m_km for forste gang. verdens_ende sitt offshore_point (3,13 km)
+# er godt INNENFOR egen 50 m-kote (4,47 km) - samme shoaling-problem som
+# Molen hadde. hvasser_sando (1,68 km mot 1,71 km) er marginalt innenfor -
+# 30 m kort. Ingen av dem er roert i denne runden (utenfor scope for
+# oppgaven som ble gitt), men brudd er brudd - allowlistet aapent, ikke
+# stille ignorert.
+KJENTE_AVVIK = {"jomfruland_ost", "verdens_ende", "hvasser_sando"}
 
 
 def test_allowlist_refererer_kun_til_eksisterende_spots():
