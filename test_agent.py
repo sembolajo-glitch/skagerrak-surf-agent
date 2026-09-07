@@ -834,14 +834,19 @@ def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
     med foer denne endringen.
 
     ordre 2026-09-06: orekroken er slettet - fjernet fra denne lista
-    (var 13 spots, na 12)."""
+    (var 13 spots, na 12).
+
+    ordre 2026-09-07: verdens_ende er slettet og erstattet med tristein
+    (fysisk annet sted - se rapport til bruker) - byttet ut i denne
+    lista med samme trippel (min/ideal/max BEHOLDT uendret for det nye
+    spotet, se spots.yaml)."""
     forventet = {
         "svenner": (1.1, 2.2, 4.0),
         "jomfruland_ost": (1.3, 2.5, 4.5),
         "rakke": (1.7, 2.6, 4.5),
         "molen_odden": (1.5, 2.5, 4.0),
         "portor": (1.5, 2.5, 4.2),
-        "verdens_ende": (2.0, 3.0, 5.0),
+        "tristein": (2.0, 3.0, 5.0),
         "hvasser_sando": (1.3, 2.0, 3.5),
         "slagen": (1.6, 2.4, 3.4),
         "skallevold": (1.9, 2.7, 3.6),

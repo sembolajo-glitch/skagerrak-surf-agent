@@ -33,15 +33,19 @@ import agent as A
 # verdi som faktisk leses - annerledes enn Molen, der flyttingen beviselig
 # hoppet til et sted forbi shoalingsonen. Ikke fikset her - egen sak.
 #
-# verdens_ende, hvasser_sando: dukket opp 2026-09-07 (ikke i forrige
-# PR - se rapport til bruker) da PR #32 (geodata-resultat) ga dem ekte
-# dybde_50m_km for forste gang. verdens_ende sitt offshore_point (3,13 km)
-# er godt INNENFOR egen 50 m-kote (4,47 km) - samme shoaling-problem som
-# Molen hadde. hvasser_sando (1,68 km mot 1,71 km) er marginalt innenfor -
-# 30 m kort. Ingen av dem er roert i denne runden (utenfor scope for
-# oppgaven som ble gitt), men brudd er brudd - allowlistet aapent, ikke
-# stille ignorert.
-KJENTE_AVVIK = {"jomfruland_ost", "verdens_ende", "hvasser_sando"}
+# hvasser_sando: dukket opp 2026-09-07 (ikke i forrige PR - se rapport
+# til bruker) da PR #32 (geodata-resultat) ga den ekte dybde_50m_km for
+# forste gang - offshore_point (1,68 km) er marginalt innenfor egen
+# 50 m-kote (1,71 km), 30 m kort. Ikke roert i denne runden (utenfor
+# scope), men brudd er brudd - allowlistet aapent, ikke stille ignorert.
+#
+# verdens_ende er FJERNET fra denne lista (ordre 2026-09-07, se rapport
+# til bruker) - spotet er slettet (koordinatet pekte paa Tjomes sorspiss,
+# et fysisk annet sted enn Tristein) og erstattet med tristein, som IKKE
+# er i avvik: offshore_point (1,5 km, etter at brukeren senere rettet
+# selve spotkoordinatet - se spots.yaml sin egen merknad ved lat/lon) er
+# bade >1 km og forbi egen dybde_50m_km (0,71 km).
+KJENTE_AVVIK = {"jomfruland_ost", "hvasser_sando"}
 
 
 def test_allowlist_refererer_kun_til_eksisterende_spots():

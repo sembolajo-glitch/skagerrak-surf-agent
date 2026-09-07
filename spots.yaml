@@ -626,33 +626,121 @@ spots:
     dybde_20m_status: ingen_kote
     dybde_30m_status: ingen_kote
     dybde_50m_status: ingen_kote
-  - id: verdens_ende
-    name: Verdens Ende / Tristein
-    klasse: B
-    lat: 59.028
-    lon: 10.475
-    offshore_point: [59.000, 10.470]
-    wind_weight: 0.7
-    facing: 200
-    swell_window: [165, 240]
-    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
-    min_hs: 2.0
-    ideal_hs: 3.0
-    max_hs: 5.0
+  - id: tristein
+    name: Tristein
+    klasse: A
+    lat: 59.0230130      # RETTET (ordre 2026-09-07, se rapport til bruker) - brukeren
+    lon: 10.5212816         # oppga et korrigert koordinat etter forrige runde (som hadde
+                           # land 87-130 m unna i hele 220-300 graders-sektoren, se git-
+                           # historikken paa dette feltet). Verifisert paa nytt mot ekte
+                           # kystkontur.geojson: aapent hav (ingen kystlinjetreff innen
+                           # 30 km) i HELE 140-259 graders-sektoren fra dette punktet -
+                           # daekker baade facing (259) og hele det opprinnelig foreslaatte
+                           # vindussenteret (235-245) uten forbehold. Naermeste kystlinje
+                           # (92,8 m) er selve revet/skjaeret punktet ligger ved, som
+                           # forventet for et "ved revlinja"-punkt. Forrige runde sin
+                           # avviks-merknad og arbeid-rundt (skjovet vindu/offshore_point)
+                           # er derfor reversert - se swell_window/offshore_point under.
+    offshore_point: [59.016266, 10.498588]  # 1,5 km langs peiling ~240 (vindussenteret,
+                                        # se swell_window under - IKKE lenger et
+                                        # kompromiss, geometrien bekrefter na at senteret
+                                        # selv er aapent). build_fetch.py sin egen
+                                        # bearing_between() gir 238,7 (avrundingsforskjell,
+                                        # ikke reell uenighet). Ekte maalt
+                                        # (compute_depth_profile(), samme kjoring som
+                                        # dybde_Xm_km under): 20 m paa 0,16 km, 50 m paa
+                                        # 0,71 km - 1,5 km gir god margin forbi begge.
+                                        # 30 m: data_slutt langs noeyaktig denne peilingen
+                                        # (nedlastet utsnitt tok slutt foer koten ble
+                                        # funnet) - se dybde_30m_status under.
+    wind_weight: 1.0            # ikke tunet - ingen surfeerfaring aa kalibrere mot enda
+    facing: 259                  # normalen paa revlinja (169+90), ikke 280 (revlinjas andre
+                                  # normal, 349-180=169+90=... se notes: trend 169/349,
+                                  # normal 259/79 - 259 er siden som vender mot aapent hav)
+    swell_window: [210, 270]     # senter 240 - midt i det oppgitte 235-245-omraadet.
+                                  # Forrige runde skjov senteret til 235/nedre kant til
+                                  # 205 pga. en da-antatt kystlinje naer 235 langs det
+                                  # (feilplasserte) gamle koordinatet - det bortfaller na
+                                  # (se koordinat-merknaden over). Bredde (60 grader)
+                                  # uendret, matcher fortsatt den oppgitte fysiske
+                                  # begrunnelsen (dønning 30-55 grader skraatt paa
+                                  # facing 259 => kildesektor omtrent 204-229).
+    spread_s: 5                  # se spread_s i toppteksten - standardverdi, ikke tunet enda
+    min_hs: 2.0                  # BEHOLDT uendret (ordre 2026-09-07) - hoyest av alle
+    ideal_hs: 3.0                 # spotene, satt for nettopp dette stedet. Ikke justert
+    max_hs: 5.0                   # uten oektdata.
     min_tp: 5.5
-    drive_min: 100
-    notes: Nærmeste ekte Skagerrak-berg til Oslo. Bør gå oftere enn Hvasser.
+    boat: true                   # adkomst kun med baat, se notes
+    kalibrert: false             # nytt spot (se rapport til bruker: det gamle
+                                  # verdens_ende-koordinatet pekte paa Tjomes sorspiss,
+                                  # 0,41 km fra selve Verdens Ende-landemerket og 2,99 km
+                                  # fra dette punktet - et FYSISK ANNET sted. All historikk
+                                  # (shadow.csv) under den gamle iden gjaldt det andre
+                                  # stedet og er ikke gyldig her.
+    notes: >
+      Tristein - klippe/skjaer ved Faerder fyr, kun tilgjengelig med baat.
+      Erstatter "Verdens Ende / Tristein" (id verdens_ende, slettet - se
+      kalibrert-merknaden over for hvorfor det ikke bare ble et navnebytte).
 
-    fetch_km_72: [8.0, 7.3, 17.2, 19.1, 31.3, 35.7, 4.2, 3.6, 20.9, 3.1, 2.8, 18.1, 18.9, 18.9, 22.1, 21.9, 24.8, 23.5, 2.7, 2.7, 17.9, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 69.2, 14.5, 30.3, 3.6, 17.1, 15.1, 12.0, 10.5, 4.8, 9.7, 6.6, 10.6, 4.9, 4.8, 4.8, 5.1, 3.0, 2.7, 4.5, 2.6, 3.5, 5.4, 4.5]
-    fetch_km_72_effektiv: [7.3, 8.0, 17.2, 19.1, 19.1, 19.1, 20.9, 4.2, 3.6, 3.6, 18.1, 18.1, 18.9, 18.9, 21.9, 22.1, 22.1, 21.9, 17.9, 17.9, 17.9, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 69.2, 30.3, 17.1, 15.1, 15.1, 12.0, 12.0, 10.5, 9.7, 9.7, 6.6, 6.6, 4.9, 4.9, 4.8, 4.8, 4.5, 3.0, 3.0, 3.5, 4.5, 4.5, 5.4]
-    dybde_20m_km:
+      Fysisk begrunnelse (manuell maaling, Norgeskart 2026-09-07): revlinja
+      paa vestsiden har trend 169/349 grader, maalt lengde 231,27 m.
+      20-meterskoten ligger 50-100 m vest for revkanten (helning ca. 1:5) -
+      en svaert kort hylle. Grunne skjaer innenfor: loddskudd +1,3, +1,9,
+      +2,4. Transekt sorover fra revet: peiling 151 grader, naar ca. 100 m
+      ved 1,15 km, midlere helning ca. 1:11.
+
+      Koordinat rettet 2026-09-07 (se rapport til bruker og merknaden ved
+      lat/lon over) - brukeren oppga et nytt koordinat etter forrige runde,
+      som hadde land 87-130 m unna i hele 220-300 graders-sektoren (en
+      geometrisk selvmotsigelse som ble rapportert, ikke tildekket, i
+      forrige commit). Det nye koordinatet er verifisert mot ekte
+      kystkontur.geojson: aapent hav i hele 140-259 graders-sektoren.
+      build_fetch.py sin egen dybdeprofil langs offshore_point-peilingen
+      (~239 grader, se offshore_point over) gir 20 m paa 0,16 km og 50 m
+      paa 0,71 km (30 m: data_slutt, se dybde_30m_status under - IKKE det
+      samme som "ingen kote finnes", bare at det nedlastede utsnittet tok
+      slutt foer koten evt. ble funnet). Dette er en ANNEN straale enn den
+      manuelle 151-graders-transekten over (som fant 100 m paa 1,15 km) -
+      rapportert som to uavhengige maalinger, ikke reconcilert, samme
+      prinsipp som for Skallevold.
+
+      Den korte hylla (20 m bare 50-100 m ute) gir for lite avstand til at
+      kammen rekker aa refraktere seg parallell med revet. Donning fra SV
+      treffer derfor 30-55 grader skraatt og beholder vinkelen fram til
+      brekket, som gir peel i stedet for closeout. Peelhastighet
+      c/sin(alfa): med c = 5,4 m/s paa 3 m dyp og 34 graders vinkel blir
+      det ca. 9,7 m/s, altsaa ca. 24 s over de 231 m. Bryte­kriteriet
+      Hb = 0,78*hb krever 3,9 m brytende hoyde for aa brekke paa 5 m vann -
+      derfor de hoye tersklene (min/ideal/max BEHOLDT uendret, se over).
+
+      Operativt vindu: avtagende fase etter SV-kuling. Donningen staar
+      igjen, vinden har dreid nordlig (fralands for vestvendt rev), og
+      sjoen har lagt seg nok til at baatturen fra Verdens Ende (4-5 km
+      aapen kryssing) er forsvarlig. Anslagsvis 4-8 timer.
+
+      Faerder nasjonalpark - ilandstigningsforbud i hekketiden paa flere
+      holmer i omraadet (se access_warning-feltet, som allerede finnes og
+      brukes av Bastoy odden - ingen ny mekanisme bygget her). Sjekk
+      gjeldende skilting/forskrift for akkurat denne holmen foer landgang.
+
+      drive_min er IKKE satt - ingen reelt anslag paa kjoretid til
+      utsettingspunktet (Verdens Ende) + baattid finnes enna, og et gjettet
+      tall ville vaert verre enn ingen tall.
+    access_warning: >
+      Færder nasjonalpark. Ilandstigningsforbud i hekketiden på flere
+      holmer i området - sjekk gjeldende skilting/forskrift for denne
+      holmen før du går i land. Vurder å holde deg i vannet/på brettet.
+
+    fetch_km_72: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 21.2, 20.5, 23.9, 28.9, 29.7, 18.1, 20.7, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 75.7, 56.8, 16.9, 28.1, 20.5, 17.8, 16.5, 13.2, 12.9, 13.0, 6.7, 7.3, 4.9, 4.6, 6.4, 5.7, 7.0, 6.1, 7.0, 12.8, 8.3, 2.7, 19.2]
+    fetch_km_72_effektiv: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 20.5, 21.2, 23.9, 23.9, 23.9, 28.9, 29.7, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 75.7, 56.8, 28.1, 20.5, 17.8, 17.8, 16.5, 13.2, 13.0, 12.9, 7.3, 6.7, 6.4, 5.7, 5.7, 6.1, 6.4, 7.0, 7.0, 7.0, 8.3, 8.3, 2.7]
+    fetch_km_72_endelig: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 21.2, 20.5, 23.9, 28.9, 29.7, 18.1, 20.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 75.7, 56.8, 16.9, 28.1, 20.5, 17.8, 16.5, 13.2, 12.9, 13.0, 6.7, 7.3, 4.9, 4.6, 6.4, 5.7, 7.0, 6.1, 7.0, 12.8, 8.3, 2.7, 19.2]
+    fetch_km_72_kjegle: [2.9, 0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 20.6, 21.2, 24.2, 28.2, 28.2, 28.2, 28.3, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 69.5, 65.9, 58.3, 28.1, 26.9, 21.2, 17.8, 14.7, 14.4, 13.0, 12.9, 7.4, 7.2, 6.5, 6.5, 6.5, 6.8, 7.1, 9.2, 9.2, 10.6, 8.8, 8.1]
+    skjaergaard_indeks: 3.65
+    dybde_20m_km: 0.16
+    dybde_20m_status: maalt
     dybde_30m_km:
-    dybde_50m_km: 4.47
-    fetch_km_72_endelig: [8.0, 7.3, 17.2, 19.1, 31.3, 35.7, 4.2, 3.6, 20.9, 3.1, 2.8, 18.1, 18.9, 18.9, 22.1, 21.9, 24.8, 23.5, 2.7, 2.7, 17.9, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 69.2, 14.5, 30.3, 3.6, 17.1, 15.1, 12.0, 10.5, 4.8, 9.7, 6.6, 10.6, 4.9, 4.8, 4.8, 5.1, 3.0, 2.7, 4.5, 2.6, 3.5, 5.4, 4.5]
-    fetch_km_72_kjegle: [8.0, 16.0, 18.7, 20.3, 20.3, 19.6, 20.9, 5.4, 4.5, 24.4, 24.6, 24.5, 24.4, 21.9, 23.0, 23.2, 23.5, 23.5, 23.5, 22.3, 20.9, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 67.8, 58.7, 30.3, 25.7, 24.4, 15.2, 15.1, 11.7, 11.6, 10.6, 10.3, 10.3, 5.9, 5.1, 5.1, 5.1, 5.1, 4.5, 4.4, 4.7, 4.7, 5.9, 7.9]
-    skjaergaard_indeks: 6.1
-    dybde_20m_status: data_slutt
     dybde_30m_status: data_slutt
+    dybde_50m_km: 0.71
     dybde_50m_status: maalt
   - id: hvasser_sando
     name: Hvasser / Sandø østside
@@ -780,8 +868,16 @@ spots:
   - id: skallevold
     name: Skallevold
     klasse: C
-    lat: 59.290
-    lon: 10.470
+    lat: 59.2896150      # RETTET (ordre 2026-09-07, se rapport til bruker): manuelt
+    lon: 10.5069350        # malt i Norgeskart. 2,1 km ost for det gamle punktet
+                           # (59.290/10.470) - fetch_km_72*/skjaergaard_indeks/
+                           # dybde_Xm_km under er regnet paa nytt av build_fetch.py
+                           # for det nye punktet i denne commiten (samme
+                           # "ikke arves"-prinsipp som Sletterøyene/Mølen tidligere).
+                           # fetch_km (manuell 16-tabell) og gate.transmission er
+                           # IKKE rekjort - samme begrunnelse som Sletterøyene:
+                           # de krever et menneskelig skjonn build_fetch.py ikke
+                           # kan gi.
     wind_weight: 1.25          # sandvik, mest vindfolsom av de kjente
     facing: 115
     swell_window: [172, 198]
@@ -793,7 +889,7 @@ spots:
     water_sensitivity_cm: 70
     drive_min: 80
     kalibrert: true
-    fetch_km: [0.3, 0.5, 2, 8, 15, 18, 25, 42, 28, 15, 6, 0.2, 0.1, 0.1, 0.1, 0.2]
+    fetch_km: [0.3, 0.5, 2, 8, 15, 18, 25, 42, 28, 15, 6, 0.2, 0.1, 0.1, 0.1, 0.2]  # STALE - se merknad ved koordinatet
     gate:
       name: Færder
       lat: 59.030
@@ -802,20 +898,47 @@ spots:
       bearing_deg: 185
       sector_half_width: 16      # trangere vindu enn Slagen
       spread_s: 5
-      transmission: 0.85         # Karlsvikodden + Ringshaugholmen
-    notes: Trenger mest av de kjente. Litt bedre på ren S enn Slagen.
+      transmission: 0.85         # Karlsvikodden + Ringshaugholmen - STALE, se merknad ved koordinatet
+    notes: >
+      Trenger mest av de kjente. Litt bedre på ren S enn Slagen.
 
-    fetch_km_72: [6.5, 5.9, 5.0, 4.7, 4.1, 15.8, 4.5, 4.5, 4.6, 4.4, 4.0, 4.0, 3.3, 3.1, 3.0, 3.0, 1.7, 1.7, 1.6, 1.6, 1.6, 1.8, 1.8, 2.0, 2.2, 2.2, 2.0, 2.0, 2.0, 2.1, 2.6, 4.1, 3.0, 5.1, 3.4, 4.5, 5.0, 5.1, 4.8, 4.7, 4.0, 3.6, 3.3, 3.0, 2.9, 2.9, 2.7, 2.5, 2.4, 2.3, 2.1, 5.4, 5.7, 6.3, 7.1, 7.3, 7.5, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 21.8, 18.0, 17.0, 16.6]
-    fetch_km_72_effektiv: [6.5, 5.9, 5.0, 5.0, 4.7, 4.5, 4.5, 4.5, 4.5, 4.4, 4.0, 4.0, 3.3, 3.1, 3.0, 3.0, 1.7, 1.7, 1.6, 1.6, 1.6, 1.8, 1.8, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.1, 2.6, 3.0, 3.4, 4.1, 4.5, 5.0, 4.8, 4.8, 4.8, 4.7, 4.0, 3.6, 3.3, 3.0, 2.9, 2.9, 2.7, 2.5, 2.4, 2.4, 2.4, 5.4, 5.7, 6.3, 7.1, 7.3, 7.5, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 21.8, 18.0, 17.0, 16.6]
+      Manuell transekt (Norgeskart, 2026-09-07): peiling 145°, lengde
+      3,46 km, når ca. 100 m. IKKE skrevet inn i dybde_20m_km/_30m_km/
+      _50m_km - de eies av build_fetch.py, som er kjørt på nytt for det
+      nye punktet i denne commiten (se rapport til bruker for hvordan
+      resultatet forholder seg til denne transekten - de er målt langs
+      TO ulike peilinger, se under).
+
+      depth_bearing_for_spot() (build_fetch.py) bruker verken facing
+      (115°) eller denne transekten (145°) for Skallevold - klasse C
+      uten offshore_point bruker gate-peilingen (geometrisk fra spot til
+      Færder-punktet, IKKE det lagrede gate.bearing_deg=185), som for
+      dette punktet er ca. 177°. Tre ulike retninger i spill: facing
+      styrer kun vindkvalitet, gate-peilingen styrer dybdeprofilen
+      build_fetch.py faktisk regner, og den manuelle transekten er en
+      uavhengig, tredje måling - ikke direkte sammenlignbar med noen av
+      de to andre.
+
+      Resultatet langs 177° AVVIKER MYE fra den manuelle transekten (som
+      fant 100 m på 3,46 km langs 145°): build_fetch.py finner 20 m på
+      kun 0,78 km, men verken 30 eller 50 m innenfor rekkevidde - en
+      substansiell kystlinje (sannsynligvis Bolærne/Rauer-området) stopper
+      søket ved 4,65 km før noen av de dypere kotene nås. Rapportert, ikke
+      overskrevet blindt - de to målingene beskriver rett og slett to
+      forskjellige stråler fra samme punkt, og build_fetch.py sin er den
+      koden faktisk bruker.
+
+    fetch_km_72: [4.0, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 9.0, 8.4, 10.4, 10.3, 8.7, 8.9, 9.7, 9.6, 13.5, 13.2, 11.8, 11.5, 11.9, 12.9, 29.3, 27.7, 33.8, 300.0, 41.3, 300.0, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.7, 0.8, 0.9, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 18.9, 6.1, 3.9, 13.9]
+    fetch_km_72_effektiv: [3.9, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 8.4, 9.0, 9.0, 8.9, 9.7, 9.6, 9.6, 9.7, 11.8, 11.8, 11.9, 11.9, 11.9, 12.9, 27.7, 29.3, 33.8, 41.3, 41.3, 41.3, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.9, 0.8, 0.8, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 3.9, 6.1, 6.1, 4.0]
     fetch_km_manuell: [0.3, 0.5, 2, 8, 15, 18, 25, 42, 28, 15, 6, 0.2, 0.1, 0.1, 0.1, 0.2]
-    dybde_20m_km:
+    fetch_km_72_endelig: [4.0, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 0.7, 9.0, 8.4, 10.4, 10.3, 8.7, 8.9, 9.7, 9.6, 13.5, 13.2, 11.8, 11.5, 11.9, 12.9, 29.3, 27.7, 33.8, 60.0, 41.3, 60.0, 8.5, 8.0, 7.8, 5.3, 4.7, 3.2, 0.7, 0.8, 0.9, 0.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 18.9, 6.1, 3.9, 13.9]
+    fetch_km_72_kjegle: [4.0, 3.9, 3.8, 0.4, 0.4, 0.4, 0.4, 0.4, 0.7, 0.7, 1.2, 9.0, 9.4, 10.3, 10.3, 10.3, 10.3, 10.3, 13.1, 13.3, 13.2, 13.2, 13.2, 12.6, 13.6, 22.4, 27.4, 28.4, 33.8, 35.7, 35.7, 25.9, 9.6, 8.6, 8.2, 7.8, 5.2, 4.7, 3.4, 0.9, 0.9, 0.9, 0.9, 0.8, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 7.9, 7.9, 13.9, 12.7, 5.1]
+    skjaergaard_indeks: 1.81
+    dybde_20m_km: 0.78
+    dybde_20m_status: maalt
     dybde_30m_km:
-    dybde_50m_km:
-    fetch_km_72_endelig: [6.5, 5.9, 5.0, 4.7, 4.1, 15.8, 4.5, 4.5, 4.6, 4.4, 4.0, 4.0, 3.3, 3.1, 3.0, 3.0, 1.7, 1.7, 1.6, 1.6, 1.6, 1.8, 1.8, 2.0, 2.2, 2.2, 2.0, 2.0, 2.0, 2.1, 2.6, 4.1, 3.0, 5.1, 3.4, 4.5, 5.0, 5.1, 4.8, 4.7, 4.0, 3.6, 3.3, 3.0, 2.9, 2.9, 2.7, 2.5, 2.4, 2.3, 2.1, 5.4, 5.7, 6.3, 7.1, 7.3, 7.5, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 21.8, 18.0, 17.0, 16.6]
-    fetch_km_72_kjegle: [16.8, 7.0, 6.1, 5.4, 4.9, 4.5, 4.6, 4.6, 4.6, 4.6, 4.4, 4.2, 4.0, 3.3, 3.2, 3.1, 3.0, 2.9, 1.7, 1.7, 1.8, 1.8, 2.0, 2.2, 2.2, 2.2, 2.2, 2.1, 2.4, 2.7, 3.0, 4.1, 4.1, 4.1, 4.6, 5.1, 5.0, 5.0, 5.1, 5.0, 4.9, 4.0, 3.6, 3.4, 3.1, 2.9, 2.9, 2.7, 2.5, 4.3, 5.4, 5.8, 6.5, 7.2, 7.3, 7.4, 7.4, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 21.3, 20.0, 18.0, 17.6]
-    skjaergaard_indeks: 0.71
-    dybde_20m_status: ingen_kote
     dybde_30m_status: ingen_kote
+    dybde_50m_km:
     dybde_50m_status: ingen_kote
   - id: sletteroyene
     name: Sletterøyene
