@@ -118,9 +118,10 @@ def test_manuelle_transekter_havner_i_notes_ikke_i_dybde_feltene():
 
     # ordre 2026-09-07: Tristein sin manuelle transekt (peiling 151,
     # 1,15 km til ca. 100 m) IKKE skrevet inn - build_fetch.py sitt eget
-    # tall (langs offshore_point-peilingen, ca. 207 grader) star i feltet.
+    # tall (langs offshore_point-peilingen, ca. 239 grader etter at
+    # brukeren rettet koordinatet, se notes) star i feltet.
     tristein = by_id["tristein"]
-    assert tristein.get("dybde_20m_km") == 0.07
+    assert tristein.get("dybde_20m_km") == 0.16
     assert "1,15 km" in tristein.get("notes", "")
 
 
@@ -154,7 +155,7 @@ def test_verdens_ende_er_slettet_tristein_er_nytt_spot():
     assert tristein["klasse"] == "A"
     assert tristein["kalibrert"] is False
     assert tristein["facing"] == 259
-    assert tristein["swell_window"] == [205, 265]
+    assert tristein["swell_window"] == [210, 270]
     # min/ideal/max EKSPLISITT beholdt uendret fra det slettede spotet -
     # satt for nettopp dette stedet, ikke justert uten oektdata
     assert (tristein["min_hs"], tristein["ideal_hs"], tristein["max_hs"]) == (2.0, 3.0, 5.0)

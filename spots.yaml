@@ -629,52 +629,42 @@ spots:
   - id: tristein
     name: Tristein
     klasse: A
-    lat: 59.0254856      # MAALT (ordre 2026-09-07, se rapport til bruker) - Norgeskart,
-    lon: 10.5271017        # koordinatpanelet var avskaaret paa skjermbildet (oppgitt
-                           # usikkerhet, ikke skjult her). Skal ligge paa vestsiden av
-                           # Tristein, ved den maalte revlinja (se notes).
-                           #
-                           # VIKTIG AVVIK (se rapport til bruker): ekte kystkontur.geojson
-                           # viser LAND kun 87-130 m unna i HELE 220-300 grader-sektoren
-                           # fra dette punktet, inkludert facing (259) og det foreslaatte
-                           # vindussenteret (235-245) - ikke en enkelt liten skjaer, en
-                           # sammenhengende 80 graders sektor. Aapent hav (ingen treff
-                           # innen 30 km) finnes i stedet 150-210 grader. Kan bety at
-                           # dette faktisk ER revet sett paa svaert naert hold (rimelig
-                           # for et "ved revlinja"-punkt), eller at koordinatet peker paa
-                           # Tristein sin le-/ostside i stedet for den eksponerte vestsiden.
-                           # IKKE korrigert her - jeg har ikke et mer presist koordinat aa
-                           # erstatte det med. swell_window og offshore_point under er
-                           # derfor satt til aa favorisere den bekreftet aapne sektoren
-                           # (205-210 grader) i stedet for det opprinnelig foreslaatte
-                           # senteret (235-245) - se egne merknader ved hvert felt.
-    offshore_point: [59.005633, 10.506604]  # 2,5 km langs (tilsiktet) peiling 208 -
-                                        # build_fetch.py sin egen bearing_between()
-                                        # regner 206,7 (avrundingsforskjell mot min
-                                        # haandregnede projeksjon, ikke reell uenighet).
-                                        # IKKE 235-245 (se koordinat-merknaden over) -
-                                        # reell, monoton dybdeprofil her (20/30/50 m paa
-                                        # 0,07/1,73/2,11 km - build_fetch.py sitt eget
-                                        # tall for NOEYAKTIG 206,7, se under), i motsetning
-                                        # til 235 grader (30/50 m: ingen_kote - stanset av
-                                        # substansiell kystlinje kun 190 m ute). 208 er
-                                        # ogsaa innenfor det oppgitte 30-55 graders
-                                        # skraatilfellet fra facing (259-208 = 51 grader),
-                                        # saa valget er fortsatt konsistent med den
-                                        # fysiske begrunnelsen i notes, bare forskjøvet
-                                        # mot den enden av vinduet som faktisk er
-                                        # bekreftet aapen.
+    lat: 59.0230130      # RETTET (ordre 2026-09-07, se rapport til bruker) - brukeren
+    lon: 10.5212816         # oppga et korrigert koordinat etter forrige runde (som hadde
+                           # land 87-130 m unna i hele 220-300 graders-sektoren, se git-
+                           # historikken paa dette feltet). Verifisert paa nytt mot ekte
+                           # kystkontur.geojson: aapent hav (ingen kystlinjetreff innen
+                           # 30 km) i HELE 140-259 graders-sektoren fra dette punktet -
+                           # daekker baade facing (259) og hele det opprinnelig foreslaatte
+                           # vindussenteret (235-245) uten forbehold. Naermeste kystlinje
+                           # (92,8 m) er selve revet/skjaeret punktet ligger ved, som
+                           # forventet for et "ved revlinja"-punkt. Forrige runde sin
+                           # avviks-merknad og arbeid-rundt (skjovet vindu/offshore_point)
+                           # er derfor reversert - se swell_window/offshore_point under.
+    offshore_point: [59.016266, 10.498588]  # 1,5 km langs peiling ~240 (vindussenteret,
+                                        # se swell_window under - IKKE lenger et
+                                        # kompromiss, geometrien bekrefter na at senteret
+                                        # selv er aapent). build_fetch.py sin egen
+                                        # bearing_between() gir 238,7 (avrundingsforskjell,
+                                        # ikke reell uenighet). Ekte maalt
+                                        # (compute_depth_profile(), samme kjoring som
+                                        # dybde_Xm_km under): 20 m paa 0,16 km, 50 m paa
+                                        # 0,71 km - 1,5 km gir god margin forbi begge.
+                                        # 30 m: data_slutt langs noeyaktig denne peilingen
+                                        # (nedlastet utsnitt tok slutt foer koten ble
+                                        # funnet) - se dybde_30m_status under.
     wind_weight: 1.0            # ikke tunet - ingen surfeerfaring aa kalibrere mot enda
     facing: 259                  # normalen paa revlinja (169+90), ikke 280 (revlinjas andre
                                   # normal, 349-180=169+90=... se notes: trend 169/349,
                                   # normal 259/79 - 259 er siden som vender mot aapent hav)
-    swell_window: [205, 265]     # senter 235 - i det oppgitte 235-245-omraadet, men IKKE
-                                  # midtpunktet (240) - se koordinat-merknaden over for
-                                  # hvorfor nedre kant (205) er lagt der geometrien
-                                  # faktisk bekrefter aapent hav. Bredde (60 grader) matcher
-                                  # den oppgitte fysiske begrunnelsen (dønning 30-55 grader
-                                  # skraatt paa facing 259 => kildesektor omtrent 204-229,
-                                  # her daekket).
+    swell_window: [210, 270]     # senter 240 - midt i det oppgitte 235-245-omraadet.
+                                  # Forrige runde skjov senteret til 235/nedre kant til
+                                  # 205 pga. en da-antatt kystlinje naer 235 langs det
+                                  # (feilplasserte) gamle koordinatet - det bortfaller na
+                                  # (se koordinat-merknaden over). Bredde (60 grader)
+                                  # uendret, matcher fortsatt den oppgitte fysiske
+                                  # begrunnelsen (dønning 30-55 grader skraatt paa
+                                  # facing 259 => kildesektor omtrent 204-229).
     spread_s: 5                  # se spread_s i toppteksten - standardverdi, ikke tunet enda
     min_hs: 2.0                  # BEHOLDT uendret (ordre 2026-09-07) - hoyest av alle
     ideal_hs: 3.0                 # spotene, satt for nettopp dette stedet. Ikke justert
@@ -698,6 +688,21 @@ spots:
       en svaert kort hylle. Grunne skjaer innenfor: loddskudd +1,3, +1,9,
       +2,4. Transekt sorover fra revet: peiling 151 grader, naar ca. 100 m
       ved 1,15 km, midlere helning ca. 1:11.
+
+      Koordinat rettet 2026-09-07 (se rapport til bruker og merknaden ved
+      lat/lon over) - brukeren oppga et nytt koordinat etter forrige runde,
+      som hadde land 87-130 m unna i hele 220-300 graders-sektoren (en
+      geometrisk selvmotsigelse som ble rapportert, ikke tildekket, i
+      forrige commit). Det nye koordinatet er verifisert mot ekte
+      kystkontur.geojson: aapent hav i hele 140-259 graders-sektoren.
+      build_fetch.py sin egen dybdeprofil langs offshore_point-peilingen
+      (~239 grader, se offshore_point over) gir 20 m paa 0,16 km og 50 m
+      paa 0,71 km (30 m: data_slutt, se dybde_30m_status under - IKKE det
+      samme som "ingen kote finnes", bare at det nedlastede utsnittet tok
+      slutt foer koten evt. ble funnet). Dette er en ANNEN straale enn den
+      manuelle 151-graders-transekten over (som fant 100 m paa 1,15 km) -
+      rapportert som to uavhengige maalinger, ikke reconcilert, samme
+      prinsipp som for Skallevold.
 
       Den korte hylla (20 m bare 50-100 m ute) gir for lite avstand til at
       kammen rekker aa refraktere seg parallell med revet. Donning fra SV
@@ -726,16 +731,16 @@ spots:
       holmer i området - sjekk gjeldende skilting/forskrift for denne
       holmen før du går i land. Vurder å holde deg i vannet/på brettet.
 
-    fetch_km_72: [17.1, 3.1, 17.9, 0.6, 24.7, 26.2, 25.0, 22.9, 24.1, 22.2, 26.7, 16.6, 16.3, 19.1, 19.1, 20.0, 20.0, 23.4, 27.9, 27.8, 24.6, 300.0, 21.6, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 4.1]
-    fetch_km_72_effektiv: [4.1, 4.1, 17.1, 17.9, 24.7, 24.7, 24.7, 24.1, 24.1, 22.9, 22.2, 19.1, 19.1, 19.1, 19.1, 20.0, 20.0, 23.4, 24.6, 27.8, 27.8, 27.8, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 3.1]
-    fetch_km_72_endelig: [17.1, 3.1, 17.9, 0.6, 24.7, 26.2, 25.0, 22.9, 24.1, 22.2, 26.7, 16.6, 16.3, 19.1, 19.1, 20.0, 20.0, 23.4, 27.9, 27.8, 24.6, 60.0, 21.6, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 4.1]
-    fetch_km_72_kjegle: [16.1, 17.9, 24.7, 26.2, 26.9, 25.5, 25.1, 25.1, 23.8, 23.8, 22.7, 21.8, 19.1, 19.2, 20.0, 20.5, 23.7, 27.8, 27.9, 27.9, 27.9, 25.2, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 3.8, 4.2]
-    skjaergaard_indeks: 1.55
-    dybde_20m_km: 0.07
+    fetch_km_72: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 21.2, 20.5, 23.9, 28.9, 29.7, 18.1, 20.7, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 75.7, 56.8, 16.9, 28.1, 20.5, 17.8, 16.5, 13.2, 12.9, 13.0, 6.7, 7.3, 4.9, 4.6, 6.4, 5.7, 7.0, 6.1, 7.0, 12.8, 8.3, 2.7, 19.2]
+    fetch_km_72_effektiv: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 20.5, 21.2, 23.9, 23.9, 23.9, 28.9, 29.7, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 75.7, 56.8, 28.1, 20.5, 17.8, 17.8, 16.5, 13.2, 13.0, 12.9, 7.3, 6.7, 6.4, 5.7, 5.7, 6.1, 6.4, 7.0, 7.0, 7.0, 8.3, 8.3, 2.7]
+    fetch_km_72_endelig: [0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 21.2, 20.5, 23.9, 28.9, 29.7, 18.1, 20.7, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 75.7, 56.8, 16.9, 28.1, 20.5, 17.8, 16.5, 13.2, 12.9, 13.0, 6.7, 7.3, 4.9, 4.6, 6.4, 5.7, 7.0, 6.1, 7.0, 12.8, 8.3, 2.7, 19.2]
+    fetch_km_72_kjegle: [2.9, 0.3, 0.3, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 20.6, 21.2, 24.2, 28.2, 28.2, 28.2, 28.3, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 200.0, 240.0, 240.0, 240.0, 69.5, 65.9, 58.3, 28.1, 26.9, 21.2, 17.8, 14.7, 14.4, 13.0, 12.9, 7.4, 7.2, 6.5, 6.5, 6.5, 6.8, 7.1, 9.2, 9.2, 10.6, 8.8, 8.1]
+    skjaergaard_indeks: 3.65
+    dybde_20m_km: 0.16
     dybde_20m_status: maalt
-    dybde_30m_km: 1.73
-    dybde_30m_status: maalt
-    dybde_50m_km: 2.11
+    dybde_30m_km:
+    dybde_30m_status: data_slutt
+    dybde_50m_km: 0.71
     dybde_50m_status: maalt
   - id: hvasser_sando
     name: Hvasser / Sandø østside

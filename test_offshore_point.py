@@ -42,8 +42,9 @@ import agent as A
 # verdens_ende er FJERNET fra denne lista (ordre 2026-09-07, se rapport
 # til bruker) - spotet er slettet (koordinatet pekte paa Tjomes sorspiss,
 # et fysisk annet sted enn Tristein) og erstattet med tristein, som IKKE
-# er i avvik: nytt offshore_point (2,5 km) er bade >1 km og forbi egen
-# dybde_50m_km (2,04 km).
+# er i avvik: offshore_point (1,5 km, etter at brukeren senere rettet
+# selve spotkoordinatet - se spots.yaml sin egen merknad ved lat/lon) er
+# bade >1 km og forbi egen dybde_50m_km (0,71 km).
 KJENTE_AVVIK = {"jomfruland_ost", "hvasser_sando"}
 
 
