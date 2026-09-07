@@ -108,6 +108,59 @@ def test_manuelle_transekter_havner_i_notes_ikke_i_dybde_feltene():
     assert "2,02 km" in sletteroyene.get("notes", "")
     assert "build_fetch.py" in sletteroyene.get("notes", "")
 
+    # ordre 2026-09-07: Skallevold sin manuelle transekt (145 grader,
+    # 3,46 km) IKKE skrevet inn - build_fetch.py sitt eget tall (0.78,
+    # langs gate-peilingen 177, en ANNEN straale) star i feltet.
+    skallevold = by_id["skallevold"]
+    assert skallevold.get("dybde_20m_km") == 0.78
+    assert "3,46 km" in skallevold.get("notes", "")
+    assert "build_fetch.py" in skallevold.get("notes", "")
+
+    # ordre 2026-09-07: Tristein sin manuelle transekt (peiling 151,
+    # 1,15 km til ca. 100 m) IKKE skrevet inn - build_fetch.py sitt eget
+    # tall (langs offshore_point-peilingen, ca. 207 grader) star i feltet.
+    tristein = by_id["tristein"]
+    assert tristein.get("dybde_20m_km") == 0.07
+    assert "1,15 km" in tristein.get("notes", "")
+
+
+def test_skallevold_nytt_koordinat_gir_monoton_profil():
+    """ordre 2026-09-07 (se rapport til bruker): Skallevold flyttet 2,1 km
+    - build_fetch.py sin gate-peiling (ca. 177 grader, IKKE facing=115
+    eller den manuelle transektens 145 grader - se depth_bearing_for_spot())
+    fant 20 m paa 0,78 km, men verken 30 eller 50 m (substansiell kystlinje
+    stoppet soeket foerst) - en triviell, men reell, monoton profil."""
+    spots, _ = A.load_spots()
+    skallevold = next(s for s in spots if s["id"] == "skallevold")
+    assert skallevold["lat"] == 59.2896150
+    assert skallevold["lon"] == 10.5069350
+    assert skallevold["dybde_20m_km"] == 0.78
+    assert skallevold["dybde_20m_status"] == "maalt"
+    assert skallevold["dybde_30m_km"] is None
+    assert skallevold["dybde_30m_status"] == "ingen_kote"
+
+
+def test_verdens_ende_er_slettet_tristein_er_nytt_spot():
+    """ordre 2026-09-07 (se rapport til bruker): det gamle verdens_ende-
+    koordinatet (59.028/10.475) pekte 0,41 km fra selve Verdens Ende-
+    landemerket (Tjomes sorspiss) og 2,99 km fra det nye tristein-
+    koordinatet - et FYSISK ANNET sted, ikke samme spot med nytt navn.
+    Derfor slettet og gjenskapt, ikke bare omdopt - kalibrert=false og
+    ingen felt arvet fra den gamle iden."""
+    spots, _ = A.load_spots()
+    by_id = {s["id"]: s for s in spots}
+    assert "verdens_ende" not in by_id
+    tristein = by_id["tristein"]
+    assert tristein["klasse"] == "A"
+    assert tristein["kalibrert"] is False
+    assert tristein["facing"] == 259
+    assert tristein["swell_window"] == [205, 265]
+    # min/ideal/max EKSPLISITT beholdt uendret fra det slettede spotet -
+    # satt for nettopp dette stedet, ikke justert uten oektdata
+    assert (tristein["min_hs"], tristein["ideal_hs"], tristein["max_hs"]) == (2.0, 3.0, 5.0)
+    assert tristein.get("boat") is True
+    assert tristein.get("access_warning"), "Faerder nasjonalpark - ferdselsrestriksjon mangler"
+
 
 def test_allowlist_refererer_kun_til_eksisterende_spots():
     """ordre 2026-09-06 (se rapport til bruker): en allowlist-oppforing
