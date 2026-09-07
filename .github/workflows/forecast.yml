@@ -38,13 +38,14 @@ jobs:
       # under (se "Publiser til data-grenen"), slik at den overlever den
       # naeste --orphan-force-pushen og dermed havner i upload-pages-
       # artifact under, klar for spot-testeren i frontenden.
+      #
+      # scripts/fetch_shadow_state.sh - se den for rotaarsaken til hvorfor
+      # shadow.csv haandteres strengere enn de to andre filene (skal feile
+      # hardt paa en reell hente-feil, ikke stille gi en tom fil). Egen
+      # fil (ikke inlinet her) fordi den trenger aa vaere kjorbar isolert
+      # i test_fetch_shadow_state.py.
       - name: Hent tilstand fra data-grenen
-        run: |
-          git fetch origin data:data 2>/dev/null || echo "data-gren finnes ikke enna"
-          mkdir -p out
-          git show data:out/alert_state.json > out/alert_state.json 2>/dev/null || true
-          git show data:out/shadow.csv       > out/shadow.csv       2>/dev/null || true
-          git show data:out/spotgrid.json    > out/spotgrid.json    2>/dev/null || true
+        run: scripts/fetch_shadow_state.sh
 
       - uses: actions/setup-python@v5
         with:
@@ -66,6 +67,23 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           python agent.py ${{ inputs.shadow && '--shadow' || '' }} | tee out/run.log
+
+      # Siste vern mot aa PUSHE OVER eksisterende historikk (se
+      # rotaarsak-merknaden ved "Hent tilstand fra data-grenen"): kjort
+      # HER, foer "Trim logg" - trimming er en VILJET, kjent reduksjon
+      # (se den), og skal ikke feilaktig utlose dette. >=, ikke >:
+      # header-reparasjon (append_shadow_log()) legger lovlig til noyaktig
+      # én linje uten nye datarader (se agent.py sin docstring der).
+      - name: Sjekk at shadow.csv ikke krympet
+        run: |
+          rows_before=$(cat out/.rows_before)
+          rows_after=$(wc -l < out/shadow.csv)
+          echo "rader for: $rows_before, etter: $rows_after"
+          if [ "$rows_after" -lt "$rows_before" ]; then
+            echo "FEIL: shadow.csv har faerre rader enn foer kjoringen ($rows_after < $rows_before)."
+            echo "Avbryter for aa unngaa aa pushe over eksisterende historikk paa data-grenen."
+            exit 1
+          fi
 
       # Roterer shadow.csv naar den blir stor - ett ars data er rikelig
       - name: Trim logg

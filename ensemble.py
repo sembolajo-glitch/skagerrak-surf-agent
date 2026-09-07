@@ -25,6 +25,15 @@ Usikkerhetskildene som samples:
 Ensemblet er deterministisk (fast seed). Samme inndata gir samme
 sannsynlighet hver kjoring - ellers ville tallet flakke mellom kjoringer
 paa uendret varsel, og du ville sluttet aa stole paa det.
+
+Regional energi-port (ordre 2026-09-02, se agent.py sin score_hour() for
+resten av bildet): evaluate() tar en valgfri regional_wp og sjekker den
+mot spot["regional_wp_min"/"regional_wp_max"]. Naar porten er raa-lukket
+bypasses den med en KONTINUERLIG vekt (bypass_weight()) regnet PER
+ENSEMBLEMEDLEM fra klasse C sine egne (perturberte) lokal-/propagert-
+energikomponenter - se _member_state(). Det er med vilje: en boolsk
+bypass flipper hardt naer paritet, mens en per-medlem kontinuerlig vekt
+lar spredningen i p_surf falle ut av selve ensemblet.
 """
 
 import math
@@ -104,6 +113,60 @@ def model_spread(wave_rec):
     return min(0.6, st.pstdev(vals) / m) if m > 0 else 0.0
 
 
+# ------------------------------------------------- regional energi-port
+#
+# score_hour() (agent.py) sin regional_wp_min/max-port (PR #16) var
+# boolsk: local_hs > prop_hs bypasset porten helt, ellers ikke. Det
+# flipper fram og tilbake naer paritet - baade mellom timer og mellom
+# ensemblemedlemmer - og gir hopp i p_surf som ikke reflekterer reell
+# usikkerhet. Hoyde alene er ogsaa feil metrikk: lokal 0.9 m/4.2 s og
+# fjordswell 0.9 m/7 s er ikke samme bolge (~2x forskjell i effekt, se
+# physics.wave_power()). Erstattet (ordre 2026-09-02) med en myk vekt
+# basert paa energifluks (Hs^2 * Tp, samme byggestein som wave_power()
+# - proporsjonalitetskonstanten trengs ikke her, det er bare et forhold)
+# og en rampe i log-rom.
+
+# Startverdi, IKKE en maalt konstant - kalibreres senere mot faktiske
+# utfall (se calibrate.py sin model_rev-grupperte rapport, shadow_schema.py).
+# Bredden paa overgangssonen i log-energiforhold: r i [-ramp, +ramp] gir
+# en lineaer rampe fra w=0 til w=1, utenfor klippes den til 0 hhv. 1.
+BYPASS_RAMP_LOG = 0.35
+
+
+def log_energy_margin(local_hs, local_tp, prop_hs, prop_tp):
+    """
+    r = log(E_lokal / E_prop), E = Hs^2 * Tp (energifluks, se
+    physics.wave_power() for hvorfor det er riktig storrelse - ikke bare
+    Hs). None hvis en av sidene mangler energi helt (Hs eller Tp <= 0) -
+    se bypass_weight() for hvordan de randtilfellene haandteres i selve
+    porten (de trenger ikke r, kun fortegnet paa hvilken side som er 0).
+    """
+    e_local = local_hs ** 2 * local_tp
+    e_prop = prop_hs ** 2 * prop_tp
+    if e_prop <= 0 or e_local <= 0:
+        return None
+    return math.log(e_local / e_prop)
+
+
+def bypass_weight(local_hs, local_tp, prop_hs, prop_tp, ramp=BYPASS_RAMP_LOG):
+    """
+    0-1: hvor mye spottens EGEN lokale sjo (uavhengig av regional_wp)
+    skal bypasse regional-energi-porten. 1.0 = lokal sjo dominerer helt
+    (porten skal ikke stenge), 0.0 = regional/propagert swell dominerer
+    helt (porten skal virke som normalt). Kontinuerlig mellom - IKKE
+    boolsk - slik at en ensemble-spredning naer paritet gir en genuin
+    spredning i utfall, ikke et hardt hopp.
+    """
+    e_local = local_hs ** 2 * local_tp
+    e_prop = prop_hs ** 2 * prop_tp
+    if e_prop <= 0:
+        return 1.0
+    if e_local <= 0:
+        return 0.0
+    r = math.log(e_local / e_prop)
+    return min(1.0, max(0.0, (r + ramp) / (2 * ramp)))
+
+
 # --------------------------------------------------------------- medlemmer
 
 
@@ -130,7 +193,15 @@ def draw_members(sig, n=N_MEMBERS, seed=SEED):
 
 
 def _member_state(spot, member, base):
-    """Regn hs/tp for ett ensemblemedlem, gitt uforstyrret utgangspunkt."""
+    """
+    Regn hs/tp for ett ensemblemedlem, gitt uforstyrret utgangspunkt.
+
+    Returnerer (hs, tp, wdir, loc_hs, loc_tp, prop_hs, prop_tp) - de
+    fire siste (raa lokal/propagert-komponenter FOR de kombineres) er
+    None for klasse A/B, der bypass_weight() ikke brukes (se evaluate()
+    - klasse A/B bypasses via base["source"]=="local_fetch" i stedet,
+    en base-niva-flagg, ikke noe som varierer per medlem).
+    """
     if spot["klasse"] == "C":
         # lokal vindsjo skalerer med vinden
         u = base["local_wind_mean"] * member["wind_scale"]
@@ -153,15 +224,15 @@ def _member_state(spot, member, base):
             )
         hs, tp = P.combine(loc_hs, loc_tp, prop_hs, prop_tp)
         wdir = base["gate_dir"] if prop_hs > loc_hs else base["local_dir"]
+        return hs, tp, wdir, loc_hs, loc_tp, prop_hs, prop_tp
     else:
         hs = base["model_hs"] * member["gate_scale"]
         tp = base["model_tp"]
         wdir = (base["model_dir"] + member["gate_dir"]) if base["model_dir"] is not None else None
+        return hs, tp, wdir, None, None, None, None
 
-    return hs, tp, wdir
 
-
-def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
+def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS, regional_wp=None):
     """
     Returnerer dict med:
       p_surf     0-100, sannsynlighet for surfbare forhold
@@ -175,6 +246,21 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
     KUN medlemmene med score > 0), saa flere marginale medlemmer over
     terskelen senker medianen samtidig som sannsynligheten stiger.
     Aritmetikk, ikke usikkerhet.
+
+    regional_wp: bolgeeffekt (kW/m) ved Saltsteins offshore_point for
+    denne timen (se agent.py sin run()), eller None hvis ukjent - porter
+    da aldri igjen, se under. Sjekkes mot spot["regional_wp_min"/
+    "regional_wp_max"] (spots.yaml) for en "raa" apen/lukket-tilstand
+    (gate_raw), DELT av alle medlemmer (samme regional_wp, samme
+    terskler - den varierer ikke per medlem). Det som VARIERER per
+    medlem er bypass_weight() sin myke vekt (w) naar porten er raa-
+    lukket: klasse C bruker medlemmets EGNE (perturberte) lokal/
+    propagert-komponenter fra _member_state(), saa spredningen i hvor
+    naer partitet lokal/regional energi er faller naturlig ut som
+    spredning i p_surf - IKKE et hardt, samlet hopp for alle medlemmer
+    samtidig. Klasse A/B bypasses fortsatt boolsk (w=1.0) naar
+    base["source"]=="local_fetch" - uendret oppforsel der, se
+    score_hour() i agent.py.
     """
     spread = model_spread(wave_rec or {})
     global_model = (wave_rec or {}).get("partisjon_kilde") == "global"
@@ -184,14 +270,30 @@ def evaluate(spot, base, wind, lead_h, water_cm, wave_rec, n=N_MEMBERS):
     ws = wind.get("wind_speed") or 0.0
     wfrom = wind.get("wind_from_direction")
 
+    wp_min = spot.get("regional_wp_min")
+    wp_max = spot.get("regional_wp_max")
+    gate_would_close = regional_wp is not None and (
+        (wp_min is not None and regional_wp < wp_min)
+        or (wp_max is not None and regional_wp > wp_max)
+    )
+    gate_raw = 0.0 if gate_would_close else 1.0
+
     surf, scores = 0, []
     for m in members:
-        hs, tp, wdir = _member_state(spot, m, base)
+        hs, tp, wdir, loc_hs, loc_tp, prop_hs, prop_tp = _member_state(spot, m, base)
 
         if spot["klasse"] in ("A", "B") and wdir is not None:
             hs *= P.window_factor(wdir, spot)
 
-        q_size = P.size_quality(hs, spot["min_hs"], spot["ideal_hs"], spot["max_hs"])
+        if base.get("source") == "local_fetch":
+            w = 1.0
+        elif spot["klasse"] == "C" and None not in (loc_hs, loc_tp, prop_hs, prop_tp):
+            w = bypass_weight(loc_hs, loc_tp, prop_hs, prop_tp)
+        else:
+            w = 0.0
+        gate = gate_raw + w * (1.0 - gate_raw)
+
+        q_size = P.size_quality(hs, spot["min_hs"], spot["ideal_hs"], spot["max_hs"]) * gate
         q_period = P.period_quality(tp, spot["min_tp"])
         q_wind_raw, _ = (
             P.wind_quality(ws * m["wind_scale"], (wfrom or 0) + m["wind_dir"], spot["facing"])
