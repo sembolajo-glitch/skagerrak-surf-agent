@@ -22,7 +22,12 @@ Per spot, ca. 4x4 km rundt spotkoordinatet:
     til der soeket ga opp i stedet (se depth_search_cap_km() - build_fetch.py
     sin egen effective_cap er ikke eksponert, saa den er rederivert her KUN
     for tegningen, samme to bestanddeler som build_fetch.compute_depth_profile()
-    selv bruker)
+    selv bruker). Status "ikke_relevant_klasse_c" (ordre 2026-09-07, se
+    KLASSE_C_RELEVANTE_DYBDER i build_fetch.py): IKKE tegnet i det hele
+    tatt - 30/50 m ble aldri soekt for denne klassen, saa det finnes ingen
+    straale/cap aa vise. Fanges automatisk av at ingen av if/elif-grenene
+    under matcher denne statusen (ingen spesialhaandtering trengs) -
+    tekstboksen (_info_box_svg()) viser fortsatt "-" og statusnavnet.
   - swell_window som en gjennomsiktig vifte
   - fetch_km/local_fetch_km (16-punkts kompasstabell) som en liten,
     logaritmisk skalert polardiagram-rose i et hjorne (ordre 2026-09-03:

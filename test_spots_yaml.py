@@ -136,10 +136,14 @@ def test_skallevold_nytt_koordinat_gir_monoton_profil():
     grader) 20 m paa 0,78 km, men verken 30 eller 50 m. Senere samme dag
     (ordre 2026-09-07, systemisk dybde_peiling-fiks) ble et eksplisitt
     `dybde_peiling: 145` lagt til - na SAMME peiling som transekten, ikke
-    gate-peilingen - og profilen ble regnet paa nytt: 20 m paa 0,43 km,
-    50 m paa 1,36 km (30 m: data_slutt, IKKE ingen_kote - nedlastet
-    utsnitt tok slutt foer eventuell kote ble funnet langs akkurat denne
-    peilingen). Fortsatt monoton (0,43 < 1,36, 30 m ukjent)."""
+    gate-peilingen - og 20 m ble regnet paa nytt: 0,43 km.
+
+    Enda senere samme dag (ordre 2026-09-07, klassebevisst
+    blokkert_av_land - se rapport til bruker): Skallevold er klasse C,
+    saa 30/50 m soekes ikke lenger i det hele tatt (se
+    KLASSE_C_RELEVANTE_DYBDER i build_fetch.py) - status
+    "ikke_relevant_klasse_c" for begge, IKKE de tidligere "data_slutt"/
+    "maalt" (1,36 km) tallene. Fortsatt trivielt monoton (kun 20 m kjent)."""
     spots, _ = A.load_spots()
     skallevold = next(s for s in spots if s["id"] == "skallevold")
     assert skallevold["lat"] == 59.2896150
@@ -148,9 +152,9 @@ def test_skallevold_nytt_koordinat_gir_monoton_profil():
     assert skallevold["dybde_20m_km"] == 0.43
     assert skallevold["dybde_20m_status"] == "maalt"
     assert skallevold["dybde_30m_km"] is None
-    assert skallevold["dybde_30m_status"] == "data_slutt"
-    assert skallevold["dybde_50m_km"] == 1.36
-    assert skallevold["dybde_50m_status"] == "maalt"
+    assert skallevold["dybde_30m_status"] == "ikke_relevant_klasse_c"
+    assert skallevold["dybde_50m_km"] is None
+    assert skallevold["dybde_50m_status"] == "ikke_relevant_klasse_c"
 
 
 def test_verdens_ende_er_slettet_tristein_er_nytt_spot():
@@ -173,6 +177,61 @@ def test_verdens_ende_er_slettet_tristein_er_nytt_spot():
     assert (tristein["min_hs"], tristein["ideal_hs"], tristein["max_hs"]) == (2.0, 3.0, 5.0)
     assert tristein.get("boat") is True
     assert tristein.get("access_warning"), "Faerder nasjonalpark - ferdselsrestriksjon mangler"
+
+
+def test_klasse_c_soeker_ikke_30_50m():
+    """ordre 2026-09-07 (se rapport til bruker): blokkert_av_land betyr
+    ulike ting for ulike klasser - for klasse C (kortperiodisk vindsjo,
+    fjord bred nok til at ENHVER peiling til slutt treffer land) er
+    30/50 m utenfor det som noensinne paavirker boelgen (se
+    KLASSE_C_RELEVANTE_DYBDER i build_fetch.py: L0 = 1,56*Tp^2,
+    bunnkontakt fra L0/2 - 20 m er allerede grensa for en typisk
+    kortperiodisk vindsjo). Klasse C skal derfor ALDRI ha "maalt",
+    "ingen_kote", "data_slutt" eller "blokkert_av_land" for 30/50 m -
+    kun "ikke_relevant_klasse_c", og verdien skal vaere None.
+
+    Klasse A/B er UBERORT av denne regelen - blokkert_av_land der er
+    fortsatt et ekte varsel om at straalen peker feil vei (se
+    test_ingen_andre_ukjente_avvik og de andre monotonitetstestene i
+    denne fila)."""
+    spots, _ = A.load_spots()
+    for spot in spots:
+        for target in (30, 50):
+            status = spot.get(f"dybde_{target}m_status")
+            value = spot.get(f"dybde_{target}m_km")
+            if spot["klasse"] == "C":
+                assert status == "ikke_relevant_klasse_c", (
+                    f"{spot['id']} (klasse C) dybde_{target}m_status er "
+                    f"{status!r}, ventet 'ikke_relevant_klasse_c'"
+                )
+                assert value is None, (
+                    f"{spot['id']} (klasse C) dybde_{target}m_km er {value}, "
+                    "ventet None - 30/50 m skal ikke soekes for denne klassen"
+                )
+            else:
+                assert status != "ikke_relevant_klasse_c", (
+                    f"{spot['id']} (klasse {spot['klasse']}) har "
+                    "'ikke_relevant_klasse_c' - den statusen er kun for klasse C"
+                )
+
+
+def test_klasse_c_verifisert_mot_spots_yaml():
+    """ordre 2026-09-07 (se rapport til bruker): bestillingen oppga en
+    tentativ klasse C-liste (slagen, skallevold, bastoy_odden,
+    sletteroyene, larkollen) med en eksplisitt "VERIFISER dette mot
+    spots.yaml, ikke mot denne lista"-instruks. Denne testen LAASER den
+    verifiserte lista - endres klassen til noen av disse spotene (eller
+    til rakke/portor, som IKKE er klasse C), skal testen feile synlig i
+    stedet for at klasse C-regelen over stille slutter aa gjelde riktig
+    sett med spots."""
+    spots, _ = A.load_spots()
+    faktisk_klasse_c = {s["id"] for s in spots if s["klasse"] == "C"}
+    assert faktisk_klasse_c == {
+        "slagen", "skallevold", "bastoy_odden", "sletteroyene", "larkollen",
+    }
+    by_id = {s["id"]: s for s in spots}
+    assert by_id["rakke"]["klasse"] != "C"
+    assert by_id["portor"]["klasse"] != "C"
 
 
 def test_allowlist_refererer_kun_til_eksisterende_spots():

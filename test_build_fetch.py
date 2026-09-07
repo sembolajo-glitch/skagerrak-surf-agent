@@ -418,6 +418,27 @@ def test_compute_depth_profile_lite_skjaer_stopper_ikke_soeket():
     assert 9.9 < value < 10.1
 
 
+def test_compute_depth_profile_respekterer_targets_parameter():
+    """ordre 2026-09-07 (se rapport til bruker, klassebevisst
+    blokkert_av_land): compute_depth_profile() skal KUN regne maaldybdene
+    i `targets` - kalleren (build_fetch.py sin main(), for klasse C) kan
+    dermed utelate 30/50 m helt, ikke bare skjule et resultat i etterkant."""
+    lon0, lat0 = 10.0, 59.0
+    ox, oy = G.to_utm(lon0, lat0)
+    contour20 = LineString([(ox - 5000, oy - 5000), (ox + 5000, oy - 5000)])
+    contour30 = LineString([(ox - 5000, oy - 6000), (ox + 5000, oy - 6000)])
+    depth_trees = {
+        20: (G.build_strtree([contour20]), [contour20]),
+        30: (G.build_strtree([contour30]), [contour30]),
+    }
+    profile = B.compute_depth_profile(lon0, lat0, 180, depth_trees,
+                                       edge_tree=None, edge_lines=[],
+                                       kyst_tree=None, kyst_lines=[],
+                                       targets=(20,))
+    assert set(profile) == {20}
+    assert profile[20][1] == "maalt"
+
+
 def test_substantial_land_crossing_km_ignorerer_smaa_skjaer():
     lon0, lat0 = 10.0, 59.0
     ox, oy = G.to_utm(lon0, lat0)

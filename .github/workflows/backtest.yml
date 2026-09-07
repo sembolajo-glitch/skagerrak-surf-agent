@@ -1,0 +1,106 @@
+name: backtest
+
+# Kjor scripts/backtest.py mot arkiverte Open-Meteo-data (IKKE MET - se
+# scripts/backtest.py sin docstring) for en eller flere historiske
+# datoer. Samme grunn som backtest-sessions.yml/probe-marine-archive.yml:
+# verken denne oekten eller brukerens eget miljo naar Open-Meteo, saa
+# dette er den eneste plassen skriptet faktisk kan hente ferske data.
+#
+# Cachen (tests/fixtures/backtest/<dato>.json) committes TILBAKE til
+# grenen workflowen kjorer paa, slik at en gitt dato kun trenger
+# hentes EN gang - senere kjoringer (her eller lokalt/offline) leser
+# fila i stedet for aa gaa til nettet paa nytt. Roerer ALDRI shadow.csv
+# eller data-grenen (forecast.yml sitt ansvar, se den workflowen) -
+# "permissions: contents: write" her gjelder bare push til DENNE
+# grenen, ikke noe orphan-branch-oppsett.
+on:
+  workflow_dispatch:
+    inputs:
+      dato:
+        description: "Dato(er), YYYY-MM-DD. Kommaseparert for flere (f.eks. \"2026-09-05,2026-09-06\" - trengs for Saltstein sin holdbarhetsanalyse over doegnskiftet)"
+        type: string
+        default: "2026-09-05"
+      spots:
+        description: "Kommaseparert liste spot-id-er (tom = alle i spots.yaml)"
+        type: string
+        default: ""
+      compare_old_point:
+        description: "Kommaseparert liste spot-id-er for gammelt-vs-nytt-offshore_point-sammenligningen"
+        type: string
+        default: "molen_odden,saltstein"
+      refresh:
+        description: "Ignorer cache, hent alt paa nytt fra Open-Meteo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer avhengigheter
+        run: pip install -r requirements.txt
+
+      - name: Kjor scripts/backtest.py
+        env:
+          DATO: ${{ inputs.dato }}
+          SPOTS: ${{ inputs.spots }}
+          COMPARE_OLD_POINT: ${{ inputs.compare_old_point }}
+          REFRESH: ${{ inputs.refresh }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          IFS=',' read -ra DATOER <<< "$DATO"
+          args=("${DATOER[@]}" --compare-old-point "$COMPARE_OLD_POINT")
+          if [ -n "$SPOTS" ]; then
+            args+=(--spots "$SPOTS")
+          fi
+          if [ "$REFRESH" = "true" ]; then
+            args+=(--refresh)
+          fi
+          python -u scripts/backtest.py "${args[@]}" | tee out_backtest.log
+
+      - name: Skriv resultatet til step summary
+        if: always()
+        run: |
+          {
+            echo "# Backtest: $DATO"
+            echo
+            echo "Datakilde: Open-Meteo (IKKE MET) - se scripts/backtest.py sin docstring."
+            echo
+            echo '```text'
+            cat out_backtest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit nye/endrede fixtures
+        if: always()
+        run: |
+          git config user.name  "surf-agent"
+          git config user.email "surf-agent@users.noreply.github.com"
+          git add tests/fixtures/backtest/
+          if git diff --cached --quiet; then
+            echo "Ingen nye eller endrede fixtures - ingenting aa committe."
+          else
+            git commit -m "backtest: cache Open-Meteo-data for $DATO"
+            git push
+          fi
+        env:
+          DATO: ${{ inputs.dato }}
+
+      - name: Last opp backtest-logg som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-log
+          path: out_backtest.log
+          if-no-files-found: warn
+          retention-days: 30

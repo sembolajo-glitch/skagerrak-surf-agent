@@ -898,18 +898,39 @@ spots:
       Kalibreringsspotten for hele klasse C. Kjent trigger - S >= 15 m/s
       i 8-12 t, vindu 2-5 t etter dreining til V/NV.
 
+      Dybdestraale ved 180 grader (ordre 2026-09-07, se rapport til
+      bruker): gate-peilingen krysser substansiell kystlinje paa
+      Ostfold-siden av Vestfjorden. Vestfjorden er 12-15 km bred her, saa
+      ENHVER peiling fra dette punktet treffer motsatt side til slutt -
+      det er ren geografi, ikke et symptom paa feil peiling slik
+      blokkert_av_land er for klasse A/B mot aapent hav (se
+      KLASSE_C_RELEVANTE_DYBDER i build_fetch.py). 30/50 m soekes uansett
+      ikke lenger for denne klassen (se dybde_30m_status/dybde_50m_status
+      under) - de ligger langt utenfor det en kortperiodisk vindsjo
+      (min_tp 4,5 s) noensinne foler bunnen av.
+
+      Viktigere fysisk forbehold, IKKE fikset her (egen sak): donningen
+      inn til Slagen kommer fra sor og DIFFRAKTERER rundt tangen ved
+      munningen for aa naa spotten - en rett straale langs én peiling
+      (uansett hvilken) kan ikke beskrive den boyningen. gate-modellen
+      (propagate_through_gate() i physics.py) forsoker aa fange noe av
+      dette via retningsfiltrering ved gate-punktet, men selve
+      dybdeprofil-strålen her er en ANNEN, enklere ting (geometrisk
+      siktelinje for aa finne 20 m-koten) - den er ikke, og har aldri
+      vaert, en beskrivelse av boelgens faktiske, boyde vei inn.
+
     fetch_km_72: [5.6, 300.0, 13.3, 11.9, 12.6, 12.7, 13.7, 11.3, 300.0, 9.4, 9.5, 8.9, 8.2, 7.9, 7.8, 7.0, 6.7, 6.3, 8.6, 8.6, 7.4, 7.9, 8.9, 9.1, 13.1, 12.1, 12.0, 12.7, 28.5, 30.8, 25.0, 300.0, 300.0, 16.5, 11.4, 10.9, 14.2, 8.3, 7.8, 0.7, 0.7, 0.6, 0.6, 0.6, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 5.8, 7.1, 7.6, 7.9, 9.3, 4.9, 13.1, 6.1]
     fetch_km_72_effektiv: [13.1, 11.9, 12.6, 12.7, 12.7, 12.6, 12.7, 12.7, 11.3, 9.5, 9.4, 8.9, 8.2, 7.9, 7.8, 7.0, 7.0, 7.0, 7.4, 7.9, 8.6, 8.6, 8.9, 9.1, 12.0, 12.1, 12.7, 12.7, 25.0, 28.5, 30.8, 30.8, 25.0, 16.5, 14.2, 11.4, 10.9, 8.3, 7.8, 0.7, 0.7, 0.6, 0.6, 0.6, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 5.8, 7.1, 7.6, 7.6, 7.9, 7.9, 6.1, 6.1]
     fetch_km_manuell: [0.5, 1.0, 3, 10, 14, 16, 22, 48, 33, 20, 8, 0.2, 0.1, 0.1, 0.1, 0.2]
     dybde_20m_km: 0.7
     dybde_30m_km:
-    dybde_50m_km: 1.4
+    dybde_50m_km:
     fetch_km_72_endelig: [5.6, 60.0, 13.3, 11.9, 12.6, 12.7, 13.7, 11.3, 60.0, 9.4, 9.5, 8.9, 8.2, 7.9, 7.8, 7.0, 6.7, 6.3, 8.6, 8.6, 7.4, 7.9, 8.9, 9.1, 13.1, 12.1, 12.0, 12.7, 28.5, 30.8, 25.0, 60.0, 145.0, 16.5, 11.4, 10.9, 14.2, 8.3, 7.8, 0.7, 0.7, 0.6, 0.6, 0.6, 0.3, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 5.8, 7.1, 7.6, 7.9, 9.3, 4.9, 13.1, 6.1]
     fetch_km_72_kjegle: [6.8, 12.6, 12.8, 13.0, 13.7, 13.2, 13.3, 13.1, 10.8, 10.6, 9.6, 9.3, 9.0, 8.3, 8.1, 7.9, 7.8, 8.6, 8.6, 8.6, 8.6, 9.1, 11.3, 13.0, 13.0, 13.0, 13.7, 28.3, 28.5, 29.0, 35.6, 60.0, 145.0, 15.8, 13.2, 13.3, 11.3, 10.9, 8.8, 7.8, 0.8, 0.7, 0.6, 0.6, 0.6, 0.4, 0.2, 0.2, 0.1, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 6.0, 7.1, 7.6, 8.0, 9.3, 9.9, 9.9, 9.9, 6.8]
     skjaergaard_indeks: 1.52
     dybde_20m_status: maalt
-    dybde_30m_status: blokkert_av_land
-    dybde_50m_status: maalt
+    dybde_30m_status: ikke_relevant_klasse_c
+    dybde_50m_status: ikke_relevant_klasse_c
   - id: skallevold
     name: Skallevold
     klasse: C
@@ -993,9 +1014,9 @@ spots:
     dybde_20m_km: 0.43
     dybde_20m_status: maalt
     dybde_30m_km:
-    dybde_30m_status: data_slutt
-    dybde_50m_km: 1.36
-    dybde_50m_status: maalt
+    dybde_30m_status: ikke_relevant_klasse_c
+    dybde_50m_km:
+    dybde_50m_status: ikke_relevant_klasse_c
   - id: sletteroyene
     name: Sletterøyene
     klasse: C
@@ -1022,15 +1043,15 @@ spots:
                             # ekte geodata) - kun feltene under (fetch_km,
                             # gate.transmission) gjenstaar.
                             #
-                            # GJENOPPRETTET (ordre 2026-09-07): build_fetch.py
-                            # fjerner automatisk dette flagget hver gang spotten
-                            # kjores gjennom (se main() i build_fetch.py: en
-                            # side effekt av at STEG 2/3 sine geodata-felt IGJEN
-                            # ble regnet paa nytt denne runden, for aa legge til
-                            # dybde_peiling under - se der). Det fjerner ikke
-                            # grunnen til at fetch_km/gate.transmission fortsatt
-                            # er ubekreftede skjonn - satt tilbake manuelt for aa
-                            # ikke miste det signalet.
+                            # GJENOPPRETTET PAA NYTT (ordre 2026-09-07):
+                            # build_fetch.py fjerner automatisk dette flagget
+                            # hver gang spotten kjores gjennom (samme
+                            # mekanisme som forrige gjenoppretting) - denne
+                            # runden var det klasse C sin nye 30/50 m-regel
+                            # (ikke_relevant_klasse_c) som utloeste en ny
+                            # kjoring. Fjerner ikke grunnen til at fetch_km/
+                            # gate.transmission fortsatt er ubekreftede
+                            # skjonn - satt tilbake igjen.
     wind_weight: 1.0          # revbunn taaler mer enn Slagen
     facing: 200
     dybde_peiling: 196    # LAGT TIL (ordre 2026-09-07, se rapport til bruker) -
@@ -1145,9 +1166,9 @@ spots:
     dybde_20m_km: 1.0
     dybde_20m_status: maalt
     dybde_30m_km:
-    dybde_30m_status: ingen_kote
-    dybde_50m_km: 1.49
-    dybde_50m_status: maalt
+    dybde_30m_status: ikke_relevant_klasse_c
+    dybde_50m_km:
+    dybde_50m_status: ikke_relevant_klasse_c
   - id: bastoy_odden
     name: Bastøy odden
     klasse: C
@@ -1189,14 +1210,14 @@ spots:
     fetch_km_72_effektiv: [0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 6.8, 7.1, 7.1, 7.4, 7.5, 7.4, 7.4, 7.5, 7.5, 7.4, 7.7, 7.8, 7.9, 7.9, 10.1, 10.9, 15.8, 16.2, 22.9, 29.9, 29.9, 29.9, 18.2, 16.4, 5.4, 4.8, 4.8, 4.7, 4.6, 4.4, 4.2, 4.2, 3.9, 3.8, 3.7, 3.7, 1.2, 1.2, 1.0, 1.0, 1.0, 3.7, 3.8, 3.9, 3.9, 3.9, 3.8, 3.8, 3.8, 3.8, 3.9, 4.1, 4.1, 4.1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
     fetch_km_manuell: [3, 3, 8, 10, 11, 14, 22, 30, 38, 30, 14, 5, 4, 5, 6, 5]
     dybde_20m_km: 0.41
-    dybde_30m_km: 1.72
-    dybde_50m_km: 1.83
+    dybde_30m_km:
+    dybde_50m_km:
     fetch_km_72_endelig: [0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.3, 0.3, 0.3, 6.8, 7.4, 60.0, 7.1, 6.9, 7.5, 7.5, 7.4, 7.4, 7.7, 8.0, 7.4, 7.8, 7.9, 10.1, 10.9, 15.8, 16.2, 22.9, 29.9, 145.0, 145.0, 18.2, 16.4, 5.4, 4.8, 4.7, 4.6, 5.1, 4.4, 4.2, 4.2, 3.9, 3.7, 3.7, 3.8, 1.2, 1.2, 1.0, 0.9, 1.0, 3.7, 3.8, 3.9, 3.9, 3.9, 3.8, 3.6, 3.5, 3.8, 3.9, 4.1, 4.4, 4.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
     fetch_km_72_kjegle: [0.4, 0.4, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 7.4, 7.4, 7.4, 7.4, 7.4, 7.4, 7.5, 7.5, 7.6, 7.8, 8.0, 8.0, 8.0, 8.1, 10.1, 12.3, 15.9, 16.6, 20.1, 29.9, 31.9, 145.0, 29.9, 18.1, 17.8, 16.7, 16.0, 5.2, 4.9, 4.9, 4.9, 4.5, 4.2, 4.1, 3.9, 3.8, 3.7, 3.7, 1.2, 1.2, 1.2, 3.7, 3.8, 3.9, 3.9, 3.9, 3.9, 3.9, 3.8, 3.8, 3.9, 4.4, 4.6, 4.6, 4.6, 4.6, 0.9, 0.8, 0.8, 0.7, 0.5]
     skjaergaard_indeks: 1.39
     dybde_20m_status: maalt
-    dybde_30m_status: maalt
-    dybde_50m_status: maalt
+    dybde_30m_status: ikke_relevant_klasse_c
+    dybde_50m_status: ikke_relevant_klasse_c
   - id: larkollen
     name: Larkollen
     klasse: C
@@ -1231,5 +1252,5 @@ spots:
     fetch_km_72_kjegle: [60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 3.1, 2.7, 2.7, 2.6, 2.5, 2.4, 2.0, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 1.9, 2.0, 2.0, 2.0, 2.3, 2.6, 2.8, 3.2, 3.2, 3.2, 1.3, 1.3, 1.6, 1.6, 1.6, 1.6, 1.5, 1.4, 1.3, 1.4, 1.4, 1.4, 1.4, 1.3, 1.3, 1.3, 1.3, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.8, 1.9, 1.9, 2.3, 2.4, 2.4, 2.5, 2.6, 8.4, 11.6, 14.1, 14.4]
     skjaergaard_indeks: 0.52
     dybde_20m_status: blokkert_av_land
-    dybde_30m_status: blokkert_av_land
-    dybde_50m_status: blokkert_av_land
+    dybde_30m_status: ikke_relevant_klasse_c
+    dybde_50m_status: ikke_relevant_klasse_c

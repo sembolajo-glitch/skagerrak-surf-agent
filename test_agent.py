@@ -588,6 +588,25 @@ def test_gather_grid_none_naar_met_ikke_svarer(monkeypatch):
     assert grid is None
 
 
+def test_wave_wind_points_klasse_c_bruker_gate():
+    """ordre 2026-09-07 (se rapport til bruker om scripts/backtest.py):
+    wave_wind_points() er den fire-linjers punkt-konvensjonen gather()
+    tidligere hadde inline - egen funksjon slik at backtesten kan
+    importere AKKURAT samme regel i stedet for aa risikere at en
+    duplisert kopi driver fra hverandre."""
+    spot = dict(_slagen())
+    wind_pt, wave_pt = A.wave_wind_points(spot)
+    assert wind_pt == (spot["lat"], spot["lon"])
+    assert wave_pt == (spot["gate"]["lat"], spot["gate"]["lon"])
+
+
+def test_wave_wind_points_klasse_ab_bruker_offshore_point():
+    spot = {"klasse": "A", "lat": 59.0, "lon": 10.0, "offshore_point": [58.9, 9.9]}
+    wind_pt, wave_pt = A.wave_wind_points(spot)
+    assert wind_pt == (59.0, 10.0)
+    assert wave_pt == (58.9, 9.9)
+
+
 def test_gather_bruker_gate_koordinat_for_klasse_c(monkeypatch):
     """Klasse C har ikke offshore_point - grid_avstand_km skal regnes fra
     gate sitt koordinat i stedet (samme punkt gather() faktisk spoerr

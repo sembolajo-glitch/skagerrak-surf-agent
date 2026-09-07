@@ -707,6 +707,25 @@ def notify(spot, window, state, dry_run=False):
 # --------------------------------------------------------------- kjoring
 
 
+def wave_wind_points(spot):
+    """
+    Hvilket (lat, lon) vind hhv. boelger skal hentes fra for et spot -
+    samme konvensjon begge veier: vind alltid ved spotten selv, boelger
+    ved gate (klasse C, fjordmunningen) eller offshore_point (klasse A/B).
+
+    Egen funksjon (ordre 2026-09-07, se rapport til bruker om
+    scripts/backtest.py) - denne fire-linjers regelen laa tidligere kun
+    inline i gather() under. En backtest som trenger AKKURAT samme punkt-
+    konvensjon (for aa score historiske Open-Meteo-data med samme
+    scoring-kjede) skal IMPORTERE denne, ikke skrive den om - driver de
+    to fra hverandre (f.eks. hvis gate-konvensjonen endres her uten at
+    en duplisert kopi et annet sted fanger det opp), er backtesten
+    upaalitelig uten at noen merker det."""
+    if spot["klasse"] == "C":
+        return (spot["lat"], spot["lon"]), (spot["gate"]["lat"], spot["gate"]["lon"])
+    return (spot["lat"], spot["lon"]), tuple(spot["offshore_point"])
+
+
 def gather(spot, mock=None):
     """Hent alle datakilder for ett spot. Returnerer (wind, waves, water, errors, grid)."""
     if mock is not None:
@@ -715,12 +734,7 @@ def gather(spot, mock=None):
     import sources as S
 
     errors = []
-    if spot["klasse"] == "C":
-        wind_pt = (spot["lat"], spot["lon"])
-        wave_pt = (spot["gate"]["lat"], spot["gate"]["lon"])
-    else:
-        wind_pt = (spot["lat"], spot["lon"])
-        wave_pt = tuple(spot["offshore_point"])
+    wind_pt, wave_pt = wave_wind_points(spot)
 
     wind, e = S.safe(S.met_wind, *wind_pt, label="met_wind")
     if e:
