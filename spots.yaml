@@ -460,8 +460,37 @@ spots:
   - id: molen_odden
     name: Mølen odden
     klasse: A
-    lat: 58.975217       # malt (ordre 2026-09-02) - se notes for sammenslaaingen med molen
-    lon: 9.812139
+
+    lat: 58.9753762       # RETTET (ordre 2026-09-06, se rapport til bruker): satt
+    lon: 9.8156833         # paa selve brekkpunktet, ca. 115 m fra land i 3-4 m dyp
+                           # (mellom loddskudd 3,3 og 6,2 i Norgeskart) - 204 m
+                           # ost for det forrige punktet (58.975217/9.812139).
+                           # Kryssjekk mot videoen 5. sept: hb=3,5 m gir
+                           # Hb=0,78*3,5=2,7 m brytehoeyde, matcher observert
+                           # 2-3 m paa video. Fysikken lukker.
+                           #
+                           # KONVENSJONSSPORSMAAL (se rapport til bruker): dette
+                           # punktet ligger I VANNET (paa selve brekket), ikke ved
+                           # strandkanten. Empirisk sjekk mot ekte kystkontur.geojson
+                           # (avstand fra spotkoordinat til naermeste kystlinje) viser
+                           # at 10 av de andre 12 spottene ligger 7-320 m fra kysten -
+                           # svaert naert vannkanten, ikke tydelig ute i vannet - mens
+                           # tre (verdens_ende, skallevold, larkollen) ligger 0,9-2,2 km
+                           # unna. Kystkontur-laget er kun LineString (ingen polygon),
+                           # saa et strengt "paa land"/"i vannet"-skille kunne ikke
+                           # verifiseres presist for de andre 12 i denne runden - men
+                           # avstandene alene viser konvensjonen IKKE er entydig i dag.
+                           # Dette betyr depth_bearing_for_spot()/compute_depth_profile()
+                           # sin straale kan starte paa ULIKE sider av fjaera for ulike
+                           # spots: en straale fra et strandkant-punkt maa first krysse
+                           # den siste biten grunt vann/toerrfall FOER den naar aapent
+                           # vann, mens en straale fra et allerede-vaatt punkt (som
+                           # dette) ikke har den samme startstrekningen -
+                           # dybde_Xm_km-tallene er dermed IKKE noedvendigvis
+                           # sammenlignbare paa tvers av spots med ulik konvensjon.
+                           # IKKE lost her - de andre spottene er bevisst IKKE
+                           # konvertert i denne PR-en, se rapport til bruker.
+
     facing: 175
     swell_window: [140, 240]
     spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
@@ -470,14 +499,22 @@ spots:
     max_hs: 4.0
     min_tp: 6.0
     wind_weight: 0.75
-    offshore_point: [58.9700, 9.8050]  # ANSLAATT (flyttet ordre 2026-09-02): opprinnelig
-                                        # [58.970, 9.808] laa kun 628 m unna, 4-8x naermere
-                                        # enn de andre 8 klasse A/B-spottenes offshore_point
-                                        # (2,2-4,9 km) - trolig paa eller nesten paa torrfallet
-                                        # naevnt i notes under. Flyttet til klart utenfor
-                                        # 15-meterskoten, iflg. kartutsnitt - fortsatt ANSLAATT,
-                                        # ikke maalt. Boer sjekkes naar build_fetch.py kan kjores
-                                        # med ekte data.
+    offshore_point: [58.96627, 9.808186]  # FLYTTET (ordre 2026-09-06, se rapport til
+                                        # bruker): forrige punkt (58.970/9.805, 0,71 km
+                                        # ute) laa dypt inne i shoalingsonen - 30 m alt
+                                        # paa 412 m betyr en 10 s dønning har bunnkontakt
+                                        # fra 78 m dyp, saa verdien MET/Open-Meteo leser
+                                        # der er allerede refraktert, og modellen
+                                        # refrakterer den en gang til (se rapport til
+                                        # bruker, forrige PR). Nytt punkt: 1,1 km langs
+                                        # peiling 203 (den MAALTE transekten - IKKE 214,6
+                                        # fra det slettede notatet) fra spotkoordinatet -
+                                        # ekte maalt (compute_depth_profile() mot samme
+                                        # geodata som resten av denne commiten): 50 m-
+                                        # koten er 0,38 km ute langs 203, 100 m-koten
+                                        # 0,60 km ute. 1,1 km (ikke avrundet 1,0 - se
+                                        # test_offshore_point.py sitt >1 km-krav) gir god
+                                        # margin forbi begge.
     drive_min: 120
     notes: >
       Vestkanten av Mølen-tuppen. Erstatter det tidligere molen-spottet
@@ -498,36 +535,49 @@ spots:
       "uverifisert" i seks dager, plausibel nok til at noen kunne lagt
       den inn i dybde_20m_km/_30m_km/_50m_km uten å sjekke.
 
-      Målt i stedet (Norgeskart, 5. sept 2026 - manuell oppmåling, IKKE
-      build_fetch.py - de feltene eies fortsatt av build_fetch.py og skal
-      fylles derfra når nettverkstilgang finnes): transekt fra selve
-      brekket, peiling 203°, lengde 412,24 m. 20 m ved 290 m, 30 m ved
-      412 m (endepunktet). Kystnormal ca. 250° - 47° avvik fra
-      transekten, altså IKKE samme retning som swellen (peiling 214,6°
-      mot offshore_point) eller facing (175°) - nok et eksempel på at
-      denne odden ikke har én entydig "rett ut"-retning, se
-      offshore_point-merknaden under. Midlere helning 0-30 m: ca. 1:14 -
-      brattere enn seks-kilometer-profilen over antydet, men fortsatt en
-      reell grunn tilnærming, ikke et stup. 0-5 m-båndet, der selve
-      bruddet skjer, er FORTSATT umålt - denne transekten dekker 0-30 m,
-      ikke bunnen av brytsonen.
+      Målt i tillegg (Norgeskart, 5. sept 2026 - manuell oppmåling):
+      transekt fra selve brekket, peiling 203°, lengde 412,24 m. 20 m ved
+      290 m, 30 m ved 412 m (endepunktet). Kystnormal ca. 250° - 47°
+      avvik fra transekten, altså IKKE samme retning som facing (175°) -
+      nok et eksempel på at denne odden ikke har én entydig "rett
+      ut"-retning. Midlere helning 0-30 m: ca. 1:14 - brattere enn
+      seks-kilometer-profilen over antydet, men fortsatt en reell grunn
+      tilnærming, ikke et stup. 0-5 m-båndet, der selve bruddet skjer, er
+      FORTSATT umålt - denne transekten dekker 0-30 m, ikke bunnen av
+      brytsonen.
 
-    # fetch_km_72*/dybde_*-feltene fra det gamle molen-punktet er IKKE
-    # tatt med her - de var maalt (build_fetch.py) mot de gamle
-    # koordinatene 58.968/9.805, 284 m unna, og ville vaert feil for
-    # dette punktet. Se geodata_stale over. Ma males paa nytt naar
-    # build_fetch.py kan kjores (blokkert i dette miljoet - se rapport
-    # til bruker, ordre 2026-09-02).
-    fetch_km_72: [0.4, 0.4, 0.4, 0.4, 0.4, 4.7, 3.7, 3.7, 2.2, 2.1, 2.2, 1.8, 1.8, 1.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 0.7, 2.9, 4.9, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 16.1, 12.6, 15.5, 11.5, 13.8, 10.3, 10.3, 5.9, 5.8, 6.4, 6.4, 3.6, 6.1, 6.2, 3.8, 3.6, 0.5, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 2.1, 2.0, 0.5, 0.5]
-    fetch_km_72_effektiv: [0.4, 0.4, 0.4, 0.4, 0.4, 3.7, 3.7, 3.7, 2.2, 2.2, 2.1, 1.8, 1.8, 1.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 0.7, 2.9, 4.9, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 16.1, 15.5, 13.8, 12.6, 11.5, 10.3, 10.3, 6.4, 6.4, 5.9, 6.1, 6.2, 6.1, 3.8, 3.8, 3.6, 0.5, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 0.6, 0.6, 0.5, 0.5]
-    fetch_km_72_endelig: [0.4, 0.4, 0.4, 0.4, 0.4, 4.7, 3.7, 3.7, 2.2, 2.1, 2.2, 1.8, 1.8, 1.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 0.7, 2.9, 4.9, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 16.1, 12.6, 15.5, 11.5, 13.8, 10.3, 10.3, 5.9, 5.8, 6.4, 6.4, 3.6, 6.1, 6.2, 3.8, 3.6, 0.5, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 2.1, 2.0, 0.5, 0.5]
-    fetch_km_72_kjegle: [0.5, 0.4, 0.4, 4.4, 4.6, 4.6, 4.6, 4.1, 3.7, 3.4, 2.2, 2.2, 2.1, 1.8, 1.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 0.7, 2.8, 2.9, 3.5, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 16.5, 16.0, 15.5, 15.4, 13.8, 11.8, 9.9, 9.1, 6.4, 6.4, 6.4, 6.4, 6.4, 6.0, 6.0, 3.8, 3.6, 0.5, 0.5, 0.5, 0.6, 0.7, 2.0, 2.0, 2.0, 2.0, 0.5]
-    skjaergaard_indeks: 0.96
-    dybde_20m_km: 10.21
+
+      Koordinatet (ordre 2026-09-06, se rapport til bruker) er flyttet
+      til selve brekkpunktet, samme sted den manuelle transekten over
+      starter fra - dybde_20m_km/_30m_km/_50m_km er derfor nå regnet på
+      nytt av build_fetch.py langs offshore_point-peilingen (også 203°,
+      samme retning som transekten over): 0,25/0,32/0,38 km. Stemmer
+      rimelig med den manuelle transekten (290/412 m til 20/30 m) gitt at
+      strålene ikke er identiske metoder - samme storrelsesorden, samme
+      bratte profil. offshore_point selv er flyttet ut forbi 50 m-koten
+      (se offshore_point-merknaden under) - forrige punkt (0,71 km ute)
+      lå fortsatt godt inne i shoalingsonen.
+
+    # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km under er REGNET PAA NYTT
+    # (ordre 2026-09-06, se rapport til bruker) mot det nye koordinatet
+    # over, med build_fetch.py mot ekte Kartverket-geodata (kystkontur/
+    # dybdekurve hentet 2026-09-03, samme data geodata.yml sist lastet ned -
+    # se geodata-resultat-grenen). Bare denne spotten og sletteroeyene er
+    # rekjort i denne commiten - de andre 11 spottenes tilsvarende felt er
+    # UBERORT, se rapport til bruker for hvorfor (geodata-resultat-grenen
+    # har allerede oppdaterte, ubrukte tall for flere av dem - en egen
+    # merge-avgjorelse, ikke gjort her).
+    fetch_km_72: [2.5, 2.3, 2.5, 5.3, 4.5, 4.0, 3.8, 2.2, 2.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.3, 0.4, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 16.6, 11.0, 10.9, 12.2, 12.8, 10.0, 8.0, 6.1, 6.0, 6.6, 6.6, 3.8, 6.2, 3.9, 0.5, 0.6, 0.6, 0.6, 0.7, 0.7, 0.8, 0.5, 0.4, 0.4, 0.4, 2.4, 2.3]
+    fetch_km_72_effektiv: [2.4, 2.5, 2.5, 4.0, 4.0, 4.0, 3.8, 2.2, 2.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.3, 0.4, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 16.6, 12.2, 12.2, 11.0, 10.9, 10.0, 8.0, 6.6, 6.6, 6.1, 6.2, 6.2, 3.9, 3.8, 0.6, 0.6, 0.6, 0.6, 0.7, 0.7, 0.7, 0.5, 0.4, 0.4, 0.4, 2.3, 2.3]
+    fetch_km_72_endelig: [2.5, 2.3, 2.5, 5.3, 4.5, 4.0, 3.8, 2.2, 2.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.3, 0.4, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 16.6, 11.0, 10.9, 12.2, 12.8, 10.0, 8.0, 6.1, 6.0, 6.6, 6.6, 3.8, 6.2, 3.9, 0.5, 0.6, 0.6, 0.6, 0.7, 0.7, 0.8, 0.5, 0.4, 0.4, 0.4, 2.4, 2.3]
+    fetch_km_72_kjegle: [2.5, 3.7, 5.1, 5.1, 5.1, 4.7, 4.2, 3.7, 3.3, 2.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.3, 0.3, 0.4, 0.5, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 200.0, 200.0, 200.0, 200.0, 200.0, 15.8, 15.5, 15.0, 14.2, 12.8, 11.5, 10.0, 8.8, 6.6, 6.6, 6.6, 6.6, 6.5, 6.2, 6.2, 0.6, 0.6, 0.7, 0.7, 0.8, 0.8, 0.8, 0.8, 0.5, 2.3, 2.4, 2.4]
+    skjaergaard_indeks: 0.84
+    dybde_20m_km: 0.25
     dybde_20m_status: maalt
-    dybde_30m_km: 8.05
+    dybde_30m_km: 0.32
     dybde_30m_status: maalt
-    dybde_50m_km: 6.35
+    dybde_50m_km: 0.38
+
     dybde_50m_status: maalt
   - id: portor
     name: Portør
@@ -654,35 +704,7 @@ spots:
     dybde_20m_status: maalt
     dybde_30m_status: maalt
     dybde_50m_status: maalt
-  - id: orekroken
-    name: Ørekroken, Kirkøy (Hvaler)
-    klasse: B
-    lat: 59.005
-    lon: 10.980
-    offshore_point: [58.980, 10.975]
-    wind_weight: 1.1          # slak sand - blir soppel raskt
-    facing: 195
-    swell_window: [155, 220]
-    spread_s: 5                # se spread_s i toppteksten - standardverdi, ikke tunet enda
-    min_hs: 2.2
-    ideal_hs: 3.0
-    max_hs: 5.0
-    min_tp: 5.5
-    drive_min: 100
 
-  # -------------------------------------------- KLASSE C - indre fjord
-
-    fetch_km_72: [5.1, 3.7, 2.8, 2.7, 2.9, 2.9, 3.6, 2.8, 3.1, 2.5, 2.5, 2.5, 2.8, 2.0, 1.4, 2.0, 1.4, 1.4, 1.3, 1.3, 1.4, 1.3, 2.0, 2.4, 1.8, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 2.2, 300.0, 2.5, 2.3, 2.2, 1.7, 300.0, 2.0, 8.0, 300.0, 3.7, 300.0, 300.0, 91.1, 77.6, 43.1, 46.3, 39.5, 27.3, 27.3, 29.8, 5.3, 32.6, 6.4, 6.5, 7.0, 9.3, 3.5, 3.8, 3.8, 3.9, 3.7, 8.1, 5.6]
-    fetch_km_72_effektiv: [5.1, 3.7, 2.9, 2.9, 2.9, 2.9, 2.9, 2.9, 2.8, 2.5, 2.5, 2.5, 2.5, 2.0, 2.0, 1.4, 1.4, 1.4, 1.4, 1.3, 1.3, 1.4, 1.8, 2.0, 2.4, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 300.0, 2.5, 2.3, 2.3, 2.3, 2.2, 2.2, 8.0, 8.0, 8.0, 300.0, 300.0, 91.1, 91.1, 77.6, 46.3, 43.1, 39.5, 29.8, 27.3, 27.3, 27.3, 6.5, 6.5, 7.0, 6.5, 6.5, 3.8, 3.8, 3.8, 3.8, 3.9, 5.1, 5.1]
-    dybde_20m_km: 2.28
-    dybde_30m_km:
-    dybde_50m_km: 0.35
-    fetch_km_72_endelig: [5.1, 3.7, 2.8, 2.7, 2.9, 2.9, 3.6, 2.8, 3.1, 2.5, 2.5, 2.5, 2.8, 2.0, 1.4, 2.0, 1.4, 1.4, 1.3, 1.3, 1.4, 1.3, 2.0, 2.4, 1.8, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 2.2, 145.0, 2.5, 2.3, 2.2, 1.7, 200.0, 2.0, 8.0, 240.0, 3.7, 240.0, 60.0, 91.1, 77.6, 43.1, 46.3, 39.5, 27.3, 27.3, 29.8, 5.3, 32.6, 6.4, 6.5, 7.0, 9.3, 3.5, 3.8, 3.8, 3.9, 3.7, 8.1, 5.6]
-    fetch_km_72_kjegle: [6.3, 6.0, 3.7, 2.9, 2.9, 2.9, 3.0, 3.1, 3.0, 2.9, 2.8, 2.8, 2.8, 2.8, 2.0, 1.5, 1.4, 1.4, 1.4, 1.4, 2.0, 2.4, 2.4, 2.4, 2.4, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0, 145.0, 145.0, 145.0, 145.0, 145.0, 145.0, 2.5, 2.5, 2.5, 2.5, 2.5, 2.4, 2.6, 3.4, 240.0, 240.0, 240.0, 240.0, 60.0, 92.4, 87.0, 79.8, 53.1, 45.2, 38.6, 32.2, 32.2, 32.2, 32.2, 31.6, 8.9, 8.7, 8.7, 8.7, 4.0, 3.9, 4.0, 4.6, 6.3, 6.3]
-    skjaergaard_indeks: 3.21
-    dybde_20m_status: maalt
-    dybde_30m_status: data_slutt
-    dybde_50m_status: maalt
   - id: slagen
     name: Slagen
     klasse: C
@@ -780,8 +802,29 @@ spots:
   - id: sletteroyene
     name: Sletterøyene
     klasse: C
-    lat: 59.350
-    lon: 10.620
+    lat: 59.3007513      # RETTET (ordre 2026-09-06, se rapport til bruker): manuelt
+    lon: 10.6557986       # malt i Norgeskart. Avstand fra det GAMLE punktet
+                           # (59.350/10.620) er 5,84 km paa peiling 158 -
+                           # IKKE 758 m NNV som forelaa i bestillingen. Det
+                           # gamle punktet var etter alt aa domme en grov
+                           # plassering ("Vesle Sletter" i navnet, men ikke
+                           # i koordinatet), ikke en presis peiling for
+                           # samme skjaer - avviket er stort nok til at
+                           # INGENTING geometrisk fra det gamle punktet
+                           # (fetch_km, gate.distance_km/bearing_deg,
+                           # transmisjon, dybdeprofil) kan arves, se under.
+    geodata_stale: true    # fetch_km (manuell 16-tabell) og gate.transmission
+                            # under er MAALT/ANSLAATT mot det GAMLE punktet,
+                            # over 5 km unna - relokasjonen gjor begge
+                            # utdaterte. Kan IKKE beregnes automatisk
+                            # (fetch_km er haandmaalt fra kart, transmisjon er
+                            # et fysisk skjonn) - trenger en ny manuell
+                            # vurdering fra noen med kartverktoyet foran seg.
+                            # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km ER
+                            # regnet paa nytt for det nye punktet i denne
+                            # commiten (build_fetch.py, ekte geodata) - kun
+                            # feltene under (fetch_km, gate.transmission)
+                            # gjenstaar.
     wind_weight: 1.0          # revbunn taaler mer enn Slagen
     facing: 200
     swell_window: [172, 208]
@@ -793,16 +836,26 @@ spots:
     water_sensitivity_cm: 60
     drive_min: 60
     boat: true
-    fetch_km: [6, 4, 3, 5, 8, 12, 20, 40, 36, 36, 20, 14, 13, 12, 10, 8]
+    fetch_km: [6, 4, 3, 5, 8, 12, 20, 40, 36, 36, 20, 14, 13, 12, 10, 8]  # STALE - se geodata_stale over
     gate:
       name: Færder
       lat: 59.030
       lon: 10.520
-      distance_km: 36
-      bearing_deg: 189
+      distance_km: 31.09       # OMREGNET (ordre 2026-09-06) for det nye punktet -
+                                # geo_utils.bearing_between()/haversine, ren geometri,
+                                # IKKE et skjonn som fetch_km/transmisjon. Var 36.
+      bearing_deg: 193         # OMREGNET, samme grunnlag som distance_km over. Var 189.
       sector_half_width: 20
       spread_s: 5
-      transmission: 0.85         # justert ned fra 1.05 (ordre 2026-08-31):
+      transmission: 0.85         # STALE - se geodata_stale over. Begrunnelsen
+                                  # under gjaldt UANSETT det gamle punktet OG
+                                  # den enda eldre facing-baserte maalingen -
+                                  # historikken star som den var, ikke fjernet,
+                                  # men ingen del av den er gyldig for dagens
+                                  # punkt. Trenger en ny vurdering.
+                                  #
+                                  # (opprinnelig, foer relokasjonen 2026-09-06):
+                                  # justert ned fra 1.05 (ordre 2026-08-31):
                                   # opprinnelig begrunnet med at dybdemaaling
                                   # motsa "dypt vann rett utenfor" -
                                   # 50-meterskoten (dybde_50m_km) laa den
@@ -823,17 +876,42 @@ spots:
       Beste uprøvde indre-fjord-kandidat. Samme fetch som Slagen, bedre bunn.
       Rekognoser fra Larkollen med kikkert før du tar båten.
 
-    fetch_km_72: [8.2, 8.2, 9.2, 6.1, 4.7, 3.8, 3.4, 3.0, 3.7, 3.2, 3.0, 2.7, 2.6, 2.6, 2.2, 2.2, 2.1, 2.3, 2.3, 2.4, 2.4, 2.3, 2.6, 2.7, 2.7, 3.0, 3.3, 2.2, 5.8, 2.8, 3.2, 3.2, 12.3, 300.0, 300.0, 300.0, 300.0, 300.0, 16.0, 15.2, 15.4, 13.1, 13.0, 11.8, 9.9, 7.9, 6.8, 6.5, 6.4, 6.9, 7.5, 7.6, 7.8, 8.1, 300.0, 8.8, 6.4, 9.3, 5.2, 5.2, 5.4, 5.8, 10.0, 10.1, 11.4, 300.0, 300.0, 16.7, 300.0, 9.7, 7.7, 8.0]
-    fetch_km_72_effektiv: [8.2, 8.2, 8.2, 6.1, 4.7, 3.8, 3.7, 3.4, 3.2, 3.0, 3.0, 2.7, 2.6, 2.6, 2.2, 2.2, 2.2, 2.3, 2.3, 2.3, 2.4, 2.4, 2.6, 2.7, 2.7, 2.7, 3.0, 3.0, 3.2, 3.2, 3.2, 3.2, 12.3, 300.0, 300.0, 300.0, 300.0, 300.0, 16.0, 15.4, 15.2, 13.1, 13.0, 11.8, 9.9, 7.9, 6.8, 6.8, 6.8, 6.9, 7.5, 7.6, 7.8, 8.1, 8.1, 8.8, 8.8, 6.4, 5.4, 5.4, 5.4, 5.8, 10.0, 10.1, 11.4, 16.7, 300.0, 300.0, 16.7, 9.7, 8.2, 8.2]
+      Relokert (ordre 2026-09-06, se rapport til bruker) 5,84 km fra det
+      opprinnelige punktet (59.350/10.620) til 59.3007513/10.6557986 -
+      fra Vesle Sletter til Store Sletters vestside. Manuell transekt i
+      Norgeskart, 6. sept 2026, peiling 196°, lengde 2,02 km: 7 m rett
+      utenfor land, 10-meterskoten innen ca. 150 m, ca. 59 m ved 1,72 km,
+      ca. 100 m ved 2,02 km (endepunktet) - midlere helning 0-100 m ca.
+      1:20. IKKE skrevet inn i dybde_20m_km/_30m_km/_50m_km (de eies av
+      build_fetch.py og er regnet paa nytt derfra for det nye punktet i
+      samme commit) - egne maaldyp (7/10/59/100 m), ikke de samme
+      malkotene (20/30/50 m) skjemaet bruker.
+
+      Den tidligere ikke-monotone dybdeprofilen (20 m paa 13,03 km, 50 m
+      paa 11,88 km - se test_spots_yaml.py sin allowlist) gjaldt KUN det
+      gamle punktet. build_fetch.py sin nye maaling for dette punktet
+      (20 m paa 1,0 km, 50 m paa 1,51 km) er monoton - bruddet er borte,
+      ikke fordi det ble fjernet/skjult, men fordi det faktisk var
+      knyttet til den gamle, feilplasserte straalen. 30 m fant ingen
+      kote innenfor soekeomraadet (ingen_kote).
+
+    # fetch_km_72*/skjaergaard_indeks/dybde_Xm_km under er REGNET PAA NYTT
+    # (ordre 2026-09-06, se rapport til bruker) mot det nye punktet, med
+    # build_fetch.py mot ekte Kartverket-geodata (samme grunnlag som
+    # molen_odden i denne commiten). fetch_km/gate.transmission er IKKE
+    # rekjort - se geodata_stale over.
+    fetch_km_72: [2.1, 6.3, 3.2, 2.6, 2.4, 2.5, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.7, 0.7, 0.7, 0.6, 0.7, 0.7, 0.7, 0.7, 2.6, 6.5, 7.5, 300.0, 300.0, 300.0, 300.0, 300.0, 13.4, 11.8, 11.5, 10.9, 11.5, 11.6, 14.8, 10.1, 10.5, 10.0, 10.1, 9.8, 8.9, 9.1, 7.7, 7.7, 7.4, 7.5, 7.8, 10.1, 11.6, 12.6, 13.6, 13.6, 10.9, 10.7, 16.4, 300.0, 22.1, 2.2, 2.2, 2.1, 2.1]
+    fetch_km_72_effektiv: [2.1, 2.6, 2.6, 2.6, 2.5, 2.4, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 2.6, 6.5, 7.5, 300.0, 300.0, 300.0, 300.0, 300.0, 13.4, 11.8, 11.5, 11.5, 11.5, 11.5, 11.5, 10.5, 10.1, 10.1, 10.0, 9.8, 9.1, 8.9, 7.7, 7.7, 7.7, 7.7, 7.8, 10.1, 11.6, 12.6, 12.6, 12.6, 13.6, 13.6, 16.4, 16.4, 16.4, 2.2, 2.2, 2.1, 2.1]
+    fetch_km_72_endelig: [2.1, 6.3, 3.2, 2.6, 2.4, 2.5, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.7, 0.7, 0.7, 0.6, 0.7, 0.7, 0.7, 0.7, 2.6, 6.5, 7.5, 145.0, 145.0, 145.0, 145.0, 145.0, 13.4, 11.8, 11.5, 10.9, 11.5, 11.6, 14.8, 10.1, 10.5, 10.0, 10.1, 9.8, 8.9, 9.1, 7.7, 7.7, 7.4, 7.5, 7.8, 10.1, 11.6, 12.6, 13.6, 13.6, 10.9, 10.7, 16.4, 60.0, 22.1, 2.2, 2.2, 2.1, 2.1]
+    fetch_km_72_kjegle: [3.1, 3.2, 3.2, 3.2, 2.9, 2.7, 2.6, 0.3, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.3, 0.3, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 2.8, 6.5, 6.9, 7.3, 145.0, 145.0, 145.0, 145.0, 145.0, 14.2, 13.3, 12.0, 11.6, 11.8, 11.7, 11.8, 11.9, 11.2, 10.5, 10.1, 10.0, 9.9, 9.1, 9.0, 7.7, 7.7, 8.0, 10.2, 11.1, 12.9, 13.5, 13.7, 13.7, 14.0, 16.1, 16.9, 17.6, 17.6, 2.2, 2.2, 2.2, 2.1]
+    skjaergaard_indeks: 0.92
     fetch_km_manuell: [6, 4, 3, 5, 8, 12, 20, 40, 36, 36, 20, 14, 13, 12, 10, 8]
-    dybde_20m_km: 15.64
-    dybde_30m_km:
-    dybde_50m_km: 5.21
-    fetch_km_72_endelig: [8.2, 8.2, 9.2, 6.1, 4.7, 3.8, 3.4, 3.0, 3.7, 3.2, 3.0, 2.7, 2.6, 2.6, 2.2, 2.2, 2.1, 2.3, 2.3, 2.4, 2.4, 2.3, 2.6, 2.7, 2.7, 3.0, 3.3, 2.2, 5.8, 2.8, 3.2, 3.2, 12.3, 145.0, 145.0, 145.0, 145.0, 145.0, 16.0, 15.2, 15.4, 13.1, 13.0, 11.8, 9.9, 7.9, 6.8, 6.5, 6.4, 6.9, 7.5, 7.6, 7.8, 8.1, 60.0, 8.8, 6.4, 9.3, 5.2, 5.2, 5.4, 5.8, 10.0, 10.1, 11.4, 60.0, 60.0, 16.7, 60.0, 9.7, 7.7, 8.0]
-    fetch_km_72_kjegle: [8.2, 8.3, 8.2, 8.3, 7.9, 4.8, 3.8, 3.6, 3.4, 3.3, 3.3, 3.0, 2.8, 2.7, 2.6, 2.3, 2.3, 2.3, 2.4, 2.4, 2.4, 2.6, 2.7, 2.7, 3.1, 3.1, 3.1, 3.3, 3.2, 3.2, 5.8, 12.4, 12.8, 145.0, 145.0, 145.0, 145.0, 16.7, 16.7, 16.5, 15.4, 15.3, 15.3, 13.1, 11.9, 10.4, 8.0, 6.9, 7.5, 7.5, 7.7, 7.8, 8.0, 8.7, 8.7, 8.9, 9.2, 9.2, 9.2, 9.0, 5.8, 10.1, 10.5, 11.7, 12.0, 14.7, 60.0, 60.0, 60.0, 9.0, 8.3, 8.2]
-    skjaergaard_indeks: 1.16
+
+    dybde_20m_km: 1.0
     dybde_20m_status: maalt
+    dybde_30m_km:
     dybde_30m_status: ingen_kote
+    dybde_50m_km: 1.51
     dybde_50m_status: maalt
   - id: bastoy_odden
     name: Bastøy odden
