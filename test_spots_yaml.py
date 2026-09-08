@@ -223,11 +223,14 @@ def test_klasse_c_verifisert_mot_spots_yaml():
     verifiserte lista - endres klassen til noen av disse spotene (eller
     til rakke/portor, som IKKE er klasse C), skal testen feile synlig i
     stedet for at klasse C-regelen over stille slutter aa gjelde riktig
-    sett med spots."""
+    sett med spots.
+
+    ordre 2026-09-08: larkollen er slettet (brukeren surfer aldri der,
+    se rapport til bruker) - fjernet fra den forventede mengden under."""
     spots, _ = A.load_spots()
     faktisk_klasse_c = {s["id"] for s in spots if s["klasse"] == "C"}
     assert faktisk_klasse_c == {
-        "slagen", "skallevold", "bastoy_odden", "sletteroyene", "larkollen",
+        "slagen", "skallevold", "bastoy_odden", "sletteroyene",
     }
     by_id = {s["id"]: s for s in spots}
     assert by_id["rakke"]["klasse"] != "C"
