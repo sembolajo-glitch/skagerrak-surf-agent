@@ -39,7 +39,7 @@ Varsel sendes når **begge** terskler passeres: `alert_min_p_surf` (50 %) og `al
 
 **Klasse A og B** — leser Hs/Tp/retning fra WW3/EWAM i et punkt 2–3 km utenfor spotten, vekter mot swellvinduet.
 
-**Klasse C** (Slagen, Skallevold, Sletterøyene, Bastøy, Larkollen) — modellene duger ikke:
+**Klasse C** (Slagen, Skallevold, Sletterøyene, Bastøy) — modellene duger ikke:
 
 1. **Lokal vindsjø** — fetch- og varighetsbegrenset JONSWAP over en 16-punkts fetch-tabell. Går bakover i vindhistorikken så lenge retningen holder seg innenfor ±45°, bruker snittvind og faktisk varighet.
 2. **Propagert swell fra munningen** — leser WW3 ved Færder, filtrerer bort alt utenfor fjordaksen med en cos^(2s)-spredningsintegral, ganger med `transmission`, forsinker med Cg = gT/4π.
@@ -319,6 +319,12 @@ ordre 2026-09-02). Ikke kjørt på nytt for det nye punktet ennå – se
 (ordre 2026-09-06, se rapport til bruker) og finnes ikke lenger i
 spots.yaml. Tallet står som referanse, ikke som gjeldende data.
 
+`svenner`- og `larkollen`-radene (i tabellen over og i
+avviksrapporten mot `fetch_km_manuell` under) er av samme grunn
+historiske – begge spotene er slettet (ordre 2026-09-08: brukeren
+surfer aldri disse, se rapport til bruker) og finnes ikke lenger i
+spots.yaml.
+
 To grupper: for `svenner` og `portor` gjør skjærene nesten ingen forskjell
 (kysten der er enten sammenhengende eller reelt åpen langs hele kjeglen).
 For `verdens_ende`, `orekroken` og `jomfruland_ost` er avviket stort nok
@@ -448,7 +454,7 @@ betyr at dataene rett og slett ikke rekker langt nok i den retningen.
 - **Ingen refraksjon eller shoaling ved brytningen.** Hs er dypvannsverdi utenfor spotten, ikke bølgehøyden i ansiktet.
 - **Ingen strøm.** Utgående brakkvann mot sørlig vind gjør fjordsjøen brattere enn fetchen tilsier.
 - **Fetch-tabellene som faktisk brukes (`fetch_km`/`local_fetch_km`) er fortsatt håndlaget** fra kartlesing. Målte verdier finnes nå ved siden av som `fetch_km_72_kjegle`/`dybde_Xm_km` (se «Geodata fra Kartverket» over), men er ikke koblet inn i beregningen ennå.
-- **`min_hs` for de ti uprøvde spottene er gjetning.** Ensemblet gir dem automatisk lavere `confidence`, men det fikser ikke en systematisk feil terskel. Behandle varslene deres som hypoteser.
+- **`min_hs` for de åtte uprøvde spottene er gjetning.** Ensemblet gir dem automatisk lavere `confidence`, men det fikser ikke en systematisk feil terskel. Behandle varslene deres som hypoteser.
 
 Første sesong er datainnsamling. Andre sesong er den nyttig.
 

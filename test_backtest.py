@@ -179,7 +179,10 @@ def test_score_spot_klasse_c_bruker_gate():
         "wave_by_point": {BT._point_key(*wave_pt): _wave_series()},
     }
     hours = BT.score_spot(slagen, merged, {}, {}, {})
-    assert len(hours) == 24
+    # 23, ikke 24: time 0 har ingen vindhistorikk aa se bakover paa (cold
+    # start), saa build_local_sea() sin varighet blir 1 t der - fysisk
+    # umulig kort Tp (se _er_gyldig_sjo(), ordre 2026-09-08), hoppet over.
+    assert len(hours) == 23
     assert hours[0]["source"] == "local+gate"
 
 
@@ -203,12 +206,12 @@ def test_report_old_vs_new_point_molen_odden(capsys):
         "wind_by_point": {BT._point_key(*wind_pt): _wind_series()},
         "wave_by_point": {
             BT._point_key(*wave_pt_new): _wave_series(base_hs=3.0),
-            BT._point_key(*wave_pt_old): _wave_series(base_hs=0.0),
+            BT._point_key(*wave_pt_old): _wave_series(base_hs=0.5),
         },
     }
     result = BT.report_old_vs_new_point("molen_odden", molen, merged, ({}, {}, {}))
     assert result["old_point"] == list(wave_pt_old)
-    assert all(d == pytest.approx(3.0) for d in result["diffs"])
+    assert all(d == pytest.approx(2.5) for d in result["diffs"])
     assert "GAMMELT offshore_point" in capsys.readouterr().out
 
 
@@ -234,36 +237,152 @@ def test_report_old_vs_new_point_saltstein_har_ingen_gammelt_punkt(capsys):
 # --------------------------------------------------------- holdbarhet
 
 
-def test_saltstein_persistence_finner_halveringstid():
+def test_saltstein_persistence_finner_halveringstid_paa_energi():
+    """ordre 2026-09-08 (se rapport til bruker): halvering maales na paa
+    P = wave_power(hs, tp), ikke hs alene - konstant Tp her isolerer at
+    halveringen faktisk styres av P (som med konstant Tp er ren hs^2, saa
+    halve P tilsvarer halve hs^2, IKKE halve hs - se tallene under)."""
     hours = [
-        {"time": f"h{i}", "hs_eff": v}
-        for i, v in enumerate([1.0, 2.0, 4.0, 3.5, 2.5, 1.9, 1.0])
+        {"time": f"h{i}", "hs_eff": hs, "tp_eff": 8.0}
+        for i, hs in enumerate([1.0, 2.0, 4.0, 3.5, 2.5, 1.9, 1.0])
     ]
     result = BT.saltstein_persistence(hours)
     assert result["peak_hs_eff"] == 4.0
     assert result["peak_time"] == "h2"
-    # halve toppen er 2.0 - forste verdi ETTER toppen under 2.0 er 1.9, 3 timer etter toppen (idx 5, peak idx 2)
-    assert result["half_life_h"] == 3
+    assert result["peak_p"] == pytest.approx(A.P.wave_power(4.0, 8.0), abs=0.1)
+    # halve topp-P (konstant Tp) tilsvarer hs = 4.0/sqrt(2) = 2.83 - forste
+    # verdi ETTER toppen under det er 2.5, 2 timer etter toppen (idx 4, peak idx 2)
+    assert result["half_life_h_energy"] == 2
+    assert result["half_point_tp_eff"] == 8.0
+    assert result["peak_tp_eff"] == 8.0
+
+
+def test_saltstein_persistence_ulik_tp_skiller_seg_fra_hs_alene():
+    """Kjernen i fiksen: samme hs ved topp og ved 'halveringspunktet',
+    men Tp har falt kraftig - skal telle som halvert PAA ENERGI selv om
+    hs alene aldri halveres."""
+    hours = [
+        {"time": "h0", "hs_eff": 1.3, "tp_eff": 7.9},
+        {"time": "h1", "hs_eff": 1.2, "tp_eff": 6.0},
+        {"time": "h2", "hs_eff": 0.96, "tp_eff": 4.7},  # naer samme hs, mye kortere tp
+    ]
+    result = BT.saltstein_persistence(hours)
+    assert result["half_life_h_hs"] is None  # hs alene halveres aldri (1.3 -> 0.65)
+    assert result["half_life_h_energy"] == 2  # men energien har falt under halve
+    assert result["half_point_tp_eff"] == 4.7
+    assert result["peak_tp_eff"] == 7.9
 
 
 def test_saltstein_persistence_ingen_halvering_innenfor_vinduet():
-    hours = [{"time": f"h{i}", "hs_eff": v} for i, v in enumerate([1.0, 4.0, 3.9, 3.8])]
+    hours = [{"time": f"h{i}", "hs_eff": v, "tp_eff": 8.0} for i, v in enumerate([1.0, 4.0, 3.9, 3.8])]
     result = BT.saltstein_persistence(hours)
-    assert result["half_life_h"] is None
-    assert result["hs_eff_at_window_end"] == 3.8
+    assert result["half_life_h_energy"] is None
+    assert result["p_at_window_end"] == pytest.approx(A.P.wave_power(3.8, 8.0), abs=0.1)
 
 
 def test_saltstein_persistence_siste_surfbare_time():
     hours = [
-        {"time": f"h{i}", "hs_eff": v}
+        {"time": f"h{i}", "hs_eff": v, "tp_eff": 8.0}
         for i, v in enumerate([1.0, 4.0, 3.0, 1.5, 0.5])
     ]
     result = BT.saltstein_persistence(hours, peak_min_hs=1.9)
     assert result["last_surfable_time"] == "h2"  # 3.0 >= 1.9, 1.5 er ikke
 
 
+def test_saltstein_persistence_mangler_tp_eff_telles_som_ugyldig():
+    """En time med hs_eff men uten tp_eff (f.eks. filtrert bort av
+    _er_gyldig_sjo() lenger opp i kjeden) skal ikke kunne bli 'toppen' -
+    persistensanalysen trenger begge for aa regne P."""
+    hours = [
+        {"time": "h0", "hs_eff": 9.0, "tp_eff": None},  # ville vaert "toppen" paa hs alene
+        {"time": "h1", "hs_eff": 1.0, "tp_eff": 8.0},
+    ]
+    result = BT.saltstein_persistence(hours)
+    assert result["peak_time"] == "h1"
+
+
 def test_saltstein_persistence_tom_liste_gir_none():
     assert BT.saltstein_persistence([]) is None
+
+
+def test_saltstein_persistence_kontrollregning_5_til_6_sept():
+    """ordre 2026-09-08: den eksplisitte kontrollregningen fra rapporten
+    til bruker, reprodusert her som en fast regresjonstest - IKKE bare
+    manuelt sjekket i en interaktiv kjoring."""
+    hours = [
+        {"time": "2026-09-05T15:00", "hs_eff": 1.30, "tp_eff": 7.9},
+        {"time": "2026-09-06T00:00", "hs_eff": 0.94, "tp_eff": 7.0},
+    ]
+    result = BT.saltstein_persistence(hours)
+    assert result["peak_p"] == pytest.approx(6.5, abs=0.1)
+    assert result["half_point_p"] == pytest.approx(3.0, abs=0.1)
+    assert result["half_life_h_energy"] == 1  # eneste punkt etter toppen i dette utvalget
+
+
+# ------------------------------------------------------------- validering
+
+
+def test_er_gyldig_sjo_avviser_kort_periode():
+    """ordre 2026-09-08 (se rapport til bruker): Tp under 2 s finnes ikke
+    i naturen - fysisk umulig, skal telle som manglende data."""
+    assert BT._er_gyldig_sjo({"hs_eff": 1.0, "tp_eff": 1.9}) is False
+    assert BT._er_gyldig_sjo({"hs_eff": 1.0, "tp_eff": 2.0}) is True
+
+
+def test_er_gyldig_sjo_avviser_naermest_flatt():
+    assert BT._er_gyldig_sjo({"hs_eff": 0.04, "tp_eff": 8.0}) is False
+    assert BT._er_gyldig_sjo({"hs_eff": 0.05, "tp_eff": 8.0}) is True
+
+
+def test_er_gyldig_sjo_avviser_manglende_verdier():
+    assert BT._er_gyldig_sjo({"hs_eff": None, "tp_eff": 8.0}) is False
+    assert BT._er_gyldig_sjo({"hs_eff": 1.0, "tp_eff": None}) is False
+
+
+def test_score_spot_hopper_over_fysisk_umulige_rader(capsys):
+    """Kjernen i fiksen (ordre 2026-09-08, se rapport til bruker): en rad
+    med Tp under 2 s (JONSWAP-vekst fra en naermest fetch-los retning,
+    se ordren ved MIN_TP_S i backtest.py) skal IKKE naa score_hour() i
+    det hele tatt - hoppes over, ikke scores som om den var ekte.
+
+    Reproduserer det ekte funnet fra rapporten: svaert lav vind (3,5 m/s)
+    fra 309 grader - en retning med naermest null lokal fetch i slagen
+    sin egen fetch_km-tabell (~0,1 km, VNV/NV-sektoren) - gir en fysisk
+    umulig, fetch-begrenset "sjo" (Tp under et sekund)."""
+    spots, _ = A.load_spots()
+    slagen = next(s for s in spots if s["id"] == "slagen")
+    wind_pt, wave_pt = A.wave_wind_points(slagen)
+
+    wind = _wind_series(base_speed=3.5, base_dir=309, n=1)
+    wave = _wave_series(n=1)  # klasse C bruker ikke denne direkte til hs_eff, men trengs for `times`
+    merged = {
+        "wind_by_point": {BT._point_key(*wind_pt): wind},
+        "wave_by_point": {BT._point_key(*wave_pt): wave},
+    }
+    hours = BT.score_spot(slagen, merged, {}, {}, {})
+    assert hours == []  # eneste time i utvalget var den ugyldige - ingenting igjen aa score
+    assert "hoppet over" in capsys.readouterr().err
+
+
+def test_score_spot_beholder_gyldige_rader_ved_siden_av_ugyldige():
+    """Motsatt av testen over: en gyldig time skal IKKE forsvinne bare
+    fordi en ANNEN time samme kjoring var ugyldig."""
+    spots, _ = A.load_spots()
+    saltstein = next(s for s in spots if s["id"] == "saltstein")
+    wind_pt, wave_pt = A.wave_wind_points(saltstein)
+    wave = {
+        "2026-09-05T00:00": {"hs": 0.02, "tp": 0.4, "wave_from_direction": 190},  # ugyldig
+        "2026-09-05T01:00": {"hs": 2.0, "tp": 8.0, "wave_from_direction": 190},  # gyldig
+    }
+    wind = _wind_series(n=2)
+    merged = {
+        "wind_by_point": {BT._point_key(*wind_pt): wind},
+        "wave_by_point": {BT._point_key(*wave_pt): wave},
+    }
+    hours = BT.score_spot(saltstein, merged, {}, {}, {})
+    assert len(hours) == 1
+    assert hours[0]["time"] == "2026-09-05T01:00"
+    assert hours[0]["hs_eff"] == 2.0
 
 
 def test_main_kjorer_helt_offline_naar_fixture_daekker_alt(tmp_path, monkeypatch, capsys):

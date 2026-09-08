@@ -43,7 +43,7 @@ SPOTS_YAML = ROOT / "spots.yaml"
 FETCH_STEP_DEG = B.FETCH_STEP_DEG
 N_RAYS = B.N_RAYS
 
-CLASS_C_IDS = ["slagen", "skallevold", "sletteroyene", "bastoy_odden", "larkollen"]
+CLASS_C_IDS = ["slagen", "skallevold", "sletteroyene", "bastoy_odden"]
 
 COMPASS_16 = ["N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO",
               "S", "SSV", "SV", "VSV", "V", "VNV", "NV", "NNV"]

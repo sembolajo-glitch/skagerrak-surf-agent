@@ -221,7 +221,7 @@ def test_load_grid_info_leser_grid_felter_per_spot(tmp_path):
     p = tmp_path / "forecast.json"
     p.write_text(json.dumps({"spots": [
         {"id": "saltstein", "grid_lat": 58.95, "grid_lon": 9.85, "grid_avstand_km": 4.11},
-        {"id": "svenner", "grid_lat": None, "grid_lon": None, "grid_avstand_km": None},
+        {"id": "spot_uten_grid", "grid_lat": None, "grid_lon": None, "grid_avstand_km": None},
         {"id": "jomfruland_ost"},  # felt mangler helt (eldre forecast.json)
     ]}), encoding="utf-8")
 

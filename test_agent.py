@@ -123,8 +123,10 @@ def test_spot_uten_terskler_porter_aldri():
     aldri lukkes av porten, uansett hvor ekstrem regional_wp er."""
     spots, _ = A.load_spots()
     # ordre 2026-09-06: var orekroken - spotet er slettet (se rapport til
-    # bruker), svenner har samme egenskap (ingen regional_wp_min/max satt)
-    spot = next(s for s in spots if s["id"] == "svenner")
+    # bruker). ordre 2026-09-08: var deretter svenner - ogsaa slettet
+    # (brukeren surfer aldri der, se rapport til bruker), erstattet med
+    # rakke (samme egenskap: ingen regional_wp_min/max satt)
+    spot = next(s for s in spots if s["id"] == "rakke")
     assert spot.get("regional_wp_min") is None
     assert spot.get("regional_wp_max") is None
     ts, wind, waves, computed = _favorable_computed(spot)
@@ -394,7 +396,10 @@ def test_score_hour_wind_floor_default_binder_ikke_for_spot_uten_override():
     normalt gir, saa gulvet skal IKKE paavirke resultatet her (kjernen i
     "ingenting endres for spots uten feltet")."""
     spots, _ = A.load_spots()
-    spot = next(s for s in spots if s["id"] == "svenner")
+    # ordre 2026-09-08: var svenner - slettet (brukeren surfer aldri der,
+    # se rapport til bruker), erstattet med rakke (samme egenskap: ingen
+    # wind_floor-override, se defaults i spots.yaml)
+    spot = next(s for s in spots if s["id"] == "rakke")
     assert spot["wind_floor"] == 0.10  # standardverdien fra defaults - ingen per-spot-override
     ts, wind, waves, computed = _computed_med_retning(spot, wave_dir=190, hs=2.0)
     wind = dict(wind, wind_speed=10.0, wind_from_direction=float(spot["facing"]))  # d=0
@@ -848,7 +853,7 @@ def test_saltstein_hs_0_8_gir_positiv_q_size_var_null_foer():
 
 def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
     """Regresjon: KUN saltstein sin trippel/kalibrert-status skal ha
-    endret seg. De andre 12 spottene sine min_hs/ideal_hs/max_hs (og
+    endret seg. De andre spottene sine min_hs/ideal_hs/max_hs (og
     dermed q_size for enhver gitt hs) skal vaere byte-for-byte identiske
     med foer denne endringen.
 
@@ -858,9 +863,12 @@ def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
     ordre 2026-09-07: verdens_ende er slettet og erstattet med tristein
     (fysisk annet sted - se rapport til bruker) - byttet ut i denne
     lista med samme trippel (min/ideal/max BEHOLDT uendret for det nye
-    spotet, se spots.yaml)."""
+    spotet, se spots.yaml).
+
+    ordre 2026-09-08: svenner og larkollen er slettet (brukeren surfer
+    aldri disse, se rapport til bruker) - fjernet fra denne lista
+    (var 12 spots utenom saltstein, na 10)."""
     forventet = {
-        "svenner": (1.1, 2.2, 4.0),
         "jomfruland_ost": (1.3, 2.5, 4.5),
         "rakke": (1.7, 2.6, 4.5),
         "molen_odden": (1.5, 2.5, 4.0),
@@ -871,7 +879,6 @@ def test_saltstein_rekalibrering_paavirker_ikke_andre_spotter():
         "skallevold": (1.9, 2.7, 3.6),
         "sletteroyene": (1.5, 2.3, 3.5),
         "bastoy_odden": (2.1, 2.8, 3.6),
-        "larkollen": (1.8, 2.5, 3.5),
     }
     spots, _ = A.load_spots()
     by_id = {s["id"]: s for s in spots}
