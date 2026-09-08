@@ -43,6 +43,35 @@ reproduserbar referanse. Mangler fila EN bestemt (lat,lon)-noekkel som
 en senere kjoring trenger (f.eks. et nytt spot lagt til), hentes KUN den
 manglende noekkelen, resten av fila roeres ikke.
 
+BEGRENSNINGER (ordre 2026-09-08, se rapport til bruker - LES foer du
+trekker noen konklusjon fra et backtest-tall):
+
+Open-Meteo sitt boelgegrid er GROVERE enn METs (som produksjonen faktisk
+kjorer paa, se sources.met_waves()/EWAM ~5 km). I kjoringen 2026-09-07
+ga gammelt og nytt offshore_point for molen_odden IDENTISKE verdier alle
+48 timer (+0,00 m gjennomsnitts- OG storste diff, se
+report_old_vs_new_point()) - og molen_odden og saltstein hadde IDENTISK
+hs_eff/tp_eff time for time gjennom hele vinduet. Begge punktene (0,71
+og 4,0 km fra Moelen, pluss Saltsteins eget punkt et godt stykke unna
+igjen) leser med andre ord samme underliggende Open-Meteo-gridcelle.
+Backtesten kan derfor IKKE brukes til aa avgjore gridcelle-spoersmaal
+(feilfunnet som faktisk motiverte aa flytte molen_odden sitt
+offshore_point i utgangspunktet - se PR-historikken) eller til aa
+sammenligne nabospotters paadrag mot hverandre - begge oppgavene krever
+noeyaktig den lokale oppløsningen denne kilden ikke har.
+
+Den ga ogsaa 0,86 m kl. 12 den 5. sept for Saltstein, der MET (samme
+kilde produksjonen bruker, se out/shadow.csv paa data-grenen) ga 1,4 m -
+med toppen omtrent tre timer senere i METs egen serie. Sammenligning mot
+sessions.csv (faktiske observerte okter) skal derfor bruke MET-verdiene
+i shadow.csv, IKKE denne backtestens tall - de to kildene er ikke
+utskiftbare, selv om begge kalles "hs_eff".
+
+Backtesten egner seg til aa sammenligne KONFIGURASJONER mot hverandre
+INNENFOR samme kjoring (samme kilde paa begge sider isolerer effekten av
+en endring - se report_old_vs_new_point()), IKKE til aa maale mot
+virkeligheten.
+
     python scripts/backtest.py 2026-09-05
     python scripts/backtest.py 2026-09-05 2026-09-06
     python scripts/backtest.py 2026-09-05 --spots saltstein,molen_odden
@@ -240,6 +269,43 @@ def merge_caches(caches):
 # --------------------------------------------------------------- scoring
 
 
+# ordre 2026-09-08 (se rapport til bruker): backtesten produserte rader med
+# fysisk umulige verdier for flere klasse C-spots (Tp 0,4-1,3 s, Hs
+# 0,02-0,09 m, retninger 30-100 grader utenfor det spotten ellers viser).
+# ROTAARSAK, verifisert mot raadataene i tests/fixtures/backtest/: IKKE
+# manglende/tomme input (vinden var reell, f.eks. 3,5 m/s fra 309 grader) -
+# physics.build_local_sea()/jonswap_growth() sin fetch-begrensede
+# SPM/CEM-vekstformel har ingen nedre grense for hvor kort en fetch den vil
+# ekstrapolere fra. Blaaser vinden fra en retning med naermest null lokal
+# fetch (her: slagen sin 16-punkts fetch_km-tabell gir ca. 0,1 km for 309
+# grader - en fralands/tvers-retning), regner formelen ut en matematisk
+# gyldig, men fysisk meningslos "sjo" (Hs under en centimeter, Tp under et
+# sekund) i stedet for aa returnere naer null. Dette skjer UANSETT varighet
+# (bekreftet algebraisk: x_fetch << x_duration her, saa resultatet er
+# fetch-begrenset, ikke varighetsbegrenset - en lengre vindhistorikk ville
+# IKKE fikset det) - synligst ved doegnstart i denne backtesten fordi
+# varigheten uansett er kappet til 1-2 t der, men den underliggende
+# feilklassen er generell, ikke en cold-start-artefakt.
+#
+# IKKE fikset i physics.py (ville vaert en endring i scoring-logikken,
+# utenfor scope her - se ordren). I stedet: valider FOER score_hour()
+# kalles (se _er_gyldig_sjo()/score_spot() under) - en rad som SER ut som
+# data, men beskriver en boelge kortere enn naturen tillater, er verre enn
+# en rad som mangler, se rapporten til bruker.
+MIN_TP_S = 2.0
+MIN_HS_M = 0.05
+
+
+def _er_gyldig_sjo(computed):
+    """False for en fysisk umulig sjotilstand (se ordre 2026-09-08 over) -
+    Tp under MIN_TP_S eller Hs under MIN_HS_M. None-verdier telles ogsaa
+    som ugyldige (mangler data helt), ikke som "0 er greit"."""
+    hs, tp = computed.get("hs_eff"), computed.get("tp_eff")
+    if hs is None or tp is None:
+        return False
+    return tp >= MIN_TP_S and hs >= MIN_HS_M
+
+
 def regional_series(merged, saltstein_spot, refresh=False, cache_for_fetch=None):
     """regional_wp/hs/tp_by_time fra Saltsteins EGET offshore_point - samme
     ETT-tall-for-hele-regionen-konstruksjon som agent.run() gjor (se der),
@@ -286,6 +352,11 @@ def score_spot(spot, merged, regional_wp_by_time, regional_hs_by_time, regional_
     utenfor scope her (score_hour() faller da tilbake paa spotens eget
     water_optimal_cm, samme forsiktige default agent.py sin egen
     gather()-feilhaandtering allerede bruker).
+
+    Rader der `computed` sin hs_eff/tp_eff er fysisk umulig (se
+    _er_gyldig_sjo() og ordre 2026-09-08 over) hoppes over FOER
+    score_hour() kalles - de telles og logges (stderr), men havner
+    aldri i den returnerte lista.
     """
     wind_pt, wave_pt = A.wave_wind_points(spot)
     if wave_point_override is not None:
@@ -304,7 +375,11 @@ def score_spot(spot, merged, regional_wp_by_time, regional_hs_by_time, regional_
         computed = A.evaluate_class_ab(spot, times, wind_series, wave_series)
 
     hours = []
+    skipped = []
     for ts, c in computed:
+        if not _er_gyldig_sjo(c):
+            skipped.append((ts, c.get("hs_eff"), c.get("tp_eff")))
+            continue
         hours.append(A.score_hour(
             spot, ts, wind_series.get(ts, {}), wave_series.get(ts, {}), None, c,
             lead_h=0.0,
@@ -312,6 +387,11 @@ def score_spot(spot, merged, regional_wp_by_time, regional_hs_by_time, regional_
             regional_hs=regional_hs_by_time.get(ts),
             regional_tp=regional_tp_by_time.get(ts),
         ))
+    if skipped:
+        log(f"  {spot['id']}: {len(skipped)} rad(er) hoppet over (Tp < {MIN_TP_S} s eller "
+            f"Hs < {MIN_HS_M} m - manglende data, se ordre 2026-09-08):")
+        for ts, hs, tp in skipped:
+            log(f"    {ts}: hs_eff={hs} tp_eff={tp}")
     return hours
 
 
@@ -389,65 +469,116 @@ def report_old_vs_new_point(spot_id, spot, merged, regional, title_extra=""):
 def saltstein_persistence(hours, peak_min_hs=None):
     """
     'Erfaringsbasert hypotese fra brukeren' (se rapport til bruker):
-    Saltstein holder seg naer 36 timer paa litt store dager. Finner
-    toppen (hoyeste hs_eff) i `hours` (allerede sortert kronologisk,
-    kan spenne flere sammenhengende doegn - se main() sin bruk av
-    merge_caches()), og maaler:
-      - hvor mange timer etter toppen hs_eff fortsatt er >= halve
-        topp-verdien (halveringstid, None hvis den ALDRI halveres
-        innenfor de hentede timene - rapporteres eksplisitt som det,
-        IKKE ekstrapolert),
+    Saltstein holder seg naer 36 timer paa litt store dager.
+
+    ordre 2026-09-08 (se rapport til bruker): FORRIGE versjon maalte dette
+    paa hs_eff alene, og konkluderte "ikke naadd paa 32 timer" fordi hs_eff
+    fortsatt sto i 0,96 m - men Tp hadde i samme vindu falt fra 8,2 til
+    4,7 s. Det er ikke den samme sjoen: donningen doede og en kortperiodisk
+    lokal vindsjo fylte plassen med omtrent samme hoyde. Hs alene kan ikke
+    skille de to - energifluks (P = rho*g^2*Hs^2*Tp/(64*pi), se
+    physics.wave_power(), IMPORTERT herfra - ikke duplisert selv om
+    P = 0,49*Hs^2*Tp er den samme formelen skrevet ut) kan, siden Tp gaar
+    inn direkte: en kort periode med samme Hs gir markert LAVERE P.
+
+    Finner toppen i `hours` (allerede sortert kronologisk, kan spenne
+    flere sammenhengende doegn - se main() sin bruk av merge_caches()) -
+    FORTSATT definert som hoyeste hs_eff (samme utvalg som forrige
+    versjon, tie-break til FORSTE forekomst - "toppen av donningen" er
+    fortsatt et Hs-begrep, se kontrollregningen under: den ekte P-
+    maksimum i datasettet ligger faktisk 6 t SENERE, kl. 21:00, med
+    marginalt hoyere Tp - men kontrollregningen forankrer eksplisitt i
+    15:00. Det som ENDRER SEG her er ikke hvilken time som telles som
+    toppen, men HVORDAN holdbarheten derfra maales), og maaler:
+      - halveringstid PAA ENERGI: timer til P < halve topp-P (None hvis
+        ALDRI naadd innenfor de hentede timene - rapporteres eksplisitt
+        som det, IKKE ekstrapolert),
+      - Tp ved toppen OG ved halveringspunktet, saa det er synlig om det
+        fortsatt er samme sjo eller en ny en har tatt over,
+      - halveringstid paa Hs ALENE, beholdt som egen linje for
+        sammenligning (se print_persistence_report()) - IKKE hovedtallet.
       - siste time i `hours` der hs_eff fortsatt er >= `peak_min_hs`
         (spotens eget min_hs - "fortsatt surfbart", ikke et nytt,
         oppfunnet tall).
-    Returnerer None hvis `hours` er tom eller ingen time har hs_eff.
+    Returnerer None hvis `hours` er tom eller ingen time har baade
+    hs_eff og tp_eff.
+
+    Kontrollregning (5.-6. sept 2026, Saltstein - se rapport til bruker):
+    topp 15:00 (hs 1,30/tp 7,9 -> P=6,5 kW/m), 00:00 neste doegn
+    (hs 0,94/tp 7,0 -> P=3,0 kW/m, under halve) - halveringstid PAA ENERGI
+    ca. 9 timer, IKKE 32 (som var hs-halveringstiden i forrige versjon).
     """
-    valid = [h for h in hours if h.get("hs_eff") is not None]
+    valid = [h for h in hours if h.get("hs_eff") is not None and h.get("tp_eff") is not None]
     if not valid:
         return None
-    peak = max(valid, key=lambda h: h["hs_eff"])
-    peak_idx = valid.index(peak)
-    after = valid[peak_idx:]
+    peak_h = max(valid, key=lambda h: h["hs_eff"])
+    peak_idx = valid.index(peak_h)
+    peak_p = P.wave_power(peak_h["hs_eff"], peak_h["tp_eff"])
+    after = [(h, P.wave_power(h["hs_eff"], h["tp_eff"])) for h in valid[peak_idx:]]
 
-    half = peak["hs_eff"] / 2.0
-    half_life_h = None
-    for i, h in enumerate(after):
-        if h["hs_eff"] < half:
-            half_life_h = i  # timer siden toppen (0-indeksert avstand)
+    half_p = peak_p / 2.0
+    half_life_h_energy, half_point = None, None
+    for i, (h, p) in enumerate(after):
+        if p < half_p:
+            half_life_h_energy = i  # timer siden toppen (0-indeksert avstand)
+            half_point = h
+            break
+
+    half_hs = peak_h["hs_eff"] / 2.0
+    half_life_h_hs = None
+    for i, (h, _) in enumerate(after):
+        if h["hs_eff"] < half_hs:
+            half_life_h_hs = i
             break
 
     last_surfable = None
     if peak_min_hs is not None:
-        for h in after:
+        for h, _ in after:
             if h["hs_eff"] >= peak_min_hs:
                 last_surfable = h["time"]
 
     return {
-        "peak_time": peak["time"], "peak_hs_eff": peak["hs_eff"],
+        "peak_time": peak_h["time"], "peak_hs_eff": peak_h["hs_eff"],
+        "peak_tp_eff": peak_h["tp_eff"], "peak_p": round(peak_p, 1),
         "n_hours_after_peak": len(after) - 1,
-        "half_life_h": half_life_h,
+        "half_life_h_energy": half_life_h_energy,
+        "half_point_time": half_point["time"] if half_point else None,
+        "half_point_tp_eff": half_point["tp_eff"] if half_point else None,
+        "half_point_p": round(P.wave_power(half_point["hs_eff"], half_point["tp_eff"]), 1)
+        if half_point else None,
+        "half_life_h_hs": half_life_h_hs,
+        "p_at_window_end": round(after[-1][1], 1),
         "last_surfable_time": last_surfable,
-        "hs_eff_at_window_end": after[-1]["hs_eff"],
     }
 
 
 def print_persistence_report(spot_id, result):
-    print(f"\n{'='*90}\nSaltstein-holdbarhet - {spot_id}  [{KILDE_TAG}]\n{'='*90}")
+    print(f"\n{'='*90}\nSaltstein-holdbarhet, paa ENERGI (P = 0,49*Hs^2*Tp) - {spot_id}  [{KILDE_TAG}]\n{'='*90}")
     if result is None:
-        print("  ingen gyldige hs_eff-timer aa analysere")
+        print("  ingen gyldige hs_eff/tp_eff-timer aa analysere")
         return
-    print(f"  topp: {result['peak_hs_eff']} m @ {result['peak_time']}")
+    print(f"  topp: P={result['peak_p']} kW/m (hs {result['peak_hs_eff']} m, "
+          f"tp {result['peak_tp_eff']} s) @ {result['peak_time']}")
     print(f"  timer hentet ETTER toppen: {result['n_hours_after_peak']}")
-    if result["half_life_h"] is None:
-        print(f"  halveringstid: IKKE naadd innenfor det hentede vinduet - "
-              f"hs_eff er fortsatt {result['hs_eff_at_window_end']} m "
-              f"({'>=' if result['hs_eff_at_window_end'] >= result['peak_hs_eff']/2 else '<'} "
+    if result["half_life_h_energy"] is None:
+        print(f"  halveringstid (ENERGI): IKKE naadd innenfor det hentede vinduet - "
+              f"P er fortsatt {result['p_at_window_end']} kW/m "
+              f"({'>=' if result['p_at_window_end'] >= result['peak_p']/2 else '<'} "
               f"halve toppen) ved vinduets slutt. Modellen underdriver IKKE holdbarheten "
               f"innenfor 36 t hvis dette vinduet daekker minst saa lenge - se timer hentet over.")
     else:
         vurdering = ("raskere enn 36 t - se hypotesen i rapporten til bruker"
-                     if result["half_life_h"] < 36 else "36 t eller mer, i traad med hypotesen")
-        print(f"  halveringstid: {result['half_life_h']} t etter toppen ({vurdering})")
+                     if result["half_life_h_energy"] < 36 else "36 t eller mer, i traad med hypotesen")
+        print(f"  halveringstid (ENERGI): {result['half_life_h_energy']} t etter toppen ({vurdering})")
+        print(f"  Tp ved halveringspunktet ({result['half_point_time']}): "
+              f"{result['half_point_tp_eff']} s (mot {result['peak_tp_eff']} s ved toppen - "
+              f"sjekk om dette fortsatt er samme sjo eller en ny, kortperiodisk vindsjo)")
+    if result["half_life_h_hs"] is None:
+        print(f"  halveringstid (Hs ALENE, kun til sammenligning - IKKE hovedtallet): "
+              f"ikke naadd innenfor vinduet")
+    else:
+        print(f"  halveringstid (Hs ALENE, kun til sammenligning - IKKE hovedtallet): "
+              f"{result['half_life_h_hs']} t etter toppen")
     if result["last_surfable_time"] is not None:
         print(f"  siste time med hs_eff >= spotens eget min_hs: {result['last_surfable_time']}")
     else:
