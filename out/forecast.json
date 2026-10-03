@@ -1,0 +1,1496 @@
+{
+  "generated_at": "2026-10-03T23:00:00+00:00",
+  "mode": "live",
+  "regional_wp": [
+    {
+      "time": "2026-10-03T23:00:00+00:00",
+      "wp": 4.1
+    },
+    {
+      "time": "2026-10-04T00:00:00+00:00",
+      "wp": 3.5
+    },
+    {
+      "time": "2026-10-04T01:00:00+00:00",
+      "wp": 3.5
+    },
+    {
+      "time": "2026-10-04T02:00:00+00:00",
+      "wp": 3.0
+    },
+    {
+      "time": "2026-10-04T03:00:00+00:00",
+      "wp": 2.4
+    },
+    {
+      "time": "2026-10-04T04:00:00+00:00",
+      "wp": 2.4
+    },
+    {
+      "time": "2026-10-04T05:00:00+00:00",
+      "wp": 1.9
+    },
+    {
+      "time": "2026-10-04T06:00:00+00:00",
+      "wp": 1.9
+    },
+    {
+      "time": "2026-10-04T07:00:00+00:00",
+      "wp": 1.8
+    },
+    {
+      "time": "2026-10-04T08:00:00+00:00",
+      "wp": 1.8
+    },
+    {
+      "time": "2026-10-04T09:00:00+00:00",
+      "wp": 1.8
+    },
+    {
+      "time": "2026-10-04T10:00:00+00:00",
+      "wp": 1.7
+    },
+    {
+      "time": "2026-10-04T11:00:00+00:00",
+      "wp": 2.0
+    },
+    {
+      "time": "2026-10-04T12:00:00+00:00",
+      "wp": 2.9
+    },
+    {
+      "time": "2026-10-04T13:00:00+00:00",
+      "wp": 3.4
+    },
+    {
+      "time": "2026-10-04T14:00:00+00:00",
+      "wp": 4.1
+    },
+    {
+      "time": "2026-10-04T15:00:00+00:00",
+      "wp": 4.3
+    },
+    {
+      "time": "2026-10-04T16:00:00+00:00",
+      "wp": 6.0
+    },
+    {
+      "time": "2026-10-04T17:00:00+00:00",
+      "wp": 7.1
+    },
+    {
+      "time": "2026-10-04T18:00:00+00:00",
+      "wp": 9.1
+    },
+    {
+      "time": "2026-10-04T19:00:00+00:00",
+      "wp": 10.2
+    },
+    {
+      "time": "2026-10-04T20:00:00+00:00",
+      "wp": 10.4
+    },
+    {
+      "time": "2026-10-04T21:00:00+00:00",
+      "wp": 10.7
+    },
+    {
+      "time": "2026-10-04T22:00:00+00:00",
+      "wp": 11.0
+    },
+    {
+      "time": "2026-10-04T23:00:00+00:00",
+      "wp": 11.4
+    },
+    {
+      "time": "2026-10-05T00:00:00+00:00",
+      "wp": 11.7
+    },
+    {
+      "time": "2026-10-05T01:00:00+00:00",
+      "wp": 13.0
+    },
+    {
+      "time": "2026-10-05T02:00:00+00:00",
+      "wp": 13.0
+    },
+    {
+      "time": "2026-10-05T03:00:00+00:00",
+      "wp": 14.1
+    },
+    {
+      "time": "2026-10-05T04:00:00+00:00",
+      "wp": 12.8
+    },
+    {
+      "time": "2026-10-05T05:00:00+00:00",
+      "wp": 12.7
+    },
+    {
+      "time": "2026-10-05T06:00:00+00:00",
+      "wp": 12.5
+    },
+    {
+      "time": "2026-10-05T07:00:00+00:00",
+      "wp": 14.8
+    },
+    {
+      "time": "2026-10-05T08:00:00+00:00",
+      "wp": 17.3
+    },
+    {
+      "time": "2026-10-05T09:00:00+00:00",
+      "wp": 17.2
+    },
+    {
+      "time": "2026-10-05T10:00:00+00:00",
+      "wp": 17.3
+    },
+    {
+      "time": "2026-10-05T11:00:00+00:00",
+      "wp": 18.9
+    },
+    {
+      "time": "2026-10-05T12:00:00+00:00",
+      "wp": 19.1
+    },
+    {
+      "time": "2026-10-05T13:00:00+00:00",
+      "wp": 17.8
+    },
+    {
+      "time": "2026-10-05T14:00:00+00:00",
+      "wp": 17.9
+    },
+    {
+      "time": "2026-10-05T15:00:00+00:00",
+      "wp": 18.1
+    },
+    {
+      "time": "2026-10-05T16:00:00+00:00",
+      "wp": 17.0
+    },
+    {
+      "time": "2026-10-05T17:00:00+00:00",
+      "wp": 15.8
+    },
+    {
+      "time": "2026-10-05T18:00:00+00:00",
+      "wp": 14.8
+    },
+    {
+      "time": "2026-10-05T19:00:00+00:00",
+      "wp": 12.5
+    },
+    {
+      "time": "2026-10-05T20:00:00+00:00",
+      "wp": 12.5
+    },
+    {
+      "time": "2026-10-05T21:00:00+00:00",
+      "wp": 11.2
+    },
+    {
+      "time": "2026-10-05T22:00:00+00:00",
+      "wp": 11.1
+    },
+    {
+      "time": "2026-10-05T23:00:00+00:00",
+      "wp": 9.6
+    },
+    {
+      "time": "2026-10-06T00:00:00+00:00",
+      "wp": 9.2
+    },
+    {
+      "time": "2026-10-06T01:00:00+00:00",
+      "wp": 8.9
+    },
+    {
+      "time": "2026-10-06T02:00:00+00:00",
+      "wp": 8.8
+    },
+    {
+      "time": "2026-10-06T03:00:00+00:00",
+      "wp": 8.7
+    },
+    {
+      "time": "2026-10-06T04:00:00+00:00",
+      "wp": 8.5
+    },
+    {
+      "time": "2026-10-06T05:00:00+00:00",
+      "wp": 7.4
+    },
+    {
+      "time": "2026-10-06T06:00:00+00:00",
+      "wp": 6.3
+    },
+    {
+      "time": "2026-10-06T12:00:00+00:00",
+      "wp": 2.7
+    },
+    {
+      "time": "2026-10-06T18:00:00+00:00",
+      "wp": 1.0
+    },
+    {
+      "time": "2026-10-07T00:00:00+00:00",
+      "wp": 0.8
+    },
+    {
+      "time": "2026-10-07T06:00:00+00:00",
+      "wp": 0.3
+    },
+    {
+      "time": "2026-10-07T12:00:00+00:00",
+      "wp": 0.2
+    },
+    {
+      "time": "2026-10-07T18:00:00+00:00",
+      "wp": 0.2
+    },
+    {
+      "time": "2026-10-08T00:00:00+00:00",
+      "wp": 0.3
+    },
+    {
+      "time": "2026-10-08T06:00:00+00:00",
+      "wp": 0.1
+    },
+    {
+      "time": "2026-10-08T12:00:00+00:00",
+      "wp": 0.1
+    },
+    {
+      "time": "2026-10-08T18:00:00+00:00",
+      "wp": 0.1
+    },
+    {
+      "time": "2026-10-09T00:00:00+00:00",
+      "wp": 0.1
+    },
+    {
+      "time": "2026-10-09T06:00:00+00:00",
+      "wp": 0.1
+    },
+    {
+      "time": "2026-10-09T12:00:00+00:00",
+      "wp": 0.3
+    },
+    {
+      "time": "2026-10-09T18:00:00+00:00",
+      "wp": 9.7
+    },
+    {
+      "time": "2026-10-10T00:00:00+00:00",
+      "wp": 6.0
+    },
+    {
+      "time": "2026-10-10T06:00:00+00:00",
+      "wp": 4.2
+    },
+    {
+      "time": "2026-10-10T12:00:00+00:00",
+      "wp": 4.2
+    },
+    {
+      "time": "2026-10-10T18:00:00+00:00",
+      "wp": 3.5
+    },
+    {
+      "time": "2026-10-11T00:00:00+00:00",
+      "wp": 2.3
+    },
+    {
+      "time": "2026-10-11T06:00:00+00:00",
+      "wp": 1.8
+    },
+    {
+      "time": "2026-10-11T12:00:00+00:00",
+      "wp": 1.4
+    },
+    {
+      "time": "2026-10-11T18:00:00+00:00",
+      "wp": 1.1
+    },
+    {
+      "time": "2026-10-12T00:00:00+00:00",
+      "wp": 0.8
+    },
+    {
+      "time": "2026-10-12T06:00:00+00:00",
+      "wp": 0.8
+    },
+    {
+      "time": "2026-10-12T12:00:00+00:00",
+      "wp": 0.6
+    }
+  ],
+  "spots": [
+    {
+      "id": "hvasser_sando",
+      "name": "Hvasser / Sandø østside",
+      "klasse": "B",
+      "lat": 59.077,
+      "lon": 10.473,
+      "kalibrert": true,
+      "boat": false,
+      "drive_min": 95,
+      "grid_lat": 59.066,
+      "grid_lon": 10.492,
+      "grid_avstand_km": 0.17,
+      "access_warning": null,
+      "max_score": 57.2,
+      "best_stars": 6.5,
+      "best_p_surf": 78.0,
+      "windows": [
+        {
+          "id": "2026-10-05T09_2h",
+          "start": "2026-10-05T09:00:00+00:00",
+          "end": "2026-10-05T10:00:00+00:00",
+          "hours": 2,
+          "stars": 5.5,
+          "stars_p10": 4.1,
+          "stars_p90": 7.0,
+          "p_surf": 70.0,
+          "p_good": 32.0,
+          "confidence": "hoy",
+          "lead_h": 35.0,
+          "peak_score": 42.6,
+          "peak_time": "2026-10-05T10:00:00+00:00",
+          "peak_hs": 2.8,
+          "peak_tp": 6.2,
+          "max_power_kw": 24,
+          "peak_wind": "13 m/s 222deg (cross-offshore)",
+          "why": "5.5/10 forventet (spenn 4.1-7.0), 70 % sannsynlighet, konfidens hoy; vind 13 m/s fra 222 grader = cross-offshore; svakeste ledd: storrelse (0.63)",
+          "bullets": [
+            {
+              "ikon": "wind",
+              "tekst": "Vind SV (222°) 13 m/s i vinduet."
+            },
+            {
+              "ikon": "swell",
+              "tekst": "Modellen gir 2.8 m @ 6.2 s fra SV (216°) rett utenfor spotten. Svellvinduet er 110–200°."
+            },
+            {
+              "ikon": "local",
+              "tekst": "Lokalt bygger vinden 0.7 m @ 3.6 s over 17 km fetch (fetchbegrenset). Dette dominerer."
+            },
+            {
+              "ikon": "spot",
+              "tekst": "Hvasser / Sandø østside vender Ø. Vinden i vinduet er cross-offshore."
+            },
+            {
+              "ikon": "result",
+              "tekst": "Sum: 1.6 m @ 6.2 s gir 5.5/10 med 70 % sannsynlighet (spenn 4.1–7.0 stjerner). Svakeste ledd er størrelse (0.63)."
+            }
+          ]
+        },
+        {
+          "id": "2026-10-05T13_3h",
+          "start": "2026-10-05T13:00:00+00:00",
+          "end": "2026-10-05T15:00:00+00:00",
+          "hours": 3,
+          "stars": 5.5,
+          "stars_p10": 3.5,
+          "stars_p90": 6.9,
+          "p_surf": 78.0,
+          "p_good": 32.0,
+          "confidence": "hoy",
+          "lead_h": 40.0,
+          "peak_score": 49.6,
+          "peak_time": "2026-10-05T15:00:00+00:00",
+          "peak_hs": 3.0,
+          "peak_tp": 6.5,
+          "max_power_kw": 28,
+          "peak_wind": "13 m/s 214deg (cross-shore)",
+          "why": "5.5/10 forventet (spenn 3.5-6.9), 78 % sannsynlighet, konfidens hoy; vind 13 m/s fra 214 grader = cross-shore; svakeste ledd: vind (0.75)",
+          "bullets": [
+            {
+              "ikon": "wind",
+              "tekst": "Vind SV (214°) 13 m/s i vinduet."
+            },
+            {
+              "ikon": "swell",
+              "tekst": "Modellen gir 3.0 m @ 6.5 s fra SV (215°) rett utenfor spotten. Svellvinduet er 110–200°."
+            },
+            {
+              "ikon": "local",
+              "tekst": "Lokalt bygger vinden 0.8 m @ 3.8 s over 19 km fetch (fetchbegrenset). Dette dominerer."
+            },
+            {
+              "ikon": "spot",
+              "tekst": "Hvasser / Sandø østside vender Ø. Vinden i vinduet er cross-shore."
+            },
+            {
+              "ikon": "result",
+              "tekst": "Sum: 1.7 m @ 6.5 s gir 5.5/10 med 78 % sannsynlighet (spenn 3.5–6.9 stjerner). Svakeste ledd er vind (0.75)."
+            }
+          ]
+        },
+        {
+          "id": "2026-10-05T17_7h",
+          "start": "2026-10-05T17:00:00+00:00",
+          "end": "2026-10-05T23:00:00+00:00",
+          "hours": 7,
+          "stars": 6.0,
+          "stars_p10": 3.5,
+          "stars_p90": 7.4,
+          "p_surf": 78.0,
+          "p_good": 40.0,
+          "confidence": "hoy",
+          "lead_h": 44.0,
+          "peak_score": 55.4,
+          "peak_time": "2026-10-05T19:00:00+00:00",
+          "peak_hs": 3.0,
+          "peak_tp": 6.8,
+          "max_power_kw": 32,
+          "peak_wind": "13 m/s 224deg (cross-offshore)",
+          "why": "6.0/10 forventet (spenn 3.5-7.4), 78 % sannsynlighet, konfidens hoy; vind 13 m/s fra 224 grader = cross-offshore; svakeste ledd: storrelse (0.76)",
+          "bullets": [
+            {
+              "ikon": "wind",
+              "tekst": "Vind SV (224°) 13 m/s i vinduet."
+            },
+            {
+              "ikon": "swell",
+              "tekst": "Modellen gir 3.0 m @ 6.8 s fra SV (215°) rett utenfor spotten. Svellvinduet er 110–200°."
+            },
+            {
+              "ikon": "local",
+              "tekst": "Lokalt bygger vinden 0.9 m @ 3.9 s over 20 km fetch (fetchbegrenset). Dette dominerer."
+            },
+            {
+              "ikon": "spot",
+              "tekst": "Hvasser / Sandø østside vender Ø. Vinden i vinduet er cross-offshore."
+            },
+            {
+              "ikon": "result",
+              "tekst": "Sum: 1.7 m @ 6.8 s gir 6.0/10 med 78 % sannsynlighet (spenn 3.5–7.4 stjerner). Svakeste ledd er størrelse (0.76)."
+            }
+          ]
+        }
+      ],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 60.0,
+          "max_stars": 4.7,
+          "max_hs": 2.4,
+          "max_power_kw": 17
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 78.0,
+          "max_stars": 6.5,
+          "max_hs": 3.1,
+          "max_power_kw": 32
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 68.0,
+          "max_stars": 6.1,
+          "max_hs": 2.5,
+          "max_power_kw": 21
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.7,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 45.0,
+          "max_stars": 3.1,
+          "max_hs": 1.9,
+          "max_power_kw": 8
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 40.0,
+          "max_stars": 5.1,
+          "max_hs": 1.9,
+          "max_power_kw": 11
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 78.0,
+        "stars": 6.5,
+        "hs": 3.1
+      },
+      "sources": [],
+      "params": {
+        "facing": 100,
+        "swell_window": [
+          110,
+          200
+        ],
+        "min_hs": 1.3,
+        "ideal_hs": 2.0,
+        "max_hs": 3.5,
+        "min_tp": 5.0,
+        "wind_weight": 1.0,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "jomfruland_ost",
+      "name": "Jomfruland østside",
+      "klasse": "A",
+      "lat": 58.84,
+      "lon": 9.566,
+      "kalibrert": false,
+      "boat": true,
+      "drive_min": 140,
+      "grid_lat": 58.835,
+      "grid_lon": 9.579,
+      "grid_avstand_km": 0.3,
+      "access_warning": null,
+      "max_score": 38.4,
+      "best_stars": 4.6,
+      "best_p_surf": 92.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 85.0,
+          "max_stars": 3.4,
+          "max_hs": 1.9,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 92.0,
+          "max_stars": 4.4,
+          "max_hs": 2.4,
+          "max_power_kw": 17
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 85.0,
+          "max_stars": 4.6,
+          "max_hs": 2.1,
+          "max_power_kw": 13
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.6,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 80.0,
+          "max_stars": 2.2,
+          "max_hs": 2.1,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 52.0,
+          "max_stars": 2.4,
+          "max_hs": 1.5,
+          "max_power_kw": 6
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 92.0,
+        "stars": 4.4,
+        "hs": 2.4
+      },
+      "sources": [],
+      "params": {
+        "facing": 135,
+        "swell_window": [
+          100,
+          230
+        ],
+        "min_hs": 1.3,
+        "ideal_hs": 2.5,
+        "max_hs": 4.5,
+        "min_tp": 6.0,
+        "wind_weight": 0.9,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "slagen",
+      "name": "Slagen",
+      "klasse": "C",
+      "lat": 59.317,
+      "lon": 10.531,
+      "kalibrert": true,
+      "boat": false,
+      "drive_min": 80,
+      "grid_lat": 59.033,
+      "grid_lon": 10.519,
+      "grid_avstand_km": 0.34,
+      "access_warning": null,
+      "max_score": 39.3,
+      "best_stars": 4.3,
+      "best_p_surf": 80.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 40.0,
+          "max_stars": 3.3,
+          "max_hs": 1.5,
+          "max_power_kw": 6
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 80.0,
+          "max_stars": 4.3,
+          "max_hs": 2.1,
+          "max_power_kw": 14
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 62.0,
+          "max_stars": 4.1,
+          "max_hs": 1.8,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.8,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.3,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.2,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 12.0,
+          "max_stars": 2.6,
+          "max_hs": 1.2,
+          "max_power_kw": 4
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 80.0,
+        "stars": 4.3,
+        "hs": 2.1
+      },
+      "sources": [],
+      "params": {
+        "facing": 120,
+        "swell_window": [
+          160,
+          200
+        ],
+        "min_hs": 1.6,
+        "ideal_hs": 2.4,
+        "max_hs": 3.4,
+        "min_tp": 4.5,
+        "wind_weight": 1.15,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": {
+          "name": "Færder",
+          "lat": 59.03,
+          "lon": 10.52,
+          "distance_km": 33,
+          "bearing_deg": 181,
+          "sector_half_width": 20,
+          "spread_s": 5,
+          "transmission": 1.0
+        }
+      }
+    },
+    {
+      "id": "saltstein",
+      "name": "Saltstein",
+      "klasse": "A",
+      "lat": 58.966,
+      "lon": 9.849,
+      "kalibrert": false,
+      "boat": false,
+      "drive_min": 110,
+      "grid_lat": 58.934,
+      "grid_lon": 9.831,
+      "grid_avstand_km": 0.41,
+      "access_warning": null,
+      "max_score": 28.5,
+      "best_stars": 3.3,
+      "best_p_surf": 100.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 100.0,
+          "max_stars": 2.8,
+          "max_hs": 2.0,
+          "max_power_kw": 11
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 100.0,
+          "max_stars": 3.0,
+          "max_hs": 2.6,
+          "max_power_kw": 19
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 100.0,
+          "max_stars": 2.3,
+          "max_hs": 1.9,
+          "max_power_kw": 11
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 2.0,
+          "max_stars": 2.0,
+          "max_hs": 0.6,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 85.0,
+          "max_stars": 2.3,
+          "max_hs": 2.1,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 70.0,
+          "max_stars": 3.3,
+          "max_hs": 1.5,
+          "max_power_kw": 6
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 100.0,
+        "stars": 3.0,
+        "hs": 2.6
+      },
+      "sources": [],
+      "params": {
+        "facing": 225,
+        "swell_window": [
+          170,
+          260
+        ],
+        "min_hs": 0.8,
+        "ideal_hs": 1.9,
+        "max_hs": 2.2,
+        "min_tp": 6.0,
+        "wind_weight": 0.55,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "molen_odden",
+      "name": "Mølen odden",
+      "klasse": "A",
+      "lat": 58.975,
+      "lon": 9.816,
+      "kalibrert": false,
+      "boat": false,
+      "drive_min": 120,
+      "grid_lat": 58.944,
+      "grid_lon": 9.795,
+      "grid_avstand_km": 0.42,
+      "access_warning": null,
+      "max_score": 19.3,
+      "best_stars": 2.9,
+      "best_p_surf": 92.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 82.0,
+          "max_stars": 2.8,
+          "max_hs": 1.9,
+          "max_power_kw": 9
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 92.0,
+          "max_stars": 2.7,
+          "max_hs": 2.4,
+          "max_power_kw": 17
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 55.0,
+          "max_stars": 2.9,
+          "max_hs": 1.8,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.6,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 52.0,
+          "max_stars": 2.7,
+          "max_hs": 2.1,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 30.0,
+          "max_stars": 2.7,
+          "max_hs": 1.5,
+          "max_power_kw": 6
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 92.0,
+        "stars": 2.7,
+        "hs": 2.4
+      },
+      "sources": [],
+      "params": {
+        "facing": 175,
+        "swell_window": [
+          140,
+          240
+        ],
+        "min_hs": 1.5,
+        "ideal_hs": 2.5,
+        "max_hs": 4.0,
+        "min_tp": 6.0,
+        "wind_weight": 0.75,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "tristein",
+      "name": "Tristein",
+      "klasse": "A",
+      "lat": 59.023,
+      "lon": 10.521,
+      "kalibrert": false,
+      "boat": true,
+      "drive_min": null,
+      "grid_lat": 59.014,
+      "grid_lon": 10.498,
+      "grid_avstand_km": 0.2,
+      "access_warning": "Færder nasjonalpark. Ilandstigningsforbud i hekketiden på flere holmer i området - sjekk gjeldende skilting/forskrift for denne holmen før du går i land. Vurder å holde deg i vannet/på brettet.\n",
+      "max_score": 12.4,
+      "best_stars": 3.8,
+      "best_p_surf": 68.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 48.0,
+          "max_stars": 1.8,
+          "max_hs": 2.8,
+          "max_power_kw": 23
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 68.0,
+          "max_stars": 2.2,
+          "max_hs": 3.4,
+          "max_power_kw": 38
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 20.0,
+          "max_stars": 1.7,
+          "max_hs": 2.6,
+          "max_power_kw": 22
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.8,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.6,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 8.0,
+          "max_stars": 1.8,
+          "max_hs": 1.9,
+          "max_power_kw": 8
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 8.0,
+          "max_stars": 3.8,
+          "max_hs": 2.0,
+          "max_power_kw": 12
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 68.0,
+        "stars": 2.2,
+        "hs": 3.4
+      },
+      "sources": [],
+      "params": {
+        "facing": 259,
+        "swell_window": [
+          210,
+          270
+        ],
+        "min_hs": 2.0,
+        "ideal_hs": 3.0,
+        "max_hs": 5.0,
+        "min_tp": 5.5,
+        "wind_weight": 1.0,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "rakke",
+      "name": "Rakke / Kjølen, Stavern",
+      "klasse": "A",
+      "lat": 58.975,
+      "lon": 10.0,
+      "kalibrert": false,
+      "boat": false,
+      "drive_min": 105,
+      "grid_lat": 58.957,
+      "grid_lon": 10.001,
+      "grid_avstand_km": 0.41,
+      "access_warning": null,
+      "max_score": 18.8,
+      "best_stars": 3.3,
+      "best_p_surf": 72.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 55.0,
+          "max_stars": 2.4,
+          "max_hs": 2.3,
+          "max_power_kw": 15
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 72.0,
+          "max_stars": 2.9,
+          "max_hs": 2.6,
+          "max_power_kw": 20
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 52.0,
+          "max_stars": 2.9,
+          "max_hs": 2.3,
+          "max_power_kw": 15
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.7,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 38.0,
+          "max_stars": 2.7,
+          "max_hs": 2.0,
+          "max_power_kw": 9
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 15.0,
+          "max_stars": 3.3,
+          "max_hs": 1.7,
+          "max_power_kw": 8
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 72.0,
+        "stars": 2.9,
+        "hs": 2.6
+      },
+      "sources": [],
+      "params": {
+        "facing": 170,
+        "swell_window": [
+          155,
+          225
+        ],
+        "min_hs": 1.7,
+        "ideal_hs": 2.6,
+        "max_hs": 4.5,
+        "min_tp": 6.0,
+        "wind_weight": 0.7,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "sletteroyene",
+      "name": "Sletterøyene",
+      "klasse": "C",
+      "lat": 59.301,
+      "lon": 10.656,
+      "kalibrert": false,
+      "boat": true,
+      "drive_min": 60,
+      "grid_lat": 59.033,
+      "grid_lon": 10.519,
+      "grid_avstand_km": 0.34,
+      "access_warning": null,
+      "max_score": 13.0,
+      "best_stars": 2.4,
+      "best_p_surf": 90.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 62.0,
+          "max_stars": 1.7,
+          "max_hs": 1.6,
+          "max_power_kw": 7
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 90.0,
+          "max_stars": 2.0,
+          "max_hs": 2.2,
+          "max_power_kw": 15
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 80.0,
+          "max_stars": 2.2,
+          "max_hs": 1.9,
+          "max_power_kw": 12
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 5.0,
+          "max_stars": 2.4,
+          "max_hs": 1.0,
+          "max_power_kw": 2
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.3,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 18.0,
+          "max_stars": 2.3,
+          "max_hs": 1.2,
+          "max_power_kw": 4
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 90.0,
+        "stars": 2.0,
+        "hs": 2.2
+      },
+      "sources": [],
+      "params": {
+        "facing": 200,
+        "swell_window": [
+          172,
+          208
+        ],
+        "min_hs": 1.5,
+        "ideal_hs": 2.3,
+        "max_hs": 3.5,
+        "min_tp": 4.5,
+        "wind_weight": 1.0,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": {
+          "name": "Færder",
+          "lat": 59.03,
+          "lon": 10.52,
+          "distance_km": 31.09,
+          "bearing_deg": 193,
+          "sector_half_width": 20,
+          "spread_s": 5,
+          "transmission": 0.85
+        }
+      }
+    },
+    {
+      "id": "portor",
+      "name": "Portør",
+      "klasse": "A",
+      "lat": 58.806,
+      "lon": 9.433,
+      "kalibrert": false,
+      "boat": false,
+      "drive_min": 140,
+      "grid_lat": 58.788,
+      "grid_lon": 9.433,
+      "grid_avstand_km": 0.37,
+      "access_warning": null,
+      "max_score": 13.1,
+      "best_stars": 2.8,
+      "best_p_surf": 58.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 32.0,
+          "max_stars": 2.8,
+          "max_hs": 1.6,
+          "max_power_kw": 7
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 58.0,
+          "max_stars": 2.5,
+          "max_hs": 1.9,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 38.0,
+          "max_stars": 2.3,
+          "max_hs": 1.7,
+          "max_power_kw": 8
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.6,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.4,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 40.0,
+          "max_stars": 2.3,
+          "max_hs": 2.0,
+          "max_power_kw": 9
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 18.0,
+          "max_stars": 2.3,
+          "max_hs": 1.4,
+          "max_power_kw": 5
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 58.0,
+        "stars": 2.5,
+        "hs": 1.9
+      },
+      "sources": [],
+      "params": {
+        "facing": 190,
+        "swell_window": [
+          160,
+          240
+        ],
+        "min_hs": 1.5,
+        "ideal_hs": 2.5,
+        "max_hs": 4.2,
+        "min_tp": 6.0,
+        "wind_weight": 0.7,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": null
+      }
+    },
+    {
+      "id": "skallevold",
+      "name": "Skallevold",
+      "klasse": "C",
+      "lat": 59.29,
+      "lon": 10.507,
+      "kalibrert": true,
+      "boat": false,
+      "drive_min": 80,
+      "grid_lat": 59.033,
+      "grid_lon": 10.519,
+      "grid_avstand_km": 0.34,
+      "access_warning": null,
+      "max_score": 0.0,
+      "best_stars": 4.0,
+      "best_p_surf": 38.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 5.0,
+          "max_stars": 2.8,
+          "max_hs": 1.3,
+          "max_power_kw": 4
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 38.0,
+          "max_stars": 4.0,
+          "max_hs": 1.8,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 12.0,
+          "max_stars": 3.4,
+          "max_hs": 1.4,
+          "max_power_kw": 7
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.7,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.1,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.2,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 1.0,
+          "max_power_kw": 3
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 38.0,
+        "stars": 4.0,
+        "hs": 1.8
+      },
+      "sources": [],
+      "params": {
+        "facing": 115,
+        "swell_window": [
+          172,
+          198
+        ],
+        "min_hs": 1.9,
+        "ideal_hs": 2.7,
+        "max_hs": 3.6,
+        "min_tp": 4.5,
+        "wind_weight": 1.25,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": {
+          "name": "Færder",
+          "lat": 59.03,
+          "lon": 10.52,
+          "distance_km": 28,
+          "bearing_deg": 185,
+          "sector_half_width": 16,
+          "spread_s": 5,
+          "transmission": 0.85
+        }
+      }
+    },
+    {
+      "id": "bastoy_odden",
+      "name": "Bastøy odden",
+      "klasse": "C",
+      "lat": 59.365,
+      "lon": 10.53,
+      "kalibrert": false,
+      "boat": true,
+      "drive_min": 60,
+      "grid_lat": 59.033,
+      "grid_lon": 10.519,
+      "grid_avstand_km": 0.34,
+      "access_warning": "Fengselsøy med landskapsvernområde. Ilandstigning på sørspissen er IKKE tillatt. Ren båtøkt. Avklar med Kriminalomsorgen/Statsforvalteren.\n",
+      "max_score": 0.0,
+      "best_stars": 2.4,
+      "best_p_surf": 30.0,
+      "windows": [],
+      "daily": [
+        {
+          "date": "2026-10-04",
+          "max_p_surf": 5.0,
+          "max_stars": 1.6,
+          "max_hs": 1.3,
+          "max_power_kw": 4
+        },
+        {
+          "date": "2026-10-05",
+          "max_p_surf": 30.0,
+          "max_stars": 2.4,
+          "max_hs": 1.8,
+          "max_power_kw": 10
+        },
+        {
+          "date": "2026-10-06",
+          "max_p_surf": 20.0,
+          "max_stars": 2.1,
+          "max_hs": 1.6,
+          "max_power_kw": 8
+        },
+        {
+          "date": "2026-10-07",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.6,
+          "max_power_kw": 1
+        },
+        {
+          "date": "2026-10-08",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.3,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-09",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 0.2,
+          "max_power_kw": 0
+        },
+        {
+          "date": "2026-10-10",
+          "max_p_surf": 0.0,
+          "max_stars": 0.0,
+          "max_hs": 1.0,
+          "max_power_kw": 3
+        }
+      ],
+      "best_day": {
+        "date": "2026-10-05",
+        "p_surf": 30.0,
+        "stars": 2.4,
+        "hs": 1.8
+      },
+      "sources": [],
+      "params": {
+        "facing": 180,
+        "swell_window": [
+          168,
+          196
+        ],
+        "min_hs": 2.1,
+        "ideal_hs": 2.8,
+        "max_hs": 3.6,
+        "min_tp": 4.5,
+        "wind_weight": 1.15,
+        "alert_min_p_surf": 50,
+        "alert_min_stars": 5.5,
+        "gate": {
+          "name": "Færder",
+          "lat": 59.03,
+          "lon": 10.52,
+          "distance_km": 38,
+          "bearing_deg": 178,
+          "sector_half_width": 16,
+          "spread_s": 5,
+          "transmission": 0.95
+        }
+      }
+    }
+  ]
+}
